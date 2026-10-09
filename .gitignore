@@ -1,0 +1,16 @@
+# Local secrets
+config.json
+.env
+*.key
+# Generated viewer data
+viewer/graph-data.js
+# Logs and ledgers
+*.log
+ledger*.json
+# Python caches
+__pycache__/
+*.pyc
+# macOS metadata
+.DS_Store
+# Node dependencies
+node_modules/
