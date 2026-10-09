@@ -175,7 +175,134 @@ button { transition: background var(--transition), color var(--transition), bord
 <main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
 <div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
 <aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" maxlength="2000" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><span class="shortcut">ENTER ↵</span><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" maxlength="2000" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<script id="voice-controller">
+const FINISH_MS = 900;
+(() => {
+  const el = id => document.getElementById(id);
+  const synth = window.speechSynthesis;
+  const Recognition = window.webkitSpeechRecognition;
+  let activated = false, thinking = false, speaking = false, enabled = false;
+  let recognition = null, timer = null, buffer = [], pending = false, generation = 0;
+  let notice = '', submit = null;
+  function status() {
+    el('voice-status').textContent = thinking ? 'Thinking…' : speaking ? 'Speaking…' :
+      enabled ? 'Listening…' : notice || 'Ready';
+    el('mic').disabled = thinking || !Recognition;
+    el('mic').setAttribute('aria-pressed', String(enabled));
+    el('mic').textContent = enabled ? 'Mic on' : 'Mic';
+  }
+  function clearBuffer() {
+    clearTimeout(timer); timer = null; buffer = []; pending = false;
+  }
+  function stopSpeech() {
+    generation++; speaking = false;
+    if (synth) synth.cancel();
+    clearBuffer(); status();
+  }
+  // All synthesis, including the greeting, passes through this single gate.
+  function speak(text) {
+    if (new URLSearchParams(location.search).getAll('mute').includes('1') ||
+        !activated || !synth || !text) return;
+    stopSpeech();
+    const token = generation;
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = synth.getVoices();
+    utterance.voice = voices.find(v => /^en[-_]GB$/i.test(v.lang)) ||
+      voices.find(v => /^en\b/i.test(v.lang)) || null;
+    utterance.lang = utterance.voice ? utterance.voice.lang : 'en-GB';
+    speaking = true; status();
+    const finish = () => { if (token === generation) { speaking = false; status(); } };
+    utterance.onend = finish;
+    utterance.onerror = () => {
+      if (token === generation) { notice = 'Voice unavailable · answer shown above'; finish(); }
+    };
+    synth.speak(utterance);
+  }
+  function haltRecognition() {
+    const old = recognition; recognition = null;
+    if (old) old.abort();
+  }
+  function schedule() {
+    clearTimeout(timer);
+    if (!buffer.length || pending || thinking) return;
+    timer = setTimeout(() => {
+      const question = buffer.join(' ').trim();
+      clearBuffer();
+      if (!thinking && enabled && question && submit) {
+        el('question').value = question; submit(question);
+      }
+    }, FINISH_MS);
+  }
+  function listen() {
+    if (!enabled || thinking || recognition || !Recognition) return;
+    const current = new Recognition(); recognition = current;
+    const finals = new Set();
+    current.lang = 'en-GB'; current.continuous = true; current.interimResults = true;
+    current.onresult = event => {
+      if (recognition !== current || thinking) return;
+      // Any new speech invalidates the old finish window, including interim speech.
+      clearTimeout(timer); pending = false;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i], text = result[0].transcript.trim();
+        const interrupt = /^(stop|wait)[.!?,]*$/i.test(text);
+        if (interrupt) { stopSpeech(); return; }
+        // While output is playing, only interrupt commands are accepted (no echo chats).
+        if (speaking) continue;
+        if (result.isFinal) {
+          if (!finals.has(i)) { finals.add(i); if (text) buffer.push(text); }
+        } else { pending = true; }
+      }
+      schedule();
+    };
+    current.onspeechstart = () => { if (recognition === current) { clearTimeout(timer); pending = true; } };
+    current.onerror = event => {
+      if (recognition !== current) return;
+      if (event.error === 'no-speech') { pending = false; schedule(); return; }
+      enabled = false; clearBuffer();
+      notice = event.error === 'not-allowed' ? 'Microphone permission denied · type instead' :
+        'Microphone unavailable · click Mic to retry';
+      haltRecognition(); status();
+    };
+    current.onend = () => {
+      if (recognition !== current) return;
+      recognition = null; pending = false; schedule(); listen(); status();
+    };
+    try { current.start(); } catch (_) {
+      recognition = null; enabled = false; notice = 'Microphone unavailable · click Mic to retry';
+    }
+    status();
+  }
+  document.addEventListener('click', event => {
+    if (!event.isTrusted || activated) return;
+    activated = true;
+    speak(el('answer').textContent);
+  }, {capture: true});
+  el('mic').onclick = () => {
+    if (thinking || !Recognition) return;
+    enabled = !enabled; notice = ''; clearBuffer();
+    if (enabled) listen(); else haltRecognition();
+    status();
+  };
+  el('stop-speech').onclick = stopSpeech;
+  window.JarvisVoice = {
+    speak,
+    setSubmit(handler) { submit = handler; },
+    setThinking(value) {
+      thinking = value;
+      if (value) { stopSpeech(); clearBuffer(); haltRecognition(); }
+      else listen();
+      status();
+    },
+    interrupt(text) {
+      if (!/^(stop|wait)[.!?,]*$/i.test(text.trim())) return false;
+      stopSpeech(); return true;
+    }
+  };
+  if (!Recognition) notice = 'Microphone unsupported · type instead';
+  status();
+})();
+</script>
 <script src="graph-data.js"></script><script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.79.0/dist/3d-force-graph.min.js"></script>
 <script type="module">
 const SETTINGS=Object.freeze({initialDistance:620,initialHeight:80,cameraMs:1300,focusDistance:120,starCount:1700,starRadius:1200,starSize:1.4,starOpacity:.85,nodeRadius:3.1,nodeSegments:16,nodeRings:12,glowSize:34,selectedScale:1.65,inactiveOpacity:.16,nodeOpacity:.92,glowOpacity:.65,linkOpacity:.56,linkWidth:.35,activeLinkWidth:1.35,orbitSpeed:.22,linkDistance:69,repulsion:-165,cooldownTicks:140,warmupTicks:70,clusterRadius:110,clusterSpread:60,clusterForce:.015,pixelRatioLimit:2,spritePixels:128,chatTimeoutMs:100000,fullCircle:Math.PI*2,half:.5,goldenAngle:2.399963,clusterMembers:6,timePrecision:2,dimensions:3,glowStops:[[0,1],[.15,.7],[.45,.12],[1,0]],groups:{Finance:'#f2c67e',Marketing:'#b397ed',Operations:'#71bce6',People:'#f294ac',Strategy:'#86d7bd'}});
@@ -193,6 +320,8 @@ function focusNode(node){if(!graph)return;selected=node.id;highlighted=new Set([
 function clearSelection(){selected=null;highlighted.clear();activeLinks.clear();$('detail').hidden=true;refreshHighlights();drawSidebar()}
 function recenter(){clearSelection();activeGroup=null;$('search').value='';drawSidebar();refreshHighlights();if(graph)graph.cameraPosition({x:0,y:SETTINGS.initialHeight,z:SETTINGS.initialDistance},{x:0,y:0,z:0},reducedMotion?0:SETTINGS.cameraMs);setOrbit(!reducedMotion)}
 $('search').addEventListener('input',drawSidebar);$('orbit').onclick=()=>setOrbit(!orbit);$('reset').onclick=recenter;$('close-detail').onclick=clearSelection;$('metric-notes').textContent=GRAPH.nodes.length;$('metric-links').textContent=GRAPH.links.length;$('metric-groups').textContent=groups.length;$('group-count').textContent=groups.length;$('index-summary').textContent=`${GRAPH.nodes.length} notes · ${GRAPH.links.length} connections`;$('graph-stats').textContent=`${GRAPH.nodes.length} NOTES / ${GRAPH.links.length} CONNECTIONS`;drawSidebar();
+window.JarvisVoice.setSubmit(ask);
+$('chat-form').addEventListener('submit',event=>{event.preventDefault();ask($('question').value)});document.querySelectorAll('[data-question]').forEach(button=>button.onclick=()=>{$('question').value=button.dataset.question;ask(button.dataset.question)});
 try{
  THREE=await import('https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js');if(typeof ForceGraph3D!=='function')throw new Error('CDN unavailable');
  const sprite=document.createElement('canvas');sprite.width=SETTINGS.spritePixels;sprite.height=SETTINGS.spritePixels;const ctx=sprite.getContext('2d'),center=SETTINGS.spritePixels*SETTINGS.half,gradient=ctx.createRadialGradient(center,center,0,center,center,center);SETTINGS.glowStops.forEach(([stop,opacity])=>gradient.addColorStop(stop,`rgba(255,255,255,${opacity})`));ctx.fillStyle=gradient;ctx.fillRect(0,0,sprite.width,sprite.height);const glowTexture=new THREE.CanvasTexture(sprite);
@@ -202,6 +331,6 @@ try{
  const dimensions=SETTINGS.dimensions,points=new Float32Array(SETTINGS.starCount*dimensions);for(let i=0;i<points.length;i++)points[i]=(Math.random()-SETTINGS.half)*SETTINGS.starRadius;const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(points,dimensions));graph.scene().add(new THREE.Points(geometry,new THREE.PointsMaterial({color:'#9aabbf',size:SETTINGS.starSize,transparent:true,opacity:SETTINGS.starOpacity,depthWrite:false})));graph.controls().autoRotateSpeed=SETTINGS.orbitSpeed;setOrbit(orbit);graph.controls().addEventListener('start',()=>setOrbit(false));$('load-state').hidden=true;new ResizeObserver(()=>graph.width($('stage').clientWidth).height($('stage').clientHeight)).observe($('stage'));
  window.jarvisView={get nodeCount(){return GRAPH.nodes.length},get linkCount(){return GRAPH.links.length},get canvasReady(){return Boolean(graph.renderer().domElement.width)},get selectedId(){return selected}};
 }catch(error){$('load-state').textContent='The galaxy couldn’t load. Check your internet connection for the 3D library, then refresh.';console.error('Galaxy rendering failed:',error.message)}
-async function ask(question){if(busy||!question.trim())return;busy=true;$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent='CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent='Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),SETTINGS.chatTimeoutMs);try{const response=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question}),signal:controller.signal}),data=await response.json();if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?'FROM YOUR NOTES':'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){highlighted=new Set(data.nodes);activeLinks=new Set(GRAPH.links.filter(l=>highlighted.has(endpoint(l.source))&&highlighted.has(endpoint(l.target))).map(linkKey));selected=null;refreshHighlights();data.nodes.forEach(id=>{if(!Number.isInteger(id)||!GRAPH.nodes[id])return;const b=document.createElement('button');b.className='source';b.textContent=GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('sources').append(b)});$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
-$('chat-form').addEventListener('submit',event=>{event.preventDefault();ask($('question').value)});document.querySelectorAll('[data-question]').forEach(button=>button.onclick=()=>{$('question').value=button.dataset.question;ask(button.dataset.question)});
+async function ask(question){if(window.JarvisVoice.interrupt(question))return;if(busy||!question.trim())return;busy=true;window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent='CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent='Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),SETTINGS.chatTimeoutMs);try{const response=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question}),signal:controller.signal}),data=await response.json();if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?'FROM YOUR NOTES':'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){highlighted=new Set(data.nodes);activeLinks=new Set(GRAPH.links.filter(l=>highlighted.has(endpoint(l.source))&&highlighted.has(endpoint(l.target))).map(linkKey));selected=null;refreshHighlights();data.nodes.forEach(id=>{if(!Number.isInteger(id)||!GRAPH.nodes[id])return;const b=document.createElement('button');b.className='source';b.textContent=GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('sources').append(b)});$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
+
 </script></body></html>

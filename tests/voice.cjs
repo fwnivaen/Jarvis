@@ -1,0 +1,89 @@
+// Browser speech doubles + virtual clock: no audio, network, or paid service.
+const {readFileSync} = require('node:fs');
+const vm = require('node:vm');
+const assert = require('node:assert/strict');
+const html = readFileSync('viewer/index.html', 'utf8');
+const source = html.match(/<script id="voice-controller">([\s\S]*?)<\/script>/)[1];
+const FINISH = 900, MID_PAUSE = 600, BRAIN_WAIT = 8000;
+function setup(search = '', supported = true) {
+  let now = 0, next = 0, cancels = 0;
+  const timers = new Map(), elements = new Map(), speech = [], recognizers = [], sent = [];
+  const el = id => {
+    if (!elements.has(id)) elements.set(id, {textContent: id === 'answer' ? 'Ready when you are.' : '', setAttribute() {}});
+    return elements.get(id);
+  };
+  let click;
+  class Recognition {
+    constructor() { recognizers.push(this); }
+    start() {}
+    abort() { this.onend?.(); }
+    result(parts) { this.onresult({resultIndex: 0, results: parts.map(([text, final]) => Object.assign([{transcript: text}], {isFinal: final}))}); }
+  }
+  const synth = {getVoices: () => [{lang: 'en-US'}, {lang: 'en-GB'}], cancel() {cancels++;}, speak(u) {speech.push(u);}};
+  const context = {URLSearchParams, location: {search}, SpeechSynthesisUtterance: function(text) {this.text = text;},
+    document: {getElementById: el, addEventListener(_, fn) {click = fn;}},
+    setTimeout(fn, ms) {timers.set(++next, {fn, at: now + ms}); return next;},
+    clearTimeout(id) {timers.delete(id);}, window: {speechSynthesis: synth, webkitSpeechRecognition: supported ? Recognition : undefined}};
+  vm.runInNewContext(source, context);
+  const voice = context.window.JarvisVoice;
+  voice.setSubmit(q => {sent.push(q); voice.setThinking(true);});
+  function tick(ms) {now += ms; for (const [id, t] of [...timers]) if (t.at <= now) {timers.delete(id); t.fn();}}
+  return {context, voice, speech, sent, el, tick, click: () => click({isTrusted: true}), mic: () => el('mic').onclick(), current: () => recognizers.at(-1), cancels: () => cancels};
+}
+const a = setup();
+assert.equal(a.speech.length, 0);
+a.click(); assert.equal(a.speech.length, 1); assert.equal(a.speech[0].voice.lang, 'en-GB');
+a.click(); assert.equal(a.speech.length, 1);
+a.speech[0].onend(); a.mic();
+assert.equal(a.el('voice-status').textContent, 'Listening…');
+a.current().result([['Tell me about', true]]); a.tick(MID_PAUSE); assert.deepEqual(a.sent, []);
+a.current().onspeechstart(); a.tick(FINISH); assert.deepEqual(a.sent, []);
+a.current().result([['Tell me about', true], ['the quarterly', false]]); a.tick(FINISH); assert.deepEqual(a.sent, []);
+a.current().result([['Tell me about', true], ['the quarterly goals', true]]);
+a.tick(FINISH - 1); assert.deepEqual(a.sent, []); a.tick(1);
+assert.deepEqual(a.sent, ['Tell me about the quarterly goals']);
+assert.equal(a.el('voice-status').textContent, 'Thinking…');
+const stale = a.current(); a.mic(); stale.result([['Unwanted question', true]]); a.tick(BRAIN_WAIT);
+assert.equal(a.el('voice-status').textContent, 'Thinking…'); assert.equal(a.sent.length, 1);
+a.voice.setThinking(false); a.voice.speak('A long answer');
+assert.equal(a.el('voice-status').textContent, 'Speaking…');
+const count = a.cancels(); a.current().result([['stop', false]]);
+assert.ok(a.cancels() > count); assert.equal(a.el('voice-status').textContent, 'Listening…');
+a.tick(FINISH); assert.equal(a.sent.length, 1);
+a.voice.speak('Another answer'); a.current().result([['wait', true]]);
+assert.equal(a.el('voice-status').textContent, 'Listening…');
+a.current().result([['Across', true]]); a.tick(MID_PAUSE); a.current().onend();
+a.current().result([['sessions', true]]); a.tick(FINISH);
+assert.equal(a.sent.at(-1), 'Across sessions');
+const muted = setup('?mute=1'); muted.click(); muted.mic(); muted.voice.speak('Never audible');
+assert.equal(muted.speech.length, 0);
+muted.current().result([['Still works', true]]); muted.tick(FINISH); assert.deepEqual(muted.sent, ['Still works']);
+const denied = setup(); denied.mic(); denied.current().onerror({error: 'not-allowed'});
+assert.match(denied.el('voice-status').textContent, /permission denied/);
+const unsupported = setup('', false); assert.equal(unsupported.el('mic').disabled, true);
+console.log('VOICE PASS: activation, British voice, 900ms buffering, interim speech, session restart, 8s thinking, busy mic, immediate interrupts, mute, permission and unsupported states.');
+
+(async () => {
+  const app = setup('?mute=1');
+  let resolveReply, request;
+  const response = new Promise(resolve => { resolveReply = resolve; });
+  for (const id of ['send', 'question', 'suggestions', 'sources', 'answer-meta', 'answer-label', 'answer']) {
+    Object.assign(app.el(id), {value: '', classList: {add() {}, remove() {}}, replaceChildren() {}, focus() {}});
+  }
+  Object.assign(app.context, {console, AbortController, fetch: (path, options) => {request = {path, options}; return response;}});
+  vm.runInNewContext("const $ = id => document.getElementById(id); let busy = false, highlighted, activeLinks, selected; const GRAPH = {nodes: [], links: []}; const SETTINGS = {chatTimeoutMs: 100000, timePrecision: 2}; function linkKey() {} function refreshHighlights() {}", app.context);
+  vm.runInNewContext(html.match(/async function ask\(question\)\{[\s\S]*?(?=\n<\/script>)/)[0], app.context);
+  const pendingReply = app.context.ask('A typed question');
+  assert.equal(request.path, '/chat');
+  assert.equal(JSON.parse(request.options.body).question, 'A typed question');
+  app.tick(BRAIN_WAIT);
+  assert.equal(app.el('voice-status').textContent, 'Thinking…');
+  assert.equal(app.el('mic').disabled, true);
+  resolveReply({ok: true, json: async () => ({answer: 'A real-shaped answer', nodes: [], elapsed_s: 8})});
+  await pendingReply;
+  assert.equal(app.el('answer').textContent, 'A real-shaped answer');
+  assert.equal(app.el('voice-status').textContent, 'Ready');
+  assert.equal(app.el('mic').disabled, false);
+  assert.equal(app.speech.length, 0);
+  console.log('CHAT PASS: shared /chat request, full delayed-response thinking, response display, mic recovery, mute.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

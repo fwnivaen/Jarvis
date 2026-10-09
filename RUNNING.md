@@ -90,3 +90,62 @@ curl --max-time 100 -sS http://127.0.0.1:4700/chat \
 
 The result includes `answer`, `nodes`, and `elapsed_s`. Failure responses also
 include `error: true` and use HTTP 503. A failed call does not enter history.
+
+## Browser voice
+
+Voice uses the browser's Speech Synthesis and `webkitSpeechRecognition` APIs;
+there is no speech subscription, API key, or backend change. Use Chrome on
+localhost and allow microphone access. Recognition may use the browser vendor's
+online recognition service, so this is not a promise of offline transcription.
+British English playback is preferred when an installed voice is available;
+otherwise an English or system default voice is used.
+
+The first trusted page click speaks the welcome line. No speech is queued before
+that click. Click **Mic** to enable listening (click again to turn it off). Mic
+stays enabled across turns, but recognition is aborted and its results ignored
+while `/chat` is in flight. After the answer arrives, listening resumes; during
+playback it accepts only **stop** and **wait**, avoiding ordinary answer echo
+being sent back as a question. Headphones make spoken interruptions more reliable.
+The **Stop** button also cancels playback immediately without needing recognition.
+
+Final phrases wait for `FINISH_MS = 900` milliseconds of quiet. New interim
+speech cancels that deadline; new final phrases append and restart it. A pause
+longer than that window sends the question. Stop/wait bypass the window and
+cancel locally; they do not call the brain. Thinking remains visible for the
+entire request, including the usual eight-second CLI delay. Speech status resets
+on playback completion or error. Unsupported/denied microphones leave typing
+available.
+
+### Manual acceptance test
+
+1. Open `http://127.0.0.1:4700` in a fresh Chrome tab. Before any click, hear
+   nothing. Click the page: hear the welcome line once. Expect **Speaking…**
+   during playback, then **Ready**. Click again: no repeated greeting.
+2. Type “What are our Quarterly Goals?” and send. Expect **Thinking…** for the
+   full response wait and a disabled Mic button. Clicking Mic during that wait
+   must not record or start a second request. Expect the answer text and sources,
+   then spoken output with **Speaking…**, followed by **Ready**.
+3. Click **Mic**, grant permission, and wait for **Listening…**. Say “What does
+   Menu Pricing” — deliberately pause about half a second — then say “say about
+   the bowls?” Stop talking for at least 900 ms. Expect one combined question in
+   the input, one `/chat` request (inspect DevTools Network), **Thinking…** for
+   the entire wait, and one answer. No request should start at the mid-sentence
+   pause. Repeat with a pause over 900 ms to confirm the configured boundary.
+4. With Mic enabled, ask for a detailed answer. While it is being spoken, say
+   “stop”. Playback should cancel as soon as recognition reports the word,
+   without the 900 ms buffer or another brain request. Repeat with “wait”. Test
+   the **Stop** button mid-answer too; it cancels synchronously. Expect
+   **Listening…** after cancellation. Spoken recognition latency depends on the
+   browser; the application adds no finish delay for these commands.
+5. Open `http://127.0.0.1:4700/?mute=1` in a separate tab. Click, type a question,
+   and try Mic. Hear **nothing**, including no greeting or answers. See the
+   normal text answer and thinking/listening status; never **Speaking…**.
+   Keep the original tab idle so its audio cannot be mistaken for this tab.
+6. Deny microphone permission in a fresh permission session: see the permission
+   message and verify typed chat still works. Turn Mic off with a buffered
+   phrase: it must not send later. Try a failed server request: thinking clears
+   and the visible error is spoken unless muted.
+
+Automated checks: `python3 preflight.py` and `node tests/voice.cjs`. The voice
+suite uses browser API doubles and a virtual clock; it verifies timing and state
+without recording or playing audio. It does not replace the live checks above.
