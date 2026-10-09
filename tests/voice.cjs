@@ -71,7 +71,7 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
     Object.assign(app.el(id), {value: '', classList: {add() {}, remove() {}}, replaceChildren() {}, focus() {}});
   }
   Object.assign(app.context, {console, AbortController, fetch: (path, options) => {request = {path, options}; return response;}});
-  vm.runInNewContext("const $ = id => document.getElementById(id); let busy = false, highlighted, activeLinks, selected; const GRAPH = {nodes: [], links: []}; const SETTINGS = {chatTimeoutMs: 100000, timePrecision: 2}; function linkKey() {} function refreshHighlights() {}", app.context);
+  vm.runInNewContext("const $ = id => document.getElementById(id); let busy = false, highlighted, activeLinks, selected; const GRAPH = {nodes: [], links: []}; const SETTINGS = {chatTimeoutMs: 100000, timePrecision: 2}; function holdCamera() {} function showAnswerSources() {} function linkKey() {} function refreshHighlights() {}", app.context);
   vm.runInNewContext(html.match(/async function ask\(question\)\{[\s\S]*?(?=\n<\/script>)/)[0], app.context);
   const pendingReply = app.context.ask('A typed question');
   assert.equal(request.path, '/chat');

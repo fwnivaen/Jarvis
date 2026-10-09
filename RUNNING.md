@@ -88,7 +88,7 @@ curl --max-time 100 -sS http://127.0.0.1:4700/chat \
   -d '{"question":"What does Menu Pricing say about the harvest and ginger tofu bowls?"}'
 ```
 
-The result includes `answer`, `nodes`, and `elapsed_s`. Failure responses also
+The result includes `answer`, `about_notes`, `nodes`, and `elapsed_s`. Failure responses also
 include `error: true` and use HTTP 503. A failed call does not enter history.
 
 ## Browser voice
@@ -149,3 +149,39 @@ available.
 Automated checks: `python3 preflight.py` and `node tests/voice.cjs`. The voice
 suite uses browser API doubles and a virtual clock; it verifies timing and state
 without recording or playing audio. It does not replace the live checks above.
+
+
+## Source camera proof
+
+Intent and citations arrive together from the existing single Codex CLI call.
+While thinking, automatic orbit and any unfinished camera flight stop. On a
+note answer with one to three distinct sources, the camera flies to the first
+(strongest) citation, lights its direct neighbours plus the other cited notes,
+and opens its excerpt panel before answer speech starts. Four or more sources
+light the cited cluster and its connecting links without moving the camera;
+the previous single-note panel closes. Source highlighting clears category
+filters so cited notes cannot be hidden by a prior filter.
+
+Greetings, jokes and thanks return `about_notes: false` with no citations and
+preserve selection, highlights, and camera position. Unsupported note questions
+also hold the view. The only spoken content is the short answer, never the
+on-screen excerpt. Clicking a source remains an explicit manual navigation.
+
+Try these in order after restarting the server and refreshing the viewer:
+
+| Question | Expected proof |
+| --- | --- |
+| What does Menu Pricing say about the harvest and ginger tofu bowls? | Fly to Menu Pricing, light neighbours, show its panel during the answer. |
+| Summarize Menu Pricing, Cash Flow Forecast, Staffing Plan, and Quarterly Goals, giving one key point from each note. | With all four cited, light all four and hold the camera; close the single-note panel. |
+| Good morning! Tell me a joke. | No camera flight or highlight/selection change, even after the note questions. |
+
+`node tests/sources.cjs` executes actual viewer functions with graph/browser
+doubles and delayed responses. It checks the four-source threshold, panel and
+speech ordering, small talk after notes, empty sources, three-source answers,
+cancelling an unfinished flight, and one HTTP request per turn. Run it with
+`node tests/voice.cjs` and `python3 preflight.py`.
+
+Verification for this change: both Node suites and preflight passed. Live
+verification was blocked in the task environment: binding port 4700 was denied,
+and a direct Codex brain attempt reported that sign-in was required. The table
+above describes acceptance expectations, not fabricated live-model results.

@@ -91,9 +91,12 @@ class Preflight(unittest.TestCase):
 
     def test_answer_validation(self):
         notes = [{"id": TEST_NOTE_ID}]
-        self.assertEqual(server.validate_answer('{"answer":"A supported answer.","nodes":[2]}', notes)["nodes"], [TEST_NOTE_ID])
-        invalid = ('plain prose', '{"answer":"","nodes":[]}', '{"answer":"x","nodes":[999]}',
-                   '{"answer":"x","nodes":[true]}', '{"answer":"x","nodes":[],"extra":1}')
+        self.assertEqual(server.validate_answer('{"answer":"A supported answer.","about_notes":true,"nodes":[2]}', notes)["nodes"], [TEST_NOTE_ID])
+        self.assertEqual(server.validate_answer('{"answer":"Hello.","about_notes":false,"nodes":[2]}', notes)["nodes"], [])
+        with self.assertRaises(server.BrainError):
+            server.validate_answer('{"answer":"x","about_notes":"false","nodes":[]}', notes)
+        invalid = ('plain prose', '{"answer":"","about_notes":true,"nodes":[]}', '{"answer":"x","about_notes":true,"nodes":[999]}',
+                   '{"answer":"x","about_notes":true,"nodes":[true]}', '{"answer":"x","about_notes":true,"nodes":[],"extra":1}')
         for raw in invalid:
             with self.assertRaises(server.BrainError):
                 server.validate_answer(raw, notes)
