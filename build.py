@@ -23,7 +23,10 @@ def read_notes(directory=NOTES_DIR):
         if path.is_symlink() or directory not in path.resolve().parents:
             continue
         text = path.read_text(encoding="utf-8")
-        notes.append({"id": len(notes), "label": path.stem,
+        label = path.stem
+        if path.parent.name == "captures" and text.startswith("# "):
+            label = text.splitlines()[0][2:].strip() or label
+        notes.append({"id": len(notes), "label": label,
                       "group": path.parent.name, "excerpt": text[:EXCERPT_CHARS],
                       "text": text})
     return notes

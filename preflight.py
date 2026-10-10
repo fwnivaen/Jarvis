@@ -89,6 +89,47 @@ class Preflight(unittest.TestCase):
         self.assertIn("Cash Flow Forecast", [n["title"] for n in followup])
         self.assertEqual(server.retrieve("quasar nucleosynthesis", []), [])
 
+    def test_capture_persistence_index_and_failure(self):
+        original = server.NOTES
+        try:
+            with tempfile.TemporaryDirectory() as directory, patch.object(build, "NOTES_DIR", Path(directory)), patch.object(server, "ask_brain") as brain:
+                server.NOTES = [{"id": 0, "label": "Voice", "group": "System", "text": "finish window microphone", "excerpt": "finish window microphone"}]
+                (Path(directory) / "Voice.md").write_text("finish window microphone")
+                for trigger in ("remember that", "note to self", "don't let me forget", "don’t let me forget", "log this"):
+                    status, _, raw = request("/remember", "POST", {"question": trigger + " the finish window should be 900 milliseconds"})
+                    self.assertEqual(status, 200)
+                    result = json.loads(raw)
+                    self.assertIn("sir", result["answer"])
+                    self.assertEqual(result["graph"], build.make_graph(server.NOTES))
+                    self.assertTrue(result["graph"]["links"])
+                brain.assert_not_called()
+                files = list((Path(directory) / "captures").glob("*.md"))
+                self.assertEqual(len(files), 5)
+                self.assertTrue(all("the finish window should be 900 milliseconds" in p.read_text() for p in files))
+                self.assertTrue(all("Date: " in p.read_text() for p in files))
+                self.assertTrue(any("900 milliseconds" in n["text"] for n in server.retrieve("What should the finish window be?", [])))
+                with patch.object(server, "ask_brain", return_value={"answer": "900 milliseconds, sir.", "nodes": [1], "about_notes": True}) as chat:
+                    self.assertEqual(request("/chat", "POST", {"question": "What should the finish window be?"})[0], 200)
+                    self.assertTrue(any("900 milliseconds" in n["text"] for n in chat.call_args.args[1]))
+                rebuilt = build.read_notes(directory)
+                self.assertEqual({n["label"] for n in rebuilt}, {n["label"] for n in server.NOTES})
+                def edges(notes):
+                    return {tuple(sorted((notes[e["source"]]["label"], notes[e["target"]]["label"]))) for e in build.make_graph(notes)["links"]}
+                self.assertEqual(edges(rebuilt), edges(server.NOTES))
+                served = request("/graph-data.js")[2].decode()
+                self.assertIn("900 milliseconds", served)
+                before = len(server.NOTES)
+                with patch.object(Path, "open", side_effect=PermissionError):
+                    status, _, raw = request("/remember", "POST", {"question": "log this a failed capture"})
+                self.assertNotEqual(status, 200)
+                self.assertTrue(json.loads(raw)["error"])
+                self.assertIn("couldn't save", json.loads(raw)["answer"])
+                self.assertEqual(len(server.NOTES), before)
+                self.assertEqual(request("/remember", "POST", {"question": "remember that"})[0], 400)
+                self.assertEqual(request("/remember", "POST", {"question": "log this test"}, {"Origin": "https://attacker.example"})[0], 403)
+        finally:
+            server.NOTES = original
+
     def test_answer_validation(self):
         notes = [{"id": TEST_NOTE_ID}]
         self.assertEqual(server.validate_answer('{"answer":"A supported answer.","about_notes":true,"nodes":[2]}', notes)["nodes"], [TEST_NOTE_ID])

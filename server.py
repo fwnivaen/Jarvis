@@ -32,6 +32,8 @@ def ensure_persona_address(answer):
 
 # ========================== END JARVIS PERSONA ============================
 
+from datetime import datetime
+
 import http.cookies
 import json
 import os
@@ -102,6 +104,16 @@ ANSWER_SCHEMA = {"type": "object", "properties": {
 PUBLIC_FILES = {"/": ("index.html", "text/html; charset=utf-8"),
                 "/index.html": ("index.html", "text/html; charset=utf-8"),
                 "/graph-data.js": ("graph-data.js", "text/javascript; charset=utf-8")}
+CAPTURE_TITLE_WORDS = 7
+CAPTURE_TITLE_CHARS = 80
+CAPTURE_TOKEN_BYTES = 6
+CAPTURE_TRIGGER = re.compile(r"^(?:remember that|note to self|don[’']t let me forget|log this)(?=$|[\s:,.!?])[:,.!?\s]*", re.IGNORECASE)
+CAPTURE_CONFIRMATIONS = (
+    "Committed to memory, sir; considerably safer than a mental sticky note.",
+    "Filed and indexed, sir. Forgetting is now beneath us.",
+    "Remembered, sir; your next question may put me to the test.",
+)
+INDEX_LOCK = threading.RLock()
 NOTES = []
 SESSIONS = {}
 SESSION_LOCK = threading.Lock()
@@ -146,7 +158,9 @@ def retrieve(question, history):
     followup = bool(set(re.findall(r"\w+", question.casefold())) & FOLLOWUP_WORDS) or len(current) < MIN_WORD_CHARS
     previous = words(" ".join(turn["question"] for turn in history)) if followup else set()
     ranked = []
-    for note in NOTES:
+    with INDEX_LOCK:
+        snapshot = list(NOTES)
+    for note in snapshot:
         title, body = words(note["label"]), words(note["text"])
         score = TITLE_WEIGHT * len(current & title) + BODY_WEIGHT * len(current & body)
         score += HISTORY_WEIGHT * (TITLE_WEIGHT * len(previous & title) + len(previous & body))
@@ -155,6 +169,55 @@ def retrieve(question, history):
     ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
     return [{"id": n["id"], "title": n["label"], "text": n["text"][:CONTEXT_NOTE_CHARS]}
             for _, n in ranked[:TOP_NOTES]]
+
+
+def remember(question):
+    """Persist first, then publish a complete index snapshot. Never call the brain."""
+    global NOTES
+    match = CAPTURE_TRIGGER.match(question)
+    content = question[match.end():].strip() if match else ""
+    if not content:
+        raise BrainError("Nothing to file yet, sir. Say a capture trigger followed by the note.")
+    title = " ".join(re.findall(r"\w+", content)[:CAPTURE_TITLE_WORDS])[:CAPTURE_TITLE_CHARS] or "Untitled capture"
+    stamp = datetime.now().astimezone()
+    with INDEX_LOCK:
+        related = retrieve(content, [])
+        parent = related[0]["id"] if related else (NOTES[0]["id"] if NOTES else None)
+        text = f"# {title}\n\nDate: {stamp.date().isoformat()}\n\n{content}\n"
+        # A durable title mention uses exactly build.py's existing edge rule.
+        if related:
+            text += f"\nRelated: [[{NOTES[parent]['label']}]]\n"
+        note = {"id": len(NOTES), "label": title, "group": "captures",
+                "text": text, "excerpt": text[:build.EXCERPT_CHARS]}
+        updated = NOTES + [note]
+        graph = build.make_graph(updated)
+        root = build.NOTES_DIR.resolve()
+        folder = root / "captures"
+        path = None
+        created = False
+        try:
+            if folder.is_symlink():
+                raise OSError("Unsafe capture directory")
+            folder.mkdir(exist_ok=True)
+            if folder.resolve().parent != root:
+                raise OSError("Unsafe capture directory")
+            # Exclusive creation avoids overwrites, even for repeated sentences.
+            path = folder / f"{title} - {stamp.date()} - {secrets.token_hex(CAPTURE_TOKEN_BYTES)}.md"
+            with path.open("x", encoding="utf-8") as handle:
+                created = True
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+        except OSError:
+            if created:
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise BrainError("I couldn't save that capture, sir. Please check the notes folder and disk space, then try again.") from None
+        NOTES = updated
+        return {"answer": secrets.choice(CAPTURE_CONFIRMATIONS), "nodes": [note["id"]],
+                "about_notes": True, "graph": graph, "parent": parent, "captured": note["id"]}
 
 
 def validate_answer(raw, notes):
@@ -316,6 +379,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/graph-data.js":
+            with INDEX_LOCK:
+                data = "const GRAPH = " + json.dumps(build.make_graph(NOTES)) + ";\n"
+            self.send_bytes(data.encode(), "text/javascript; charset=utf-8", head=head)
+            return
         # Exact allowlist; no directory serving, traversal, percent decoding, or symlinks.
         if path not in PUBLIC_FILES:
             self.send_bytes(b"Not found", "text/plain", 404, head=head)
@@ -328,7 +396,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path != "/chat":
+        if self.path not in ("/chat", "/remember"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -348,6 +416,15 @@ class Handler(BaseHTTPRequestHandler):
             question = question.strip()
         except (ValueError, AttributeError, UnicodeDecodeError, TimeoutError):
             self.send_json({"answer": "Please send a short, nonempty question.", "nodes": []}, 400)
+            return
+        if self.path == "/remember":
+            try:
+                self.send_json(remember(question))
+            except BrainError as error:
+                self.send_json({"answer": str(error), "nodes": [], "error": True}, 400)
+            except Exception:
+                self.send_json({"answer": "I couldn't complete that capture, sir. Please check your notes before retrying.",
+                                "nodes": [], "error": True}, 500)
             return
         if not BRAIN_SLOTS.acquire(blocking=False):
             self.send_json({"answer": "I'm answering another question. Please try again in a moment.", "nodes": []}, 429)

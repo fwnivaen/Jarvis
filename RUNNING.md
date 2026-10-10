@@ -185,3 +185,36 @@ Verification for this change: both Node suites and preflight passed. Live
 verification was blocked in the task environment: binding port 4700 was denied,
 and a direct Codex brain attempt reported that sign-in was required. The table
 above describes acceptance expectations, not fabricated live-model results.
+
+
+## Voice captures (Prompt 05)
+
+Restart the server once after installing this update, then refresh the viewer.
+Say or type **remember that**, **note to self**, **don't let me forget**, or
+**log this**, followed by the complete note. Voice uses the same 900 ms finish
+buffer, including interim speech and multiple final fragments.
+
+`/remember` writes a unique Markdown file under `notes/captures/`, with a title,
+local date, and the full text after the trigger. It publishes the updated retrieval
+index before replying. No brain call is made. The most relevant keyword match
+gets a durable related-note link using the existing build rules. With no match,
+the first star is the birth position, without inventing a semantic link.
+The star pulses at its parent's position, then the camera flies to it. Reduced
+motion skips the pulse and camera animation. Existing IDs stay stable until a
+server restart; reload the viewer after restarting. New pages receive the current
+in-memory graph, including captures. Other already-open tabs should be refreshed.
+
+Write errors are shown and spoken through the normal voice gate (unless muted
+or browser audio is unavailable). If a network response is lost, Jarvis says the
+save is unconfirmed: check the captures folder before retrying. A successful save
+with a display failure is reported as saved and searchable, with a visual error.
+
+Acceptance test:
+1. Click Mic and say: **remember that the finish window should be 900 milliseconds**.
+2. Expect one short spoken confirmation and a new star, without a page reload.
+3. Immediately ask: **What should the finish window be?** Expect **900 milliseconds**
+   with the new capture as a source.
+4. Check the real Markdown in `notes/captures/`. Restart and refresh to verify persistence.
+
+Automated capture tests run in temporary folders and never add test notes to your
+brain: `python3 preflight.py`, `node tests/voice.cjs`, `node tests/sources.cjs`.
