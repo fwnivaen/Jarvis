@@ -52,8 +52,8 @@ func startListening() {
         DispatchQueue.main.async {
             if let result = result {
                 publish(result.isFinal ? "final" : "listening", result.bestTranscription.formattedString)
-            } else if error != nil {
-                publish("error", "Mac speech recognition stopped. Click Mic to retry.")
+            } else if let error = error as NSError? {
+                publish("error", "Mac speech recognition stopped (\(error.domain) \(error.code)). Click Mic to retry.")
             }
         }
     }

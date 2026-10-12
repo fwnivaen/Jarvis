@@ -255,9 +255,12 @@ class MacRecognition {
     clearTimeout(timer); timer = null; buffer = []; pending = false;
   }
   function stopSpeech() {
+    const wasSpeaking = speaking;
     generation++; speaking = false;
     if (synth) synth.cancel();
-    clearBuffer(); status();
+    clearBuffer();
+    if (wasSpeaking && Recognition === MacRecognition && enabled && !thinking) { haltRecognition(); listen(); }
+    status();
   }
   // All synthesis, including the greeting, passes through this single gate.
   function speak(text) {
@@ -271,7 +274,12 @@ class MacRecognition {
       voices.find(v => /^en\b/i.test(v.lang)) || null;
     utterance.lang = utterance.voice ? utterance.voice.lang : 'en-GB';
     speaking = true; status();
-    const finish = () => { if (token === generation) { speaking = false; status(); } };
+    const finish = () => { if (token === generation) {
+      speaking = false;
+      // Discard the native recognizer's cumulative transcript of our own voice.
+      if (Recognition === MacRecognition && enabled && !thinking) { haltRecognition(); clearBuffer(); listen(); }
+      status();
+    } };
     utterance.onend = finish;
     utterance.onerror = () => {
       if (token === generation) { notice = 'Voice unavailable · answer shown above'; finish(); }

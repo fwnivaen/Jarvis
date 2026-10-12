@@ -29,3 +29,5 @@ See RUNNING.md for detailed browser checks and historical verification notes.
 ## Microphone inside Codex
 
 If browser speech recognition fails, Mic switches to the bundled Mac speech helper. Build it once with `./native/build_voice.sh` (Apple command-line tools required). macOS asks for microphone and speech-recognition permission for Jarvis Voice. Recognition requires an available on-device English recognizer; audio is not sent to an API. Mic off, an in-flight question, or a closed tab stops recording. A ten-second heartbeat limit stops an abandoned session. Temporary transcripts are deleted when the session closes.
+
+Mac speech troubleshooting: `kLSRErrorDomain 201` means Dictation is disabled. Enable it under System Settings → Keyboard → Dictation. Jarvis still explicitly requires on-device recognition. Rebuilding the locally signed helper can cause macOS to request permission again; ordinary Jarvis restarts do not rebuild it.
