@@ -1,5 +1,15 @@
 # Run Jarvis
 
+Current daily launcher and audit test commands are in README.md.
+
+Migration audit on this Mac (October 11, 2026): the server successfully bound to
+127.0.0.1:4700, Codex sign-in succeeded, and full live preflight reported
+`12 pass, 0 fail, 2 warn`. The two warnings skip inactive OpenAI API checks.
+Real chat, immediate capture recall with cleanup, and JPEG vision all passed.
+The historical port/sign-in restrictions described below no longer apply to this
+Mac session. Browser microphone, speech and screen permissions still require the
+guided checks. Prompt 08 remains excluded.
+
 Requires Python 3.9+, an internet connection for the pinned viewer CDN libraries,
 and a signed-in Codex CLI. There is no npm build or Python package installation.
 
@@ -30,7 +40,7 @@ capture; its recall chain is a WARN because the model call was skipped.
 Quick mode does not prove the brain works. Full mode uses the server's
 `BRAIN_TIMEOUT_S` and `SEE_TIMEOUT_S`, plus transport overhead.
 
-With `codex-cli`, preflight requires `codex` on PATH and a successful
+With `codex-cli`, preflight finds `codex` on PATH or in its installed app and requires a successful
 `codex login status`, then makes one real `ask_brain()` call with the configured
 model. The inactive OpenAI checks are WARN (`skipped: codex-cli brain active`).
 With `openai-api`, it authenticates a real minimal `/v1/models` request and makes
@@ -243,7 +253,7 @@ buffer, including interim speech and multiple final fragments.
 local date, and the full text after the trigger. It publishes the updated retrieval
 index before replying. No brain call is made. The most relevant keyword match
 gets a durable related-note link using the existing build rules. With no match,
-the first star is the birth position, without inventing a semantic link.
+the capture links to one derived Captures hub, recreated from saved links after restart.
 The star pulses at its parent's position, then the camera flies to it. Reduced
 motion skips the pulse and camera animation. Existing IDs stay stable until a
 server restart; reload the viewer after restarting. New pages receive the current
