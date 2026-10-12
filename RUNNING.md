@@ -4,7 +4,7 @@ Requires Python 3.9+, an internet connection for the pinned viewer CDN libraries
 and a signed-in Codex CLI. There is no npm build or Python package installation.
 
 ```bash
-cd /Users/fwnivaen/Documents/Codex/2026-10-08/new-chat-5
+cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
 python3 preflight.py
 python3 server.py
 ```
@@ -218,3 +218,48 @@ Acceptance test:
 
 Automated capture tests run in temporary folders and never add test notes to your
 brain: `python3 preflight.py`, `node tests/voice.cjs`, `node tests/sources.cjs`.
+
+
+## Screen sight (Prompt 06)
+
+Restart the Python server and refresh Chrome. Click **Screen**, then choose the
+screen, window, or tab in the browser picker. **SCREEN SHARING LIVE** stays visible
+until sharing stops. Audio is not captured. Click **Stop sharing** or the browser's
+stop control to end the stream. **Use notes** ends sharing and restores normal chat.
+
+While sharing, typed and spoken questions go to `/see`. Explicit recall triggers
+such as **remember that** still save text through `/remember`. Each screen question
+captures exactly one frame at submission time, scales its long side to at most
+1600 pixels, and encodes JPEG at `SCREEN_JPEG_QUALITY = 0.82`. The JSON envelope
+contains `question`, base64 `image`, and `media_type: image/jpeg`; the HTTP envelope
+is `application/json`. No startup frame is cached. Unavailable, muted, or ended
+streams refuse capture. Ending or changing the share during a request discards
+that answer. Ended screen mode remains explicit until sharing again or Use notes.
+
+The configured brain backend and model remain unchanged. Codex image support is
+checked with `codex exec --help`; supported versions receive `--image` with a
+private temporary JPEG outside the repository. Temporary files are removed on
+success, failure, and timeout. Unsupported CLI versions return a spoken butler
+error. The API backend uses an `input_image` base64 JPEG data URL. Vision has its
+own `SEE_TIMEOUT_S = 120`; the browser allows 130 seconds including transport.
+Thinking remains visible throughout. Results use the existing speech gate,
+including mute and stop. Frames and screen answers never enter notes or chat
+history. The model is instructed to admit unreadable details rather than guess.
+
+Live acceptance:
+1. Restart the server, refresh Chrome, click Screen, and select a harmless window.
+2. Ask **what am I looking at**. Expect the actual contents described on screen
+   and spoken, with Thinking visible until completion.
+3. Change the shared content and ask again. Expect the new contents.
+4. Stop sharing and ask again. Expect an explicit ended-share response, no `/see`
+   request, and no remembered description. Use notes restores ordinary questions.
+5. Stop sharing while Thinking. Expect the old answer to be discarded.
+
+Verification in the coding session: `python3 preflight.py` passed 15 checks;
+`node tests/voice.cjs`, `node tests/sources.cjs`, and `node tests/screen.cjs` passed.
+Checks cover both backend payloads, JPEG rejection, temporary-file cleanup on
+success/error/timeout, no vision history, fresh frames, downscaling, thinking,
+and ended shares. Installed CLI help confirms `-i, --image <FILE>...`.
+Live verification remains pending: this session cannot bind port 4700, and a real
+CLI attachment probe returned a brain-connection error. No live screen answer
+was obtained; the automated doubles are not an end-to-end demo.

@@ -215,6 +215,75 @@ class Preflight(unittest.TestCase):
             self.assertTrue(result["error"])
             self.assertIn("too long", result["answer"])
 
+    def test_vision_route_requires_jpeg_and_has_no_history(self):
+        import base64
+        frame = b"\xff\xd8\xfftest\xff\xd9"
+        body = {"question": "What am I looking at?", "media_type": "image/jpeg",
+                "image": base64.b64encode(frame).decode()}
+        before = dict(server.SESSIONS)
+        with patch.object(server, "ask_brain", return_value={"answer": "A screen, sir.", "nodes": [], "about_notes": False}) as brain:
+            status, headers, _ = request("/see", "POST", body)
+            self.assertEqual(status, 200)
+            brain.assert_called_once_with(server.SEE_PROMPT, [], [], body["question"], image=frame)
+            self.assertNotIn("Set-Cookie", headers)
+            self.assertEqual(server.SESSIONS, before)
+            for change in ({"media_type": "image/png"}, {"image": "bad base64!"}, {"image": ""}, {"image": base64.b64encode(b"PNG").decode()}):
+                self.assertEqual(request("/see", "POST", dict(body, **change))[0], 400)
+            self.assertEqual(brain.call_count, 1)
+        self.assertEqual(request("/see", "POST", body, {"Origin": "https://attacker.example"})[0], 403)
+
+    def test_vision_cli_attachment_cleanup_and_timeout(self):
+        from types import SimpleNamespace
+        frame = b"\xff\xd8\xfftest\xff\xd9"
+        paths = []
+        seen_timeouts = []
+        mode = ["ok"]
+        class Process:
+            pid = 123
+            returncode = 0
+            def __init__(self, args, **kwargs):
+                self.path = Path(args[args.index("--image") + 1])
+                paths.append(self.path)
+                self.answer = Path(args[args.index("--output-last-message") + 1])
+                assert ROOT not in self.path.parents
+                assert self.path.read_bytes() == frame
+                self.first = True
+            def communicate(self, _input=None, timeout=None):
+                if self.first:
+                    seen_timeouts.append(timeout)
+                    self.first = False
+                    if mode[0] == "timeout":
+                        raise subprocess.TimeoutExpired("codex", timeout)
+                    if mode[0] == "error":
+                        self.returncode = 1
+                        return None, "failed"
+                    self.answer.write_text('{"answer":"A screen, sir.","nodes":[],"about_notes":false}')
+                return None, ""
+        with patch.object(server, "load_config", return_value={"brain": "codex-cli", "model": "test"}), patch.object(server, "find_codex", return_value="codex"), patch.object(server.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="-i, --image <FILE>...")), patch.object(server.subprocess, "Popen", Process), patch.object(server.os, "killpg"), contextlib.redirect_stdout(io.StringIO()):
+            for value in ("ok", "error", "timeout"):
+                mode[0] = value
+                result = server.ask_brain(server.SEE_PROMPT, [], [], "Look", image=frame)
+                self.assertEqual(bool(result.get("error")), value != "ok")
+                self.assertFalse(paths[-1].exists())
+            with patch.object(server.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="no image flag")):
+                result = server.ask_brain(server.SEE_PROMPT, [], [], "Look", image=frame)
+                self.assertTrue(result["error"])
+                self.assertIn("sir", result["answer"])
+                self.assertIn("image attachment", result["answer"])
+        self.assertEqual(seen_timeouts, [server.SEE_TIMEOUT_S] * 3)
+
+    def test_vision_api_data_url(self):
+        import base64
+        frame = b"\xff\xd8\xfftest\xff\xd9"
+        response = io.BytesIO(json.dumps({"output": [{"content": [{"type": "output_text", "text": '{"answer":"A screen, sir.","about_notes":false,"nodes":[]}'}]}]}).encode())
+        with patch.object(server, "load_config", return_value={"brain": "openai-api", "model": "test", "openai_api_key": "test-only"}), patch.object(server.urllib.request, "urlopen", return_value=response) as call, contextlib.redirect_stdout(io.StringIO()):
+            result = server.ask_brain(server.SEE_PROMPT, [], [], "Look", image=frame)
+        self.assertFalse(result.get("error"))
+        body = json.loads(call.call_args.args[0].data)
+        self.assertEqual(body["input"][0]["content"][1]["image_url"], "data:image/jpeg;base64," + base64.b64encode(frame).decode())
+        self.assertEqual(call.call_args.kwargs["timeout"], server.SEE_TIMEOUT_S)
+        self.assertFalse(body["store"])
+
     def test_ignored_files_are_untracked(self):
         for name in ("config.json", "viewer/graph-data.js"):
             result = subprocess.run(["git", "check-ignore", "-q", name], cwd=ROOT, timeout=TEST_TIMEOUT_S)
