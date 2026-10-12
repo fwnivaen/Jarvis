@@ -25,3 +25,7 @@ Markdown lives in `notes/`; captures live in `notes/captures/`. Unrelated captur
 The browser handles voice and screen permissions. Internet access is needed for the graph libraries and cloud brain. The old copy in Documents and the old persona stash are retained untouched.
 
 See RUNNING.md for detailed browser checks and historical verification notes.
+
+## Microphone inside Codex
+
+If browser speech recognition fails, Mic switches to the bundled Mac speech helper. Build it once with `./native/build_voice.sh` (Apple command-line tools required). macOS asks for microphone and speech-recognition permission for Jarvis Voice. Recognition requires an available on-device English recognizer; audio is not sent to an API. Mic off, an in-flight question, or a closed tab stops recording. A ten-second heartbeat limit stops an abandoned session. Temporary transcripts are deleted when the session closes.

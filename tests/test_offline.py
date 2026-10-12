@@ -242,6 +242,33 @@ class Preflight(unittest.TestCase):
             with self.assertRaisesRegex(FileNotFoundError, 'notes folder is missing'):
                 build.read_notes(build.NOTES_DIR)
 
+    def test_native_voice_requires_same_origin(self):
+        import voice_bridge
+        with patch.object(voice_bridge, 'handle', return_value={'status': 'starting'}) as bridge:
+            self.assertEqual(request('/voice/start', 'POST', {})[0], 403)
+            self.assertEqual(request('/voice/start', 'POST', {}, {'Origin': 'http://attacker.example'})[0], 403)
+            bridge.assert_not_called()
+            self.assertEqual(request('/voice/start', 'POST', {}, {'Origin': f'http://127.0.0.1:{TEST_PORT}'})[0], 200)
+            bridge.assert_called_once_with('start', None)
+
+    def test_native_voice_token_and_cleanup(self):
+        import voice_bridge
+        from unittest.mock import MagicMock
+        process = MagicMock()
+        process.poll.return_value = None
+        with patch.object(voice_bridge, 'SESSION', None), patch.object(voice_bridge, 'APP', Path(self.scratch.name)), patch.object(voice_bridge.subprocess, 'Popen', return_value=process):
+            try:
+                state = voice_bridge.handle('start')
+                folder = Path(voice_bridge.SESSION['scratch'].name)
+                self.assertTrue(folder.exists())
+                self.assertEqual(voice_bridge.handle('poll', 'wrong')['status'], 'error')
+                self.assertEqual(voice_bridge.handle('start')['status'], 'error')
+                self.assertEqual(voice_bridge.handle('stop', state['token'])['status'], 'stopped')
+                self.assertFalse(folder.exists())
+                self.assertIsNone(voice_bridge.SESSION)
+            finally:
+                voice_bridge.stop()
+
     def test_finish_window_numeric_and_tunable(self):
         import preflight
         with patch.object(Path, 'read_text', return_value='<script>const FINISH_MS = 750; setTimeout(fn, FINISH_MS)</script>'):

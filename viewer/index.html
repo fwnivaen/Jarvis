@@ -197,16 +197,56 @@ document.getElementById('answer').textContent = bootGreeting();
 </script>
 <script id="voice-controller">
 const FINISH_MS = 900;
+const NATIVE_POLL_MS = 150;
+class MacRecognition {
+  constructor() { this.closed=false; this.token=null; this.sequence=0; this.lastText=''; }
+  async call(action, data={}) {
+    const response=await fetch('/voice/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!response.ok)throw new Error('Mac voice connection failed');
+    return response.json();
+  }
+  async start() {
+    try {
+      const state=await this.call('start');
+      if(state.status==='error')throw new Error(state.text);
+      this.token=state.token;
+      if(this.closed){await this.call('stop',{token:this.token});return;}
+      this.poll();
+    }catch(error){if(!this.closed)this.onerror?.({error:'native',message:error.message});}
+  }
+  async poll() {
+    if(this.closed)return;
+    try {
+      const state=await this.call('poll',{token:this.token});
+      if(this.closed)return;
+      if(state.status==='error')throw new Error(state.text);
+      this.onstatus?.(state.status==='permission'?state.text:state.status==='starting'?'Starting Mac microphone…':'');
+      if(state.sequence!==this.sequence){
+        this.sequence=state.sequence;
+        if(state.text && (state.status==='listening'||state.status==='final') && state.text!==this.lastText){
+          this.lastText=state.text;
+          this.onresult?.({native:true,text:state.text});
+        }
+      }
+      if(state.status==='final'){this.abort();this.onend?.();return;}
+      this.timer=setTimeout(()=>this.poll(),NATIVE_POLL_MS);
+    }catch(error){if(!this.closed)this.onerror?.({error:'native',message:error.message});}
+  }
+  abort() {
+    this.closed=true;clearTimeout(this.timer);
+    if(this.token)this.call('stop',{token:this.token}).catch(()=>{});
+  }
+}
 (() => {
   const el = id => document.getElementById(id);
   const synth = window.speechSynthesis;
-  const Recognition = window.webkitSpeechRecognition;
+  let Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || MacRecognition;
   let activated = false, thinking = false, speaking = false, enabled = false;
   let recognition = null, timer = null, buffer = [], pending = false, generation = 0;
   let notice = '', submit = null;
   function status() {
     el('voice-status').textContent = thinking ? 'Thinking…' : speaking ? 'Speaking…' :
-      enabled ? 'Listening…' : notice || 'Ready';
+      enabled ? notice || 'Listening…' : notice || 'Ready';
     el('mic').disabled = thinking || !Recognition;
     el('mic').setAttribute('aria-pressed', String(enabled));
     el('mic').textContent = enabled ? 'Mic on' : 'Mic';
@@ -256,10 +296,17 @@ const FINISH_MS = 900;
   function listen() {
     if (!enabled || thinking || recognition || !Recognition) return;
     const current = new Recognition(); recognition = current;
+    current.onstatus = message => { if(recognition===current){notice=message;status();} };
     const finals = new Set();
     current.lang = 'en-GB'; current.continuous = true; current.interimResults = true;
     current.onresult = event => {
       if (recognition !== current || thinking) return;
+      if(event.native){
+        const text=event.text.trim();
+        if(/^(stop|wait)[.!?,]*$/i.test(text)){stopSpeech();return;}
+        if(speaking)return;
+        clearTimeout(timer); pending=false; buffer=[text]; schedule(); return;
+      }
       // Any new speech invalidates the old finish window, including interim speech.
       clearTimeout(timer); pending = false;
       for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -278,17 +325,21 @@ const FINISH_MS = 900;
     current.onerror = event => {
       if (recognition !== current) return;
       if (event.error === 'no-speech') { pending = false; schedule(); return; }
+      if(['network','service-not-allowed'].includes(event.error) && Recognition!==MacRecognition){
+        haltRecognition();clearBuffer();Recognition=MacRecognition;
+        notice='Starting Mac microphone…';listen();status();return;
+      }
       enabled = false; clearBuffer();
-      notice = event.error === 'not-allowed' ? 'Microphone permission denied · type instead' :
-        'Microphone unavailable · click Mic to retry';
+      notice = event.error==='native' ? event.message : event.error === 'not-allowed' ? 'Microphone permission denied · type instead' :
+        `Microphone unavailable (${event.error || 'unknown'}) · click Mic to retry`;
       haltRecognition(); status();
     };
     current.onend = () => {
       if (recognition !== current) return;
       recognition = null; pending = false; schedule(); listen(); status();
     };
-    try { current.start(); } catch (_) {
-      recognition = null; enabled = false; notice = 'Microphone unavailable · click Mic to retry';
+    try { current.start(); } catch (error) {
+      recognition = null; enabled = false; notice = `Microphone could not start (${error.name || 'unknown'}) · click Mic to retry`;
     }
     status();
   }

@@ -66,10 +66,20 @@ assert.equal(muted.speech.length, 0);
 muted.current().result([['Still works', true]]); muted.tick(FINISH); assert.deepEqual(muted.sent, ['Still works']);
 const denied = setup(); denied.mic(); denied.current().onerror({error: 'not-allowed'});
 assert.match(denied.el('voice-status').textContent, /permission denied/);
-const unsupported = setup('', false); assert.equal(unsupported.el('mic').disabled, true);
+const unsupported = setup('', false); assert.equal(unsupported.el('mic').disabled, false);
 console.log('VOICE PASS: activation, British voice, 900ms buffering, interim speech, session restart, 8s thinking, busy mic, immediate interrupts, mute, permission and unsupported states.');
 
 (async () => {
+  const native = setup('?mute=1');
+  const calls=[];
+  native.context.fetch=async(path)=>{calls.push(path);return {ok:true,json:async()=>path.endsWith('/start')?{token:'test',status:'starting'}:path.endsWith('/stop')?{status:'stopped'}:{status:'listening',sequence:1,text:'A native sentence'}}};
+  native.mic();native.current().onerror({error:'network'});
+  for(let i=0;i<12;i++)await Promise.resolve();
+  assert.ok(calls.includes('/voice/start'));
+  assert.ok(calls.includes('/voice/poll'));
+  native.tick(FINISH);
+  assert.deepEqual(native.sent,['A native sentence']);
+  assert.ok(calls.includes('/voice/stop'));
   const app = setup('?mute=1');
   let resolveReply, request;
   const response = new Promise(resolve => { resolveReply = resolve; });

@@ -45,6 +45,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import build
+import voice_bridge
 
 ROOT = Path(__file__).resolve().parent
 VIEWER_DIR = ROOT / "viewer"
@@ -479,7 +480,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/chat", "/remember", "/see", "/preflight/cleanup"):
+        if self.path not in ("/chat", "/remember", "/see", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -493,6 +494,13 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path == "/see" else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
+            if self.path.startswith("/voice/"):
+                # Voice control must originate in our own viewer, never a cross-site POST.
+                if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
+                    self.send_json({"status": "error", "text": "Local viewer requests only."}, 403)
+                    return
+                self.send_json(voice_bridge.handle(self.path.rsplit("/", 1)[-1], body.get("token")))
+                return
             if self.path == "/preflight/cleanup":
                 token = body.get("token")
                 if not isinstance(token, str) or not PREFLIGHT_TOKEN.fullmatch(token):
