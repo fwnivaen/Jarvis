@@ -1,11 +1,14 @@
 """Local-only note galaxy with text and screen retrieval. Standard library only."""
 # ==================== JARVIS PERSONA — EDIT THIS BLOCK ====================
-SYSTEM_PROMPT = (
+PERSONA_PROMPT = (
     "You are Jarvis, a dry, impeccably polite British butler with a razor wit. "
-    "Address the user as sir once in EVERY reply, including greetings, jokes, thanks, "
-    "small talk, and unsupported questions. Do not repeat it in every sentence. "
+    "Use sir occasionally, roughly one reply in three, and never in every reply. "
     "Use ONE witty sentence plus only the facts needed. One genuinely funny line "
     "beats three bland ones; if nothing funny is available, be brief instead. "
+)
+# ========================== END JARVIS PERSONA ============================
+
+SYSTEM_PROMPT = PERSONA_PROMPT + (
     "First decide whether the current question is about the notes, using history only to resolve genuine follow-ups. "
     "Greetings, thanks, jokes and general small talk are not about notes, even after a note question. "
     "For small talk, reply naturally and set about_notes false and nodes empty. "
@@ -20,18 +23,6 @@ SYSTEM_PROMPT = (
     "ordered with the strongest source first). Cite every note actually used, not merely retrieved. "
     "Use an empty nodes array for an unsupported answer. Never invent IDs."
 )
-# Deterministic fallback shared by both backends; no extra model call.
-PERSONA_ADDRESS = "sir"
-
-
-def ensure_persona_address(answer):
-    if re.search(rf"\b{re.escape(PERSONA_ADDRESS)}\b", answer, flags=re.IGNORECASE):
-        return answer
-    return f"{PERSONA_ADDRESS.capitalize()}, {answer}"
-
-
-# ========================== END JARVIS PERSONA ============================
-
 from datetime import datetime
 
 import base64
@@ -64,12 +55,11 @@ BRAIN_TIMEOUT_S = 90
 SEE_TIMEOUT_S = 120
 MAX_SEE_REQUEST_BYTES = 5_000_000
 JPEG_MIME = "image/jpeg"
-SIGHT_UNSUPPORTED = "Sight needs the OpenAI or Gemini brain with this Codex CLI, sir; image attachment support is unavailable. This server currently supports openai-api as the alternative."
+SIGHT_UNSUPPORTED = "Sight needs an API brain, sir. Add an OpenAI key in config.json to enable it."
 PREFLIGHT_PROTOCOL = 1
 PREFLIGHT_TOKEN = re.compile(r"^[0-9a-f]{32}$")
 PREFLIGHT_CLOSED_TTL_S = 3600
-SEE_PROMPT = (
-    "You are Jarvis, a concise, dry, polite British butler. Address the user as sir. "
+SEE_PROMPT = PERSONA_PROMPT + (
     "Answer the question specifically from the attached CURRENT screen frame only. "
     "If details are too small, blurry, missing or unreadable, say so plainly; never guess. "
     "You see one still frame, not a live feed. Do not claim to see changes or earlier frames. "
@@ -128,8 +118,8 @@ CAPTURE_TOKEN_BYTES = 6
 CAPTURE_TRIGGER = re.compile(r"^(?:remember that|note to self|don[’']t let me forget|log this)(?=$|[\s:,.!?])[:,.!?\s]*", re.IGNORECASE)
 CAPTURE_CONFIRMATIONS = (
     "Committed to memory, sir; considerably safer than a mental sticky note.",
-    "Filed and indexed, sir. Forgetting is now beneath us.",
-    "Remembered, sir; your next question may put me to the test.",
+    "Filed and indexed. Forgetting is now beneath us.",
+    "Remembered; your next question may put me to the test.",
 )
 INDEX_LOCK = threading.RLock()
 NOTES = []
@@ -180,6 +170,8 @@ def retrieve(question, history):
     ranked = []
     with INDEX_LOCK:
         snapshot = list(NOTES)
+    if not build.NOTES_DIR.is_dir():
+        raise BrainError(build.NOTES_MISSING)
     for note in snapshot:
         title, body = words(note["label"]), words(note["text"])
         score = TITLE_WEIGHT * len(current & title) + BODY_WEIGHT * len(current & body)
@@ -207,14 +199,21 @@ def remember(question, preflight_token=None):
                     or preflight_token in PREFLIGHT_CLOSED or preflight_token in PREFLIGHT_CAPTURES):
                 raise BrainError("Invalid or already completed preflight capture, sir.")
         related = retrieve(content, [])
-        parent = related[0]["id"] if related else (NOTES[0]["id"] if NOTES else None)
+        updated = list(NOTES)
+        if related:
+            parent = related[0]["id"]
+        else:
+            hub = next((n for n in updated if n["label"] == build.CAPTURE_HUB_TITLE), None)
+            if hub is None:
+                hub = build.capture_hub(len(updated))
+                updated.append(hub)
+            parent = hub["id"]
         text = f"# {title}\n\nDate: {stamp.date().isoformat()}\n\n{content}\n"
         # A durable title mention uses exactly build.py's existing edge rule.
-        if related:
-            text += f"\nRelated: [[{NOTES[parent]['label']}]]\n"
-        note = {"id": len(NOTES), "label": title, "group": "captures",
+        text += f"\nRelated: [[{updated[parent]['label']}]]\n"
+        note = {"id": len(updated), "label": title, "group": "captures",
                 "text": text, "excerpt": text[:build.EXCERPT_CHARS]}
-        updated = NOTES + [note]
+        updated.append(note)
         graph = build.make_graph(updated)
         root = build.NOTES_DIR.resolve()
         folder = root / "captures"
@@ -270,6 +269,8 @@ def cleanup_preflight(token):
                     raise BrainError("Preflight capture was edited; cleanup refused, sir.")
                 path.unlink()
             NOTES = [item for item in NOTES if item is not note]
+            if not any(f"[[{build.CAPTURE_HUB_TITLE}]]" in item["text"] for item in NOTES):
+                NOTES = [item for item in NOTES if not item.get("capture_hub")]
             for index, item in enumerate(NOTES):
                 item["id"] = index
             build.write_graph(build.make_graph(NOTES))
@@ -297,7 +298,7 @@ def validate_answer(raw, notes):
         allowed = {note["id"] for note in notes}
         if not all(type(node) is int and node in allowed for node in result["nodes"]):
             raise ValueError
-        result["answer"] = ensure_persona_address(result["answer"].strip())
+        result["answer"] = result["answer"].strip()
         result["nodes"] = list(dict.fromkeys(result["nodes"]))
         return result
     except (ValueError, TypeError):
@@ -401,7 +402,7 @@ def ask_brain(system, notes, history, question, image=None):
             raise BrainError("Choose codex-cli or openai-api as the brain in your local configuration file.")
         return validate_answer(raw, notes)
     except BrainError as error:
-        return {"answer": ensure_persona_address(str(error)), "nodes": [], "about_notes": False, "error": True}
+        return {"answer": str(error), "nodes": [], "about_notes": False, "error": True}
     except (OSError, ValueError, TypeError):
         return {"answer": "My brain couldn't start safely. Check your Codex installation and settings, then try again.", "nodes": [], "about_notes": False, "error": True}
     finally:
@@ -528,6 +529,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "I'm answering another question. Please try again in a moment.", "nodes": []}, 429)
             return
         try:
+            if self.path == "/chat" and not build.NOTES_DIR.is_dir():
+                self.send_json({"answer": build.NOTES_MISSING, "nodes": [], "error": True}, 503)
+                return
             if self.path == "/see":
                 start = time.monotonic()
                 result = ask_brain(SEE_PROMPT, [], [], question, image=image)
@@ -568,7 +572,11 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global NOTES
     initialize_config()
-    NOTES, graph = build.build()
+    try:
+        NOTES, graph = build.build()
+    except FileNotFoundError:
+        NOTES, graph = [], {"nodes": [], "links": []}
+        print(build.NOTES_MISSING, flush=True)
     try:
         server = GalaxyServer((HOST, PORT), Handler)
     except PermissionError:

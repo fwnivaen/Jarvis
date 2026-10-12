@@ -10,7 +10,6 @@ import hashlib
 import io
 import json
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -32,6 +31,8 @@ SIGHT_TIMEOUT_S = server.SEE_TIMEOUT_S + server.CLI_CHECK_TIMEOUT_S + TRANSPORT_
 LOCAL_TIMEOUT_S = server.CLI_CHECK_TIMEOUT_S
 MAX_RESPONSE_BYTES = 20_000_000
 SUMMARY_PRECISION = 2
+EXPECTED_FINISH_MS = 900
+OFFLINE_TIMEOUT_S = 30
 OPENAI_MODELS_URL = 'https://api.openai.com/v1/models'
 PLACEHOLDER_KEY = 'PUT-YOUR-KEY-HERE'
 BRAIN_QUESTION = 'Say ready in one short sentence.'
@@ -205,11 +206,11 @@ class Harness:
         return 'real note question returned a valid answer and source nodes'
 
     def cli_login(self):
-        executable = shutil.which('codex')
-        require(executable is not None, 'codex is not on PATH; add your installed CLI to PATH')
+        executable = server.find_codex()
+        require(executable is not None, 'Codex CLI was not found in PATH or its installed app location')
         result = subprocess.run([executable, 'login', 'status'], capture_output=True, text=True, timeout=LOCAL_TIMEOUT_S)
         require(result.returncode == 0, 'Codex is not logged in; run codex login locally')
-        return 'codex is on PATH and login status succeeded'
+        return 'installed Codex CLI found and login status succeeded'
 
     def minimal_brain(self):
         self.settings()
@@ -306,7 +307,7 @@ class Harness:
         if no_images:
             require(status == 503 and value.get('error') is True and value.get('answer') == server.SIGHT_UNSUPPORTED
                     and value.get('nodes') == [], 'unsupported CLI did not return the explicit sight limitation')
-            raise CheckWarning('sight needs the OpenAI or Gemini brain; CLI has no image support')
+            raise CheckWarning(server.SIGHT_UNSUPPORTED)
         require(status == 200, f'/see returned HTTP {status}; image-capable backend must answer')
         valid_answer(value)
         require(value['about_notes'] is False and bool(SIGHT_EXPECTED.search(value['answer'])), 'sight did not identify the real JPEG content')
@@ -359,14 +360,24 @@ class Harness:
         page = (server.VIEWER_DIR / 'index.html').read_text(encoding='utf-8')
         scripts = '\n'.join(re.findall(r'<script\b[^>]*>(.*?)</script>', page, re.S | re.I))
         scripts = re.sub(r'/\*.*?\*/|//[^\n]*', '', scripts, flags=re.S)
-        require(re.search(r'\bconst\s+FINISH_MS\s*=\s*\d+\s*;', scripts) is not None,
-                'viewer has no named const FINISH_MS')
+        match = re.search(r'\bconst\s+FINISH_MS\s*=\s*(\d+(?:\.\d+)?)\s*;', scripts)
+        require(match is not None, 'FINISH_MS must exist and be a numeric constant')
         require(re.search(r'setTimeout\([\s\S]*?,\s*FINISH_MS\s*\)', scripts) is not None,
                 'FINISH_MS is not used by the finish timer')
-        return 'named FINISH_MS constant exists and drives the finish timer'
+        if float(match.group(1)) != EXPECTED_FINISH_MS:
+            raise CheckWarning(f'FINISH_MS is {match.group(1)} ms; recommended default is {EXPECTED_FINISH_MS} ms')
+        return 'numeric FINISH_MS is 900 ms and drives the finish timer'
+
+    def offline(self):
+        result = subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests',
+                                 '-p', 'test_offline.py'], cwd=ROOT, capture_output=True,
+                                text=True, timeout=OFFLINE_TIMEOUT_S)
+        require(result.returncode == 0, 'offline regression tests failed; run the README test command for details')
+        return 'offline regression tests passed without network or real brain calls'
 
     def execute(self):
         print('Jarvis preflight — ' + ('QUICK: live brain chains will be WARN' if self.quick else 'FULL LIVE RUN'), flush=True)
+        self.run('Offline regressions', self.offline)
         self.run('Server and viewer', self.viewer)
         self.run('Graph data', self.load_graph)
         self.run('/chat live answer', self.chat, brain=True)

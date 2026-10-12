@@ -175,7 +175,7 @@ button { transition: background var(--transition), color var(--transition), bord
 <main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
 <div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
 <aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" maxlength="2000" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
 <script src="graph-data.js"></script>
 <script id="boot-greeting">
 // Local boot copy only: the conversational persona lives at the top of server.py.
@@ -189,7 +189,7 @@ function bootGreeting(now = new Date()) {
   const hour = now.getHours();
   const period = hour < GREETING_SETTINGS.afternoonHour ? 'morning' :
     hour < GREETING_SETTINGS.eveningHour ? 'afternoon' : 'evening';
-  const count = GRAPH.nodes.length;
+  const count = GRAPH.nodes.filter(node => !node.capture_hub).length;
   const phrase = GREETING_PHRASES[Math.floor(Math.random() * GREETING_PHRASES.length)];
   return `Good ${period}, sir. ${count.toLocaleString()} ${count === 1 ? 'note' : 'notes'} indexed, ${phrase}`;
 }
@@ -324,9 +324,11 @@ const FINISH_MS = 900;
 </script>
 <script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.79.0/dist/3d-force-graph.min.js"></script>
 <script type="module">
-const SCREEN_MAX_PX = 1600;
+const SEE_MAX_PX = 1600;
 const SCREEN_JPEG_QUALITY = 0.82;
 const SEE_REQUEST_TIMEOUT_MS = 130000;
+const VIDEO_READY_STATE = 2;
+const QUESTION_MAX_CHARS = 2000;
 const SETTINGS=Object.freeze({capturePulseMs:550,capturePulseScale:2.8,captureTimeoutMs:10000,sourceClusterThreshold:4,initialDistance:620,initialHeight:80,cameraMs:1300,focusDistance:120,starCount:1700,starRadius:1200,starSize:1.4,starOpacity:.85,nodeRadius:3.1,nodeSegments:16,nodeRings:12,glowSize:34,selectedScale:1.65,inactiveOpacity:.16,nodeOpacity:.92,glowOpacity:.65,linkOpacity:.56,linkWidth:.35,activeLinkWidth:1.35,orbitSpeed:.22,linkDistance:69,repulsion:-165,cooldownTicks:140,warmupTicks:70,clusterRadius:110,clusterSpread:60,clusterForce:.015,pixelRatioLimit:2,spritePixels:128,chatTimeoutMs:100000,fullCircle:Math.PI*2,half:.5,goldenAngle:2.399963,clusterMembers:6,timePrecision:2,dimensions:3,glowStops:[[0,1],[.15,.7],[.45,.12],[1,0]],groups:{Finance:'#f2c67e',Marketing:'#b397ed',Operations:'#71bce6',People:'#f294ac',Strategy:'#86d7bd'}});
 const $=id=>document.getElementById(id),reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let cameraFrame=null;
@@ -360,6 +362,7 @@ function focusNode(node){if(!graph||busy)return;selected=node.id;highlighted=new
 function clearSelection(){selected=null;highlighted.clear();activeLinks.clear();$('detail').hidden=true;refreshHighlights();drawSidebar()}
 function recenter(){if(busy)return;clearSelection();activeGroup=null;$('search').value='';drawSidebar();refreshHighlights();if(graph)flyCamera({x:0,y:SETTINGS.initialHeight,z:SETTINGS.initialDistance},{x:0,y:0,z:0});setOrbit(!reducedMotion)}
 $('search').addEventListener('input',drawSidebar);$('orbit').onclick=()=>setOrbit(!orbit);$('reset').onclick=recenter;$('close-detail').onclick=clearSelection;$('metric-notes').textContent=GRAPH.nodes.length;$('metric-links').textContent=GRAPH.links.length;$('metric-groups').textContent=groups.length;$('group-count').textContent=groups.length;$('index-summary').textContent=`${GRAPH.nodes.length} notes · ${GRAPH.links.length} connections`;$('graph-stats').textContent=`${GRAPH.nodes.length} NOTES / ${GRAPH.links.length} CONNECTIONS`;drawSidebar();
+$('question').maxLength=QUESTION_MAX_CHARS;
 window.JarvisVoice.setSubmit(ask);
 $('chat-form').addEventListener('submit',event=>{event.preventDefault();ask($('question').value)});document.querySelectorAll('[data-question]').forEach(button=>button.onclick=()=>{$('question').value=button.dataset.question;ask(button.dataset.question)});
 try{
@@ -424,9 +427,9 @@ $('screen').onclick=async()=>{
 function screenFrame(){
  const track=screenStream?.getVideoTracks()[0],video=screenVideo;
  if(!track||track.readyState!=='live')throw new Error('The screen share has ended, sir. Share again, or select Use notes; I cannot see an earlier frame.');
- if(track.muted||!video||video.readyState<2||!video.videoWidth||!video.videoHeight)
+ if(track.muted||!video||video.readyState<VIDEO_READY_STATE||!video.videoWidth||!video.videoHeight)
   throw new Error('The screen frame is not available yet, sir. Please try again once the share is visible.');
- const scale=Math.min(1,SCREEN_MAX_PX/Math.max(video.videoWidth,video.videoHeight));
+ const scale=Math.min(1,SEE_MAX_PX/Math.max(video.videoWidth,video.videoHeight));
  const canvas=document.createElement('canvas');
  canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));
  try{

@@ -10,6 +10,16 @@ NOTES_DIR = ROOT / "notes"
 GRAPH_PATH = ROOT / "viewer" / "graph-data.js"
 EXCERPT_CHARS = 700
 JSON_INDENT = 2
+CAPTURE_HUB_TITLE = "Captures"
+NOTES_MISSING = "Your notes folder is missing. Restore the notes folder beside server.py, then restart Jarvis."
+
+
+def capture_hub(node_id):
+    return {"id": node_id, "label": CAPTURE_HUB_TITLE, "group": "captures",
+            "excerpt": "Saved captures without another related note.",
+            "text": "Saved captures without another related note.", "capture_hub": True}
+
+
 WIKILINK = re.compile(r"\[\[([^\]]+)\]\]")
 
 
@@ -19,6 +29,8 @@ def normalize(text):
 
 def read_notes(directory=NOTES_DIR):
     directory = Path(directory).resolve()
+    if not directory.is_dir():
+        raise FileNotFoundError(NOTES_MISSING)
     notes = []
     for path in sorted(directory.rglob("*.md"), key=lambda p: p.relative_to(directory).as_posix().casefold()):
         # Do not follow symlinks out of the notes tree.
@@ -31,11 +43,17 @@ def read_notes(directory=NOTES_DIR):
         notes.append({"id": len(notes), "label": label,
                       "group": path.parent.name, "excerpt": text[:EXCERPT_CHARS],
                       "text": text})
+    if (any(f"[[{CAPTURE_HUB_TITLE}]]" in n["text"] for n in notes)
+            and not any(n["label"] == CAPTURE_HUB_TITLE for n in notes)):
+        notes.append(capture_hub(len(notes)))
     return notes
 
 
 def make_graph(notes):
     nodes = [{key: note[key] for key in ("id", "label", "group", "excerpt")} for note in notes]
+    for node, note in zip(nodes, notes):
+        if note.get("capture_hub"):
+            node["capture_hub"] = True
     bodies = [" " + normalize(n["text"]) + " " for n in notes]
     titles = [" " + normalize(n["label"]) + " " for n in notes]
     wikilinks = [{normalize(link.split("|")[0].split("#")[0])
@@ -76,5 +94,8 @@ def build(directory=NOTES_DIR, output=GRAPH_PATH):
 
 
 if __name__ == "__main__":
-    _, graph = build()
+    try:
+        _, graph = build()
+    except FileNotFoundError:
+        raise SystemExit(NOTES_MISSING) from None
     print(f"Indexed {len(graph['nodes'])} notes and {len(graph['links'])} links.")
