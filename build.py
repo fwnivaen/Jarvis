@@ -1,6 +1,8 @@
 """Index markdown notes using only the Python standard library."""
 import json
 import re
+import os
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -47,12 +49,29 @@ def make_graph(notes):
     return {"nodes": nodes, "links": links}
 
 
+def graph_bytes(graph):
+    return ("const GRAPH = " + json.dumps(graph, ensure_ascii=True, indent=JSON_INDENT) + ";\n").encode("utf-8")
+
+
+def write_graph(graph, output=GRAPH_PATH):
+    """Publish atomically so readers never see a partially written script."""
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=output.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(graph_bytes(graph))
+        os.replace(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def build(directory=NOTES_DIR, output=GRAPH_PATH):
     notes = read_notes(directory)
     graph = make_graph(notes)
-    output = Path(output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("const GRAPH = " + json.dumps(graph, ensure_ascii=True, indent=JSON_INDENT) + ";\n", encoding="utf-8")
+    write_graph(graph, output)
     return notes, graph
 
 

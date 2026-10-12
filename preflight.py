@@ -1,309 +1,405 @@
-"""Offline security and behavior checks. Does not call a model or read secrets."""
+"""Live Jarvis checks. Start server.py first; no mocks or replacement brain.
+
+--quick skips model inference, but still writes and cleans a real capture.
+Only PASS/FAIL/WARN verdicts count; skipped chains are never passes.
+"""
+import argparse
+import base64
 import contextlib
+import hashlib
 import io
 import json
 import re
+import shutil
 import subprocess
-import tempfile
-import unittest
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from html.parser import HTMLParser
 from pathlib import Path
-from unittest.mock import patch
 
 import build
 import server
 
 ROOT = Path(__file__).resolve().parent
-MIN_SAMPLE_NOTES = 30
-MIN_GROUPS = 5
-TEST_PORT = 4700
-TEST_NOTE_ID = 2
-TEST_TIMEOUT_S = 10
-REQUEST_LIMIT_EXCESS = 1
+HTTP_TIMEOUT_S = server.SOCKET_TIMEOUT_S
+TRANSPORT_GRACE_S = 15
+CHAT_TIMEOUT_S = server.BRAIN_TIMEOUT_S + TRANSPORT_GRACE_S
+SIGHT_TIMEOUT_S = server.SEE_TIMEOUT_S + server.CLI_CHECK_TIMEOUT_S + TRANSPORT_GRACE_S
+LOCAL_TIMEOUT_S = server.CLI_CHECK_TIMEOUT_S
+MAX_RESPONSE_BYTES = 20_000_000
+SUMMARY_PRECISION = 2
+OPENAI_MODELS_URL = 'https://api.openai.com/v1/models'
+PLACEHOLDER_KEY = 'PUT-YOUR-KEY-HERE'
+BRAIN_QUESTION = 'Say ready in one short sentence.'
+CHAT_QUESTION = 'What are the main facts in the note titled {title}?'
+SIGHT_QUESTION = 'What is the dominant color in this image? Be specific and brief.'
+SIGHT_EXPECTED = re.compile(r'\b(red|crimson|scarlet)\b', re.IGNORECASE)
+SECRET_PATHS = ('/config.json', '/config.json?preflight=1', '/%63onfig.json',
+                '/viewer/../config.json', '/%2e%2e/config.json', '/viewer/config.json')
+# A real, decodable 96x96 red JPEG. The question never supplies its expected color.
+JPEG_BASE64 = (
+    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/'
+    '2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/'
+    'wAARCABgAGADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/'
+    '8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/'
+    '9oADAMBAAIRAxEAPwDzeiiivhz+qAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKAP//Z'
+)
 
 
-class FakeSocket:
-    def __init__(self, data):
-        self.input = io.BytesIO(data)
-        self.output = io.BytesIO()
-
-    def makefile(self, *_args):
-        return self.input
-
-    def sendall(self, data):
-        self.output.write(data)
-
-    def settimeout(self, _timeout):
-        pass
+class CheckFailure(Exception):
+    """Messages must contain no credentials, response bodies, or note content."""
 
 
-def request(path, method="GET", body=None, headers=None):
-    class TestServer:
-        server_address = ("127.0.0.1", TEST_PORT)
-    fields = {"Host": f"127.0.0.1:{TEST_PORT}"}
-    data = b"" if body is None else json.dumps(body).encode()
-    if body is not None:
-        fields.update({"Content-Type": "application/json", "Content-Length": str(len(data))})
-    fields.update(headers or {})
-    raw = f"{method} {path} HTTP/1.0\r\n" + "".join(f"{k}: {v}\r\n" for k, v in fields.items()) + "\r\n"
-    sock = FakeSocket(raw.encode() + data)
-    server.Handler(sock, ("127.0.0.1", TEST_PORT), TestServer())
-    response_headers, response_body = sock.output.getvalue().split(b"\r\n\r\n", 1)
-    return int(response_headers.split()[1]), response_headers.decode(), response_body
+class CheckWarning(Exception):
+    pass
 
 
-class Preflight(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        server.NOTES, cls.graph = build.build()
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *_args, **_kwargs):
+        return None
 
-    def test_graph_indices_and_edges(self):
-        nodes, links = self.graph["nodes"], self.graph["links"]
-        self.assertGreaterEqual(len(nodes), MIN_SAMPLE_NOTES)
-        self.assertGreaterEqual(len({n["group"] for n in nodes}), MIN_GROUPS)
-        self.assertEqual([n["id"] for n in nodes], list(range(len(nodes))))
-        self.assertTrue(all(len(n["excerpt"]) <= build.EXCERPT_CHARS for n in nodes))
-        self.assertTrue(links)
-        for link in links:
-            self.assertTrue(0 <= link["source"] < link["target"] < len(nodes))
-        self.assertEqual(len(links), len({(l["source"], l["target"]) for l in links}))
 
-    def test_title_mentions_shared_wikilinks_and_symlinks(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "notes"
-            root.mkdir()
-            (root / "Alpha.md").write_text("Beta is useful. [[Shared Topic|alias]]")
-            (root / "Beta.md").write_text("Independent text")
-            (root / "Gamma.md").write_text("[[Shared Topic#Heading]]")
-            outside = Path(directory) / "outside.md"
-            outside.write_text("Must not be indexed")
-            (root / "Link.md").symlink_to(outside)
-            graph = build.make_graph(build.read_notes(root))
-            self.assertEqual([n["label"] for n in graph["nodes"]], ["Alpha", "Beta", "Gamma"])
-            self.assertEqual(graph["links"], [{"source": 0, "target": 1}, {"source": 0, "target": 2}])
+class Assets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.urls = set()
 
-    def test_title_weighting_and_followup(self):
-        selection = server.retrieve("What does Menu Pricing say?", [])
-        self.assertEqual(selection[0]["title"], "Menu Pricing")
-        self.assertLessEqual(len(selection), server.TOP_NOTES)
-        followup = server.retrieve("Who updates it?", [{"question": "Explain Cash Flow Forecast", "answer": ""}])
-        self.assertIn("Cash Flow Forecast", [n["title"] for n in followup])
-        self.assertEqual(server.retrieve("quasar nucleosynthesis", []), [])
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in ('script', 'img', 'source') and attrs.get('src'):
+            self.urls.add(attrs['src'])
+        if tag == 'link' and attrs.get('href'):
+            self.urls.add(attrs['href'])
 
-    def test_capture_persistence_index_and_failure(self):
-        original = server.NOTES
+
+def require(condition, message):
+    if not condition:
+        raise CheckFailure(message)
+
+
+def parse_graph(raw):
+    match = re.fullmatch(rb'\s*const GRAPH = (.*);\s*', raw, re.S)
+    require(match is not None, 'graph-data.js is not the expected graph script')
+    try:
+        graph = json.loads(match.group(1))
+    except ValueError:
+        raise CheckFailure('graph-data.js contains invalid JSON') from None
+    require(isinstance(graph, dict) and isinstance(graph.get('nodes'), list)
+            and isinstance(graph.get('links'), list), 'graph structure is invalid')
+    return graph
+
+
+def valid_answer(value, allowed=()):
+    require(isinstance(value, dict), 'answer is not a JSON object')
+    require(not value.get('error'), 'brain returned an error; check the active backend locally')
+    require(isinstance(value.get('answer'), str) and bool(value['answer'].strip()), 'answer is empty')
+    require(len(value['answer']) <= server.MAX_ANSWER_CHARS, 'answer exceeds the server limit')
+    require(type(value.get('about_notes')) is bool, 'about_notes must be a boolean')
+    require(isinstance(value.get('nodes'), list), 'answer has no nodes array')
+    require(all(type(node) is int and node in allowed for node in value['nodes']), 'answer cites invalid node IDs')
+    require(value['about_notes'] or not value['nodes'], 'non-note answer cites notes')
+    return value
+
+
+class Harness:
+    def __init__(self, url, quick):
+        self.url = url.rstrip('/')
+        self.quick = quick
+        self.counts = dict.fromkeys(('pass', 'fail', 'warn'), 0)
+        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        self.page = None
+        self.config = None
+        self.config_error = False
+        self.graph = None
+
+    def run(self, label, function, brain=False):
+        started = time.monotonic()
+        print(f'… {label}', flush=True)
+        state, detail = 'pass', ''
         try:
-            with tempfile.TemporaryDirectory() as directory, patch.object(build, "NOTES_DIR", Path(directory)), patch.object(server, "ask_brain") as brain:
-                server.NOTES = [{"id": 0, "label": "Voice", "group": "System", "text": "finish window microphone", "excerpt": "finish window microphone"}]
-                (Path(directory) / "Voice.md").write_text("finish window microphone")
-                for trigger in ("remember that", "note to self", "don't let me forget", "don’t let me forget", "log this"):
-                    status, _, raw = request("/remember", "POST", {"question": trigger + " the finish window should be 900 milliseconds"})
-                    self.assertEqual(status, 200)
-                    result = json.loads(raw)
-                    self.assertIn("sir", result["answer"])
-                    self.assertEqual(result["graph"], build.make_graph(server.NOTES))
-                    self.assertTrue(result["graph"]["links"])
-                brain.assert_not_called()
-                files = list((Path(directory) / "captures").glob("*.md"))
-                self.assertEqual(len(files), 5)
-                self.assertTrue(all("the finish window should be 900 milliseconds" in p.read_text() for p in files))
-                self.assertTrue(all("Date: " in p.read_text() for p in files))
-                self.assertTrue(any("900 milliseconds" in n["text"] for n in server.retrieve("What should the finish window be?", [])))
-                with patch.object(server, "ask_brain", return_value={"answer": "900 milliseconds, sir.", "nodes": [1], "about_notes": True}) as chat:
-                    self.assertEqual(request("/chat", "POST", {"question": "What should the finish window be?"})[0], 200)
-                    self.assertTrue(any("900 milliseconds" in n["text"] for n in chat.call_args.args[1]))
-                rebuilt = build.read_notes(directory)
-                self.assertEqual({n["label"] for n in rebuilt}, {n["label"] for n in server.NOTES})
-                def edges(notes):
-                    return {tuple(sorted((notes[e["source"]]["label"], notes[e["target"]]["label"]))) for e in build.make_graph(notes)["links"]}
-                self.assertEqual(edges(rebuilt), edges(server.NOTES))
-                served = request("/graph-data.js")[2].decode()
-                self.assertIn("900 milliseconds", served)
-                before = len(server.NOTES)
-                with patch.object(Path, "open", side_effect=PermissionError):
-                    status, _, raw = request("/remember", "POST", {"question": "log this a failed capture"})
-                self.assertNotEqual(status, 200)
-                self.assertTrue(json.loads(raw)["error"])
-                self.assertIn("couldn't save", json.loads(raw)["answer"])
-                self.assertEqual(len(server.NOTES), before)
-                self.assertEqual(request("/remember", "POST", {"question": "remember that"})[0], 400)
-                self.assertEqual(request("/remember", "POST", {"question": "log this test"}, {"Origin": "https://attacker.example"})[0], 403)
+            if brain and self.quick:
+                raise CheckWarning('skipped: --quick (real brain call)')
+            detail = function() or 'OK'
+        except CheckWarning as error:
+            state, detail = 'warn', str(error)
+        except CheckFailure as error:
+            state, detail = 'fail', str(error)
+        except (urllib.error.URLError, TimeoutError, ConnectionError):
+            state, detail = 'fail', 'connection failed or timed out; check the running server/backend'
+        except subprocess.TimeoutExpired:
+            state, detail = 'fail', 'local command timed out'
+        except Exception as error:
+            # Do not stringify arbitrary exceptions: diagnostics can include secrets.
+            state, detail = 'fail', f'{type(error).__name__}; inspect local setup (details withheld)'
+        self.counts[state] += 1
+        mark = {'pass': '✓', 'fail': '✗', 'warn': '⚠'}[state]
+        elapsed = time.monotonic() - started
+        print(f'{mark} {state.upper()} {label} ({elapsed:.{SUMMARY_PRECISION}f}s): {detail}', flush=True)
+
+    def request(self, path, body=None, timeout=HTTP_TIMEOUT_S, method=None):
+        headers = {'Cache-Control': 'no-cache', 'Origin': self.url}
+        if body is not None:
+            headers['Content-Type'] = 'application/json'
+        request = urllib.request.Request(self.url + path, headers=headers, method=method,
+                                         data=None if body is None else json.dumps(body).encode())
+        try:
+            response = self.opener.open(request, timeout=timeout)
+        except urllib.error.HTTPError as error:
+            response = error
+        with response:
+            raw = response.read(MAX_RESPONSE_BYTES + 1)
+            require(len(raw) <= MAX_RESPONSE_BYTES, 'HTTP response exceeds preflight limit')
+            return response.status, response.headers, raw
+
+    def json_request(self, path, body=None, timeout=HTTP_TIMEOUT_S):
+        status, headers, raw = self.request(path, body, timeout)
+        require(headers.get_content_type() == 'application/json', f'{path} did not return JSON (HTTP {status})')
+        try:
+            return status, json.loads(raw)
+        except ValueError:
+            raise CheckFailure(f'{path} returned invalid JSON') from None
+
+    def settings(self):
+        if self.config_error:
+            raise CheckFailure('configuration could not be loaded; inspect it locally')
+        if self.config is None:
+            try:
+                self.config = server.load_config()
+            except server.BrainError:
+                self.config_error = True
+                raise CheckFailure('configuration could not be loaded; inspect it locally') from None
+        backend = self.config.get('brain', 'codex-cli')
+        require(backend in ('codex-cli', 'openai-api'), 'unsupported brain backend in configuration')
+        return self.config
+
+    def viewer(self):
+        status, headers, raw = self.request('/')
+        require(status == 200, f'viewer returned HTTP {status}')
+        require(headers.get_content_type() == 'text/html', 'viewer is not HTML')
+        require(b'graph-data.js' in raw and b'<html' in raw.lower(), 'response is not the Jarvis viewer')
+        self.page = raw
+        return 'running server serves the viewer'
+
+    def load_graph(self):
+        status, _, raw = self.request('/graph-data.js')
+        require(status == 200, f'graph returned HTTP {status}')
+        graph = parse_graph(raw)
+        require(len(graph['nodes']) > 0, 'graph contains zero nodes')
+        ids = [n.get('id') for n in graph['nodes']]
+        require(all(type(node) is int for node in ids) and len(ids) == len(set(ids)), 'invalid or duplicate graph IDs')
+        self.graph = graph
+        return f"{len(graph['nodes'])} nodes loaded"
+
+    def chat(self):
+        if self.graph is None:
+            self.load_graph()
+        first = self.graph['nodes'][0]
+        status, value = self.json_request('/chat', {'question': CHAT_QUESTION.format(title=first['label'])}, CHAT_TIMEOUT_S)
+        require(status == 200, f'/chat returned HTTP {status}; no successful live answer')
+        valid_answer(value, {n['id'] for n in self.graph['nodes']})
+        require(value['about_notes'] and bool(value['nodes']), 'note question returned no supporting source')
+        return 'real note question returned a valid answer and source nodes'
+
+    def cli_login(self):
+        executable = shutil.which('codex')
+        require(executable is not None, 'codex is not on PATH; add your installed CLI to PATH')
+        result = subprocess.run([executable, 'login', 'status'], capture_output=True, text=True, timeout=LOCAL_TIMEOUT_S)
+        require(result.returncode == 0, 'Codex is not logged in; run codex login locally')
+        return 'codex is on PATH and login status succeeded'
+
+    def minimal_brain(self):
+        self.settings()
+        # Call the exact boundary used by /chat; never substitute a fake model.
+        with contextlib.redirect_stdout(io.StringIO()):
+            value = server.ask_brain(server.SYSTEM_PROMPT, [], [], BRAIN_QUESTION)
+        valid_answer(value)
+        require(value['about_notes'] is False, 'minimal greeting was incorrectly classified as a note answer')
+        return 'real ask_brain() returned valid JSON using the configured model'
+
+    def key_check(self):
+        config = self.settings()
+        if config.get('brain', 'codex-cli') == 'codex-cli':
+            raise CheckWarning('skipped: codex-cli brain active')
+        if self.quick:
+            raise CheckWarning('skipped: --quick (live API authentication call)')
+        key = config.get('openai_api_key')
+        require(isinstance(key, str) and bool(key.strip()) and key != PLACEHOLDER_KEY,
+                'OpenAI API key is missing or still the placeholder')
+        request = urllib.request.Request(OPENAI_MODELS_URL, headers={'Authorization': 'Bearer ' + key})
+        try:
+            with urllib.request.build_opener(NoRedirect()).open(request, timeout=server.BRAIN_TIMEOUT_S) as response:
+                value = json.loads(response.read(server.MAX_BRAIN_BYTES))
+            require(isinstance(value, dict) and isinstance(value.get('data'), list), 'API key probe returned malformed data')
+        except urllib.error.HTTPError as error:
+            raise CheckFailure(f'OpenAI key probe rejected (HTTP {error.code}); inspect key permissions locally') from None
+        return 'authenticated minimal GET /v1/models succeeded'
+
+    def model_check(self):
+        config = self.settings()
+        if config.get('brain', 'codex-cli') == 'codex-cli':
+            raise CheckWarning('skipped: codex-cli brain active')
+        if self.quick:
+            raise CheckWarning('skipped: --quick (real brain call)')
+        return self.minimal_brain()
+
+    def capture(self):
+        # Refuse to write a probe to a stale server without guaranteed cleanup support.
+        status, capability = self.json_request('/preflight/status')
+        require(status == 200 and capability.get('protocol') == server.PREFLIGHT_PROTOCOL,
+                'restart server.py: safe preflight cleanup is unavailable')
+        token = uuid.uuid4().hex
+        secret = uuid.uuid4().hex
+        pattern = f'Preflight {token} *.md'
+        folder = build.NOTES_DIR / 'captures'
+        question = f'remember that Preflight {token} verification code is {secret}.'
+        try:
+            status, value = self.json_request('/remember', {'question': question, 'preflight_token': token})
+            require(status == 200 and not value.get('error'), f'/remember failed (HTTP {status})')
+            files = list(folder.glob(pattern))
+            require(len(files) == 1 and files[0].is_file() and not files[0].is_symlink(), 'capture was not written in this checkout')
+            require(secret in files[0].read_text(encoding='utf-8'), 'capture file does not contain the saved fact')
+            self.load_graph()
+            captured = value.get('captured')
+            require(type(captured) is int and any(n['id'] == captured and token in n['label'] for n in self.graph['nodes']),
+                    'capture is absent from the live index')
+            status, _, raw = self.request('/graph-data.js')
+            require(status == 200 and raw == build.GRAPH_PATH.read_bytes(), 'capture left the on-disk graph stale')
+            if not self.quick:
+                # No cookie/history and no secret in this question: only retrieval can supply it.
+                status, recalled = self.json_request('/chat', {'question': f'What is the verification code for Preflight {token}?'}, CHAT_TIMEOUT_S)
+                require(status == 200, f'capture recall failed (HTTP {status})')
+                valid_answer(recalled, {n['id'] for n in self.graph['nodes']})
+                require(secret in recalled['answer'] and captured in recalled['nodes'], 'immediate recall did not return the saved fact with its source')
         finally:
-            server.NOTES = original
+            status, cleaned = self.json_request('/preflight/cleanup', {'token': token})
+            require(status == 200 and cleaned.get('cleaned') is True, 'CAPTURE CLEANUP FAILED; inspect the preflight capture locally')
+            require(not list(folder.glob(pattern)), 'CAPTURE CLEANUP FAILED: test file remains')
+            self.load_graph()
+            require(not any(token in n.get('label', '') or token in n.get('excerpt', '') for n in self.graph['nodes']),
+                    'CAPTURE CLEANUP FAILED: test note remains in live index')
+            require(token.encode() not in build.GRAPH_PATH.read_bytes(), 'CAPTURE CLEANUP FAILED: test note remains in graph file')
+        if self.quick:
+            raise CheckWarning('real capture write/index/cleanup passed; /chat recall skipped: --quick')
+        return 'real file saved, immediately recalled with source, then removed from disk and live index'
 
-    def test_answer_validation(self):
-        notes = [{"id": TEST_NOTE_ID}]
-        self.assertEqual(server.validate_answer('{"answer":"A supported answer.","about_notes":true,"nodes":[2]}', notes)["nodes"], [TEST_NOTE_ID])
-        self.assertEqual(server.validate_answer('{"answer":"Hello.","about_notes":false,"nodes":[2]}', notes)["nodes"], [])
-        with self.assertRaises(server.BrainError):
-            server.validate_answer('{"answer":"x","about_notes":"false","nodes":[]}', notes)
-        invalid = ('plain prose', '{"answer":"","about_notes":true,"nodes":[]}', '{"answer":"x","about_notes":true,"nodes":[999]}',
-                   '{"answer":"x","about_notes":true,"nodes":[true]}', '{"answer":"x","about_notes":true,"nodes":[],"extra":1}')
-        for raw in invalid:
-            with self.assertRaises(server.BrainError):
-                server.validate_answer(raw, notes)
+    def sight(self):
+        backend = self.settings().get('brain', 'codex-cli')
+        no_images = False
+        if backend == 'codex-cli':
+            executable = server.find_codex()
+            if executable is not None:
+                try:
+                    result = subprocess.run([executable, 'exec', '--help'], capture_output=True, text=True, timeout=LOCAL_TIMEOUT_S)
+                    no_images = result.returncode == 0 and '--image' not in result.stdout
+                except (OSError, subprocess.TimeoutExpired):
+                    pass  # Still exercise /see; an unknown capability cannot earn a WARN.
+        # The envelope and MIME match canvas.toDataURL in the actual viewer.
+        page = (server.VIEWER_DIR / 'index.html').read_text(encoding='utf-8')
+        require("toDataURL('image/jpeg'" in page and "media_type:'image/jpeg'" in page, 'viewer JPEG contract changed; update the live probe')
+        base64.b64decode(JPEG_BASE64, validate=True)
+        status, value = self.json_request('/see', {'question': SIGHT_QUESTION, 'image': JPEG_BASE64,
+                                                  'media_type': server.JPEG_MIME}, SIGHT_TIMEOUT_S)
+        if no_images:
+            require(status == 503 and value.get('error') is True and value.get('answer') == server.SIGHT_UNSUPPORTED
+                    and value.get('nodes') == [], 'unsupported CLI did not return the explicit sight limitation')
+            raise CheckWarning('sight needs the OpenAI or Gemini brain; CLI has no image support')
+        require(status == 200, f'/see returned HTTP {status}; image-capable backend must answer')
+        valid_answer(value)
+        require(value['about_notes'] is False and bool(SIGHT_EXPECTED.search(value['answer'])), 'sight did not identify the real JPEG content')
+        return 'real image/jpeg answered correctly (dominant color identified)'
 
-    def test_public_routes_and_secrets_boundary(self):
-        self.assertEqual(request("/")[0], 200)
-        self.assertEqual(request("/graph-data.js")[0], 200)
-        for path in ("/config.json", "/../config.json", "/%2e%2e/config.json", "/%63onfig.json",
-                     "/.git/config", "/server.py", "/AGENTS.md", "/notes/", "/viewer/", "/anything.json"):
-            self.assertEqual(request(path)[0], 404, path)
-        self.assertEqual(request("/", headers={"Host": "attacker.example"})[0], 403)
-        status, headers, body = request("/", method="HEAD")
-        self.assertEqual(status, 200)
-        self.assertEqual(body, b"")
-        self.assertIn("X-Content-Type-Options: nosniff", headers)
-        with tempfile.TemporaryDirectory() as directory:
-            (Path(directory) / "index.html").symlink_to(ROOT / "README.md")
-            with patch.object(server, "VIEWER_DIR", Path(directory)):
-                self.assertEqual(request("/")[0], 404)
+    def served_files(self):
+        status, _, page = self.request('/')
+        require(status == 200, 'cannot fetch viewer for served-file comparison')
+        parser = Assets()
+        parser.feed(page.decode('utf-8'))
+        paths = set(server.PUBLIC_FILES)
+        for asset in parser.urls:
+            resolved = urllib.parse.urlsplit(urllib.parse.urljoin(self.url + '/', asset))
+            if resolved.netloc == urllib.parse.urlsplit(self.url).netloc:
+                paths.add(resolved.path + (('?' + resolved.query) if resolved.query else ''))
+        for path in sorted(paths):
+            route = urllib.parse.urlsplit(path).path
+            relative = server.PUBLIC_FILES.get(route, (route.lstrip('/'),))[0]
+            disk = server.VIEWER_DIR / relative
+            require(disk.is_file() and not disk.is_symlink() and server.VIEWER_DIR in disk.resolve().parents,
+                    'served asset has no safe matching file on disk')
+            status, headers, raw = self.request(path)
+            require(status == 200, f'served file failed: {route} (HTTP {status})')
+            require(hashlib.sha256(raw).digest() == hashlib.sha256(disk.read_bytes()).digest(),
+                    f'STALE SERVED FILE: {route}; restart the correct checkout')
+            require('no-store' in headers.get('Cache-Control', ''), f'{route} permits stale browser caching')
+        # Detect a disk note edit missing from the running in-memory graph too.
+        self.load_graph()
+        actual = sorted((n['label'], n['group'], n['excerpt']) for n in self.graph['nodes'])
+        expected = sorted((n['label'], n['group'], n['excerpt']) for n in build.read_notes())
+        require(actual == expected, 'live index differs from notes on disk; restart server.py')
+        return f'{len(paths)} served routes match disk byte-for-byte; live note index matches disk'
 
-    def test_chat_input_and_origin_validation(self):
-        for body in ({}, {"question": ""}, {"question": []}, [], {"question": "x" * (server.MAX_QUESTION_CHARS + REQUEST_LIMIT_EXCESS)}):
-            self.assertEqual(request("/chat", "POST", body)[0], 400)
-        self.assertEqual(request("/chat", "POST", {"question": "test"}, {"Origin": "https://attacker.example"})[0], 403)
-        self.assertEqual(request("/chat", "POST", {"question": "test"}, {"Content-Type": "text/plain"})[0], 415)
-        self.assertEqual(request("/chat", "POST", {"question": "test"}, {"Content-Length": str(server.MAX_REQUEST_BYTES + REQUEST_LIMIT_EXCESS)})[0], 400)
+    def private_config(self):
+        for path in SECRET_PATHS:
+            for method in ('GET', 'HEAD'):
+                status, _, _ = self.request(path, method=method)
+                require(status in (403, 404), f'SECURITY FAILURE: config.json is reachable or redirected (HTTP {status}); stop the server')
+        return 'config.json and encoded/traversal aliases blocked for GET and HEAD'
 
-    def test_session_history_isolation_and_brain_errors(self):
-        server.SESSIONS.clear()
-        histories = []
-        def fake_brain(_system, notes, history, _question):
-            histories.append(history)
-            return {"answer": "The notes cover this. Here is the summary.", "nodes": [notes[0]["id"]]}
-        with patch.object(server, "ask_brain", side_effect=fake_brain):
-            status, headers, _ = request("/chat", "POST", {"question": "Menu Pricing"})
-            self.assertEqual(status, 200)
-            cookie = re.search(r"Set-Cookie: ([^;]+)", headers).group(1)
-            request("/chat", "POST", {"question": "What about it?"}, {"Cookie": cookie})
-            request("/chat", "POST", {"question": "Quarterly Goals"})
-        self.assertEqual(len(histories[0]), 0)
-        self.assertEqual(len(histories[1]), 1)
-        self.assertEqual(len(histories[2]), 0)
-        with patch.object(server, "ask_brain", return_value={"answer": "Unavailable.", "nodes": [], "error": True}):
-            self.assertEqual(request("/chat", "POST", {"question": "Menu Pricing"})[0], 503)
+    def ignored_config(self):
+        for name in ('config.json', 'viewer/graph-data.js'):
+            result = subprocess.run(['git', 'check-ignore', '-q', '--', name], cwd=ROOT, capture_output=True, timeout=LOCAL_TIMEOUT_S)
+            require(result.returncode == 0, f'{name} is not ignored by git')
+            tracked = subprocess.run(['git', 'ls-files', '--', name], cwd=ROOT, capture_output=True, timeout=LOCAL_TIMEOUT_S)
+            require(tracked.returncode == 0 and not tracked.stdout, f'{name} is tracked by git')
+        return 'config.json and generated graph are ignored and untracked'
 
-    def test_codex_arguments_are_restricted(self):
-        args = server.cli_command("codex", "gpt-6-astra", "/tmp/empty", "/tmp/schema.json", "/tmp/answer.txt")
-        self.assertEqual(args[args.index("--sandbox") + 1], "read-only")
-        self.assertIn("--ignore-user-config", args)
-        self.assertIn("--strict-config", args)
-        self.assertIn("--ephemeral", args)
-        self.assertIn('web_search="disabled"', args)
-        for feature in ("shell_tool", "apps", "plugins", "browser_use", "computer_use", "multi_agent"):
-            self.assertIn(feature, args)
-        self.assertEqual(args[-1], "-")
+    def finish_constant(self):
+        page = (server.VIEWER_DIR / 'index.html').read_text(encoding='utf-8')
+        scripts = '\n'.join(re.findall(r'<script\b[^>]*>(.*?)</script>', page, re.S | re.I))
+        scripts = re.sub(r'/\*.*?\*/|//[^\n]*', '', scripts, flags=re.S)
+        require(re.search(r'\bconst\s+FINISH_MS\s*=\s*\d+\s*;', scripts) is not None,
+                'viewer has no named const FINISH_MS')
+        require(re.search(r'setTimeout\([\s\S]*?,\s*FINISH_MS\s*\)', scripts) is not None,
+                'FINISH_MS is not used by the finish timer')
+        return 'named FINISH_MS constant exists and drives the finish timer'
 
-    def test_missing_cli_and_timeout_are_safe(self):
-        safe_config = {"brain": "codex-cli", "model": "gpt-6-astra"}
-        with patch.object(server, "load_config", return_value=safe_config), patch.object(server, "find_codex", return_value=None), contextlib.redirect_stdout(io.StringIO()):
-            result = server.ask_brain("system", [], [], "test")
-            self.assertTrue(result["error"])
-            self.assertEqual(result["nodes"], [])
-        class TimedOut:
-            pid = 123
-            returncode = None
-            def __init__(self, *_args, **_kwargs):
-                self.first = True
-            def communicate(self, *_args, **_kwargs):
-                if self.first:
-                    self.first = False
-                    raise subprocess.TimeoutExpired("codex", server.BRAIN_TIMEOUT_S)
-                return None, ""
-        with patch.object(server, "load_config", return_value=safe_config), patch.object(server, "find_codex", return_value="codex"), patch.object(server.subprocess, "Popen", TimedOut), patch.object(server.os, "killpg"), contextlib.redirect_stdout(io.StringIO()):
-            result = server.ask_brain("system", [], [], "test")
-            self.assertTrue(result["error"])
-            self.assertIn("too long", result["answer"])
-
-    def test_vision_route_requires_jpeg_and_has_no_history(self):
-        import base64
-        frame = b"\xff\xd8\xfftest\xff\xd9"
-        body = {"question": "What am I looking at?", "media_type": "image/jpeg",
-                "image": base64.b64encode(frame).decode()}
-        before = dict(server.SESSIONS)
-        with patch.object(server, "ask_brain", return_value={"answer": "A screen, sir.", "nodes": [], "about_notes": False}) as brain:
-            status, headers, _ = request("/see", "POST", body)
-            self.assertEqual(status, 200)
-            brain.assert_called_once_with(server.SEE_PROMPT, [], [], body["question"], image=frame)
-            self.assertNotIn("Set-Cookie", headers)
-            self.assertEqual(server.SESSIONS, before)
-            for change in ({"media_type": "image/png"}, {"image": "bad base64!"}, {"image": ""}, {"image": base64.b64encode(b"PNG").decode()}):
-                self.assertEqual(request("/see", "POST", dict(body, **change))[0], 400)
-            self.assertEqual(brain.call_count, 1)
-        self.assertEqual(request("/see", "POST", body, {"Origin": "https://attacker.example"})[0], 403)
-
-    def test_vision_cli_attachment_cleanup_and_timeout(self):
-        from types import SimpleNamespace
-        frame = b"\xff\xd8\xfftest\xff\xd9"
-        paths = []
-        seen_timeouts = []
-        mode = ["ok"]
-        class Process:
-            pid = 123
-            returncode = 0
-            def __init__(self, args, **kwargs):
-                self.path = Path(args[args.index("--image") + 1])
-                paths.append(self.path)
-                self.answer = Path(args[args.index("--output-last-message") + 1])
-                assert ROOT not in self.path.parents
-                assert self.path.read_bytes() == frame
-                self.first = True
-            def communicate(self, _input=None, timeout=None):
-                if self.first:
-                    seen_timeouts.append(timeout)
-                    self.first = False
-                    if mode[0] == "timeout":
-                        raise subprocess.TimeoutExpired("codex", timeout)
-                    if mode[0] == "error":
-                        self.returncode = 1
-                        return None, "failed"
-                    self.answer.write_text('{"answer":"A screen, sir.","nodes":[],"about_notes":false}')
-                return None, ""
-        with patch.object(server, "load_config", return_value={"brain": "codex-cli", "model": "test"}), patch.object(server, "find_codex", return_value="codex"), patch.object(server.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="-i, --image <FILE>...")), patch.object(server.subprocess, "Popen", Process), patch.object(server.os, "killpg"), contextlib.redirect_stdout(io.StringIO()):
-            for value in ("ok", "error", "timeout"):
-                mode[0] = value
-                result = server.ask_brain(server.SEE_PROMPT, [], [], "Look", image=frame)
-                self.assertEqual(bool(result.get("error")), value != "ok")
-                self.assertFalse(paths[-1].exists())
-            with patch.object(server.subprocess, "run", return_value=SimpleNamespace(returncode=0, stdout="no image flag")):
-                result = server.ask_brain(server.SEE_PROMPT, [], [], "Look", image=frame)
-                self.assertTrue(result["error"])
-                self.assertIn("sir", result["answer"])
-                self.assertIn("image attachment", result["answer"])
-        self.assertEqual(seen_timeouts, [server.SEE_TIMEOUT_S] * 3)
-
-    def test_vision_api_data_url(self):
-        import base64
-        frame = b"\xff\xd8\xfftest\xff\xd9"
-        response = io.BytesIO(json.dumps({"output": [{"content": [{"type": "output_text", "text": '{"answer":"A screen, sir.","about_notes":false,"nodes":[]}'}]}]}).encode())
-        with patch.object(server, "load_config", return_value={"brain": "openai-api", "model": "test", "openai_api_key": "test-only"}), patch.object(server.urllib.request, "urlopen", return_value=response) as call, contextlib.redirect_stdout(io.StringIO()):
-            result = server.ask_brain(server.SEE_PROMPT, [], [], "Look", image=frame)
-        self.assertFalse(result.get("error"))
-        body = json.loads(call.call_args.args[0].data)
-        self.assertEqual(body["input"][0]["content"][1]["image_url"], "data:image/jpeg;base64," + base64.b64encode(frame).decode())
-        self.assertEqual(call.call_args.kwargs["timeout"], server.SEE_TIMEOUT_S)
-        self.assertFalse(body["store"])
-
-    def test_ignored_files_are_untracked(self):
-        for name in ("config.json", "viewer/graph-data.js"):
-            result = subprocess.run(["git", "check-ignore", "-q", name], cwd=ROOT, timeout=TEST_TIMEOUT_S)
-            self.assertEqual(result.returncode, 0)
-            tracked = subprocess.run(["git", "ls-files", "--error-unmatch", name], cwd=ROOT, capture_output=True, timeout=TEST_TIMEOUT_S)
-            self.assertNotEqual(tracked.returncode, 0)
-
-    def test_viewer_javascript_syntax(self):
-        page = (ROOT / "viewer" / "index.html").read_text()
-        script = re.search(r'<script type="module">(.*?)</script>', page, re.S).group(1)
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "viewer.mjs"
-            path.write_text(script)
-            result = subprocess.run(["node", "--check", str(path)], capture_output=True, text=True, timeout=TEST_TIMEOUT_S)
-            self.assertEqual(result.returncode, 0, result.stderr)
+    def execute(self):
+        print('Jarvis preflight — ' + ('QUICK: live brain chains will be WARN' if self.quick else 'FULL LIVE RUN'), flush=True)
+        self.run('Server and viewer', self.viewer)
+        self.run('Graph data', self.load_graph)
+        self.run('/chat live answer', self.chat, brain=True)
+        try:
+            backend = self.settings().get('brain', 'codex-cli')
+        except CheckFailure:
+            backend = None
+        if backend == 'codex-cli':
+            self.run('Codex PATH and login', self.cli_login)
+            self.run('Codex configured model / ask_brain()', self.minimal_brain, brain=True)
+        self.run('OpenAI API key', self.key_check)
+        self.run('OpenAI configured model', self.model_check)
+        self.run('/remember → file → immediate /chat → cleanup', self.capture)
+        self.run('/see real JPEG', self.sight, brain=True)
+        self.run('Served files match disk', self.served_files)
+        self.run('SECURITY: config.json not browser-accessible', self.private_config)
+        self.run('Git ignores local configuration', self.ignored_config)
+        self.run('Viewer FINISH_MS constant', self.finish_constant)
+        print(f"{self.counts['pass']} pass, {self.counts['fail']} fail, {self.counts['warn']} warn", flush=True)
+        return int(self.counts['fail'] > 0)
 
 
-if __name__ == "__main__":
-    suite = unittest.defaultTestLoader.loadTestsFromTestCase(Preflight)
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    state = "PASS" if result.wasSuccessful() else "FAIL"
-    print(f"PREFLIGHT {state}: {result.testsRun} checks; {len(server.NOTES)} notes; offline checks only — live browser and brain require separate verification.")
-    raise SystemExit(0 if result.wasSuccessful() else 1)
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--quick', action='store_true', help='skip real brain calls; still check capture persistence and cleanup')
+    parser.add_argument('--url', default=f'http://{server.HOST}:{server.PORT}', help='running local Jarvis URL')
+    args = parser.parse_args()
+    url = urllib.parse.urlsplit(args.url)
+    if (url.scheme != 'http' or url.hostname not in ('127.0.0.1', 'localhost') or not url.port
+            or url.username or url.password or url.path not in ('', '/') or url.query or url.fragment):
+        parser.error('--url must be an http://127.0.0.1:PORT or http://localhost:PORT origin')
+    return Harness(args.url.rstrip('/'), args.quick).execute()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -5,14 +5,57 @@ and a signed-in Codex CLI. There is no npm build or Python package installation.
 
 ```bash
 cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
-python3 preflight.py
 python3 server.py
 ```
 
 Open <http://127.0.0.1:4700> in Chrome. Keep Terminal running; Ctrl+C stops it.
 The server indexes notes on startup. After editing notes, restart the server and
 refresh the page. `python3 build.py` can also rebuild the graph separately.
-`preflight.py` uses Node only to check JavaScript syntax, without npm packages.
+In a second Terminal, run the live preflight while the server stays running:
+
+```bash
+cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
+python3 preflight.py
+```
+
+The preflight uses only the Python standard library. It checks the actual HTTP
+routes, configured brain, JPEG vision, capture persistence and immediate recall,
+served bytes, secret-file access, Git ignores, and the voice finish constant.
+Each check prints its duration. The final line is `N pass, N fail, N warn`;
+any failure exits nonzero. Run it before reporting a change as finished.
+
+For UI-only changes, `python3 preflight.py --quick` skips model inference and
+reports those chains as WARN. It still creates, indexes, and cleans a real test
+capture; its recall chain is a WARN because the model call was skipped.
+Quick mode does not prove the brain works. Full mode uses the server's
+`BRAIN_TIMEOUT_S` and `SEE_TIMEOUT_S`, plus transport overhead.
+
+With `codex-cli`, preflight requires `codex` on PATH and a successful
+`codex login status`, then makes one real `ask_brain()` call with the configured
+model. The inactive OpenAI checks are WARN (`skipped: codex-cli brain active`).
+With `openai-api`, it authenticates a real minimal `/v1/models` request and makes
+a real inference request to verify configured-model access. Credentials and raw
+provider diagnostics are never printed. A placeholder key fails in API mode.
+
+If you use only the CLI bundled with ChatGPT, add it to this Terminal's PATH:
+
+```bash
+export PATH="/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin:$PATH"
+```
+
+Preflight must run from the same checkout as the server. Restart the server
+after pulling server changes. Run it while Jarvis is idle: the temporary capture
+appears briefly in the live graph. Cleanup removes only the unchanged capture
+registered to that run's random token, then removes it from the live index and
+rewrites the generated graph. It runs even when recall fails. Cleanup failures
+are FAIL, never hidden. If either process is forcibly killed, inspect the
+`Preflight ...` capture locally before restarting; `finally` cannot run after
+a forced kill. No normal note is eligible for the cleanup endpoint.
+
+The served graph and disk graph now use the same bytes, refreshed atomically
+after captures and cleanup. Served-file checks also require `Cache-Control:
+no-store`. This verifies server responses, not an already-open tab's DOM or
+external CDN availability; refresh the browser after changes.
 
 ## Explore
 
@@ -77,8 +120,10 @@ The preflight check verifies both ignored files remain untracked.
 If the environment says it cannot listen on port 4700, start the server in your
 own Terminal. A blank galaxy with a library error means the CDN is unavailable.
 Brain-unavailable messages mean the CLI could not run or reach its service; they
-are not fabricated note answers. A successful preflight is an offline check,
-not proof of a working model connection or a rendered browser.
+are not fabricated note answers. A successful full preflight verifies the live
+model chains; it does not automate microphone permissions or browser rendering.
+The historical verification notes below describe earlier prompts' offline
+checks; Prompt 07 replaces that harness with the live checks described above.
 
 To test one real question from a second Terminal:
 

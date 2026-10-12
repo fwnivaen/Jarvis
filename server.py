@@ -1,4 +1,4 @@
-"""Local-only note galaxy and a text-only retrieval brain. Standard library only."""
+"""Local-only note galaxy with text and screen retrieval. Standard library only."""
 # ==================== JARVIS PERSONA — EDIT THIS BLOCK ====================
 SYSTEM_PROMPT = (
     "You are Jarvis, a dry, impeccably polite British butler with a razor wit. "
@@ -64,6 +64,10 @@ BRAIN_TIMEOUT_S = 90
 SEE_TIMEOUT_S = 120
 MAX_SEE_REQUEST_BYTES = 5_000_000
 JPEG_MIME = "image/jpeg"
+SIGHT_UNSUPPORTED = "Sight needs the OpenAI or Gemini brain with this Codex CLI, sir; image attachment support is unavailable. This server currently supports openai-api as the alternative."
+PREFLIGHT_PROTOCOL = 1
+PREFLIGHT_TOKEN = re.compile(r"^[0-9a-f]{32}$")
+PREFLIGHT_CLOSED_TTL_S = 3600
 SEE_PROMPT = (
     "You are Jarvis, a concise, dry, polite British butler. Address the user as sir. "
     "Answer the question specifically from the attached CURRENT screen frame only. "
@@ -132,6 +136,8 @@ NOTES = []
 SESSIONS = {}
 SESSION_LOCK = threading.Lock()
 BRAIN_SLOTS = threading.BoundedSemaphore(MAX_PARALLEL_BRAINS)
+PREFLIGHT_CAPTURES = {}
+PREFLIGHT_CLOSED = {}
 
 
 class BrainError(Exception):
@@ -185,7 +191,7 @@ def retrieve(question, history):
             for _, n in ranked[:TOP_NOTES]]
 
 
-def remember(question):
+def remember(question, preflight_token=None):
     """Persist first, then publish a complete index snapshot. Never call the brain."""
     global NOTES
     match = CAPTURE_TRIGGER.match(question)
@@ -195,6 +201,11 @@ def remember(question):
     title = " ".join(re.findall(r"\w+", content)[:CAPTURE_TITLE_WORDS])[:CAPTURE_TITLE_CHARS] or "Untitled capture"
     stamp = datetime.now().astimezone()
     with INDEX_LOCK:
+        if preflight_token is not None:
+            if (not isinstance(preflight_token, str) or not PREFLIGHT_TOKEN.fullmatch(preflight_token)
+                    or not content.startswith(f"Preflight {preflight_token} ")
+                    or preflight_token in PREFLIGHT_CLOSED or preflight_token in PREFLIGHT_CAPTURES):
+                raise BrainError("Invalid or already completed preflight capture, sir.")
         related = retrieve(content, [])
         parent = related[0]["id"] if related else (NOTES[0]["id"] if NOTES else None)
         text = f"# {title}\n\nDate: {stamp.date().isoformat()}\n\n{content}\n"
@@ -222,6 +233,7 @@ def remember(question):
                 handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
+            build.write_graph(graph)
         except OSError:
             if created:
                 try:
@@ -230,8 +242,39 @@ def remember(question):
                     pass
             raise BrainError("I couldn't save that capture, sir. Please check the notes folder and disk space, then try again.") from None
         NOTES = updated
+        if preflight_token is not None:
+            PREFLIGHT_CAPTURES[preflight_token] = (path, note, text)
         return {"answer": secrets.choice(CAPTURE_CONFIRMATIONS), "nodes": [note["id"]],
                 "about_notes": True, "graph": graph, "parent": parent, "captured": note["id"]}
+
+
+def cleanup_preflight(token):
+    """Only delete a capture this process created for this random probe token."""
+    global NOTES
+    if not isinstance(token, str) or not PREFLIGHT_TOKEN.fullmatch(token):
+        raise BrainError("Invalid preflight token, sir.")
+    with INDEX_LOCK:
+        now = time.monotonic()
+        for closed, when in list(PREFLIGHT_CLOSED.items()):
+            if now - when > PREFLIGHT_CLOSED_TTL_S:
+                del PREFLIGHT_CLOSED[closed]
+        # Reject a delayed /remember even if cleanup arrived first after a timeout.
+        PREFLIGHT_CLOSED[token] = now
+        capture = PREFLIGHT_CAPTURES.get(token)
+        if capture is not None:
+            path, note, original = capture
+            if path.is_symlink() or path.parent.is_symlink():
+                raise BrainError("Preflight capture path changed; cleanup refused, sir.")
+            if path.exists():
+                if path.read_text(encoding="utf-8") != original:
+                    raise BrainError("Preflight capture was edited; cleanup refused, sir.")
+                path.unlink()
+            NOTES = [item for item in NOTES if item is not note]
+            for index, item in enumerate(NOTES):
+                item["id"] = index
+            build.write_graph(build.make_graph(NOTES))
+            del PREFLIGHT_CAPTURES[token]
+        return {"cleaned": True, "graph": build.make_graph(NOTES)}
 
 
 def validate_answer(raw, notes):
@@ -291,11 +334,13 @@ def ask_brain(system, notes, history, question, image=None):
                 try:
                     help_result = subprocess.run([executable, "exec", "--help"], capture_output=True,
                                                  text=True, timeout=CLI_CHECK_TIMEOUT_S)
-                    supported = help_result.returncode == 0 and "--image" in help_result.stdout
+                    if help_result.returncode != 0:
+                        raise BrainError("Codex image capability check failed, sir. Check your CLI installation.")
+                    supported = "--image" in help_result.stdout
                 except (OSError, subprocess.TimeoutExpired):
-                    supported = False
+                    raise BrainError("Codex image capability check failed, sir. Check your CLI installation.") from None
                 if not supported:
-                    raise BrainError("This Codex CLI cannot confirm image attachment support, sir. Please update it; I shall not pretend to see your screen.")
+                    raise BrainError(SIGHT_UNSUPPORTED)
             # Auth stays in the existing CLI credential store. No keys are copied.
             # The model's working directory starts EMPTY and is outside the repository.
             with tempfile.TemporaryDirectory(prefix="jarvis-brain-") as scratch:
@@ -413,10 +458,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/preflight/status":
+            self.send_bytes(json.dumps({"protocol": PREFLIGHT_PROTOCOL}).encode(), "application/json", head=head)
+            return
         if path == "/graph-data.js":
             with INDEX_LOCK:
-                data = "const GRAPH = " + json.dumps(build.make_graph(NOTES)) + ";\n"
-            self.send_bytes(data.encode(), "text/javascript; charset=utf-8", head=head)
+                data = build.graph_bytes(build.make_graph(NOTES))
+            self.send_bytes(data, "text/javascript; charset=utf-8", head=head)
             return
         # Exact allowlist; no directory serving, traversal, percent decoding, or symlinks.
         if path not in PUBLIC_FILES:
@@ -430,7 +478,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/chat", "/remember", "/see"):
+        if self.path not in ("/chat", "/remember", "/see", "/preflight/cleanup"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -444,6 +492,15 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path == "/see" else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
+            if self.path == "/preflight/cleanup":
+                token = body.get("token")
+                if not isinstance(token, str) or not PREFLIGHT_TOKEN.fullmatch(token):
+                    raise ValueError
+                try:
+                    self.send_json(cleanup_preflight(token))
+                except (BrainError, OSError):
+                    self.send_json({"error": True, "answer": "Preflight cleanup failed; inspect its test capture locally, sir."}, 500)
+                return
             question = body.get("question")
             if not isinstance(question, str) or not 0 < len(question.strip()) <= MAX_QUESTION_CHARS:
                 raise ValueError
@@ -460,7 +517,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/remember":
             try:
-                self.send_json(remember(question))
+                self.send_json(remember(question, body.get("preflight_token")))
             except BrainError as error:
                 self.send_json({"answer": str(error), "nodes": [], "error": True}, 400)
             except Exception:
