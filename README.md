@@ -56,3 +56,100 @@ Say **“go back to your normal brain”** to restore the backend and model in l
 At startup with a real key, Jarvis intersects its explicit OpenRouter known set with the live catalog and reads image capabilities. Missing IDs are dropped. If the catalog cannot be checked, OpenRouter choices stay disabled for that run. After changing a key, restart to refresh this check. With a missing or placeholder key, an OpenRouter-only choice is refused out loud and lists the Codex choices. No backend or model substitution occurs.
 
 `GET /model` returns only public backend/model/label status. `POST /model` accepts a JSON `question` containing the spoken command or exact alias and returns the confirmation/refusal plus current status. Neither endpoint exposes keys.
+
+## Focus sessions
+
+Build the floating desktop card once with `native/build_focus.sh`, then restart
+`python3 server.py`. Click **FOCUS** for thirty minutes, or say/type
+**thirty minutes on this**. Starting while Jarvis is frontmost arms the session:
+the first non-home app/site becomes the target. The card appears at the top-right
+of the main display across Spaces and tints brown during drift. It never takes
+keyboard focus. The viewer also shows the countdown.
+
+The target is the frontmost app's bundle ID; for Chrome-family browsers it also
+includes a SHA-256 hash of the lowercase URL hostname (not path, query, fragment,
+or port). Different paths on the same site remain focused. Browser internal pages
+are compared by their host too. The local Jarvis root/index tab on port 4700 is
+home base, including its query parameters. Home time counts as permitted time;
+it never triggers a callout. Returning home preserves an excursion so you can
+excuse it there. Returning to the actual target closes the excursion.
+
+The server samples once per second using a **fresh `osascript` process** to query
+System Events, then the active Chrome-family tab when relevant. No cached
+NSWorkspace notification state is used. The reader compares identities internally;
+only booleans leave it. `/focus` explicitly constructs a whitelist of booleans and
+numeric counters. No app name, bundle ID, URL, host, or hash enters viewer/card
+state, speech, or the ledger. Raw CLI diagnostics are discarded. Failed queries
+freeze the countdown and show Activity unavailable; they do not invent focus.
+A one-second sampler cannot observe excursions that happen entirely between
+samples. An observed switch gets 800ms grace; at normal query latency its first
+callout is on the following tick, approximately 1–2 seconds after switching.
+
+Commands (speech and typed input use the same handler):
+
+| Say | Effect |
+| --- | --- |
+| thirty minutes on this | Start; arm if on the Jarvis home tab |
+| call me out every thirty seconds | Set the nag interval (minimum three seconds) |
+| give me fifteen seconds | Suppress speech temporarily; continue accounting |
+| it's okay, I'm doing research | Refund this excursion's time and drift count; stay quiet until back at the target |
+| pause / resume | Freeze / resume countdown and observation |
+| extend by five minutes | Add time to the plan |
+| end the session | Finish and speak the report |
+| abort | Stop, report, and reset the clean streak |
+
+One persistent excursion counts once and escalates across three canned speech
+pools with each nag. The macOS `say` process speaks autonomous callouts and the
+report even if the viewer reloads or closes. Browser `?mute=1` does not mute this
+server-owned accountability speech. The session lives in server memory; restarting
+the server ends it. Reloading the viewer only fetches its current state.
+
+The report gives minutes permitted/on-target out of planned minutes, drift count,
+and streak. A non-aborted session earns a streak increment when credited time is
+at least 85% of **planned** time; ending early is not a shortcut. The private,
+ignored `ledger-focus.json` stores totals only (sessions, aborts, planned seconds,
+on-target seconds, drifts, streak). It stores no session history or timestamps.
+If that ledger is malformed or unwritable, the report says it could not be saved.
+
+### macOS 27 permissions, before live testing
+
+In **System Settings → Privacy & Security** grant the **launcher** of the server:
+
+- **Automation → System Events**, and **Automation → Google Chrome** (or the
+  Chrome-family browser used). For `start.sh` in Terminal, the launcher is Terminal;
+  for a server launched from Codex, it is normally Codex. Follow the responsible
+  application name macOS actually shows. The grant is to the launcher controlling
+  those apps, not to Chrome controlling Jarvis.
+- **Accessibility / Device Control and Data Access** for that same launcher if
+  macOS requests it for the System Events frontmost-process query.
+- For the existing native microphone, **Microphone** and **Speech Recognition**
+  belong to **Jarvis Voice**. If browser recognition is selected, Chrome needs
+  microphone access plus the localhost site's microphone permission instead.
+
+Focus needs no Screen Recording, Input Monitoring, Full Disk Access, or remote
+Apple Events permission. The native countdown card and `say` need no such grant.
+An initial permission dialog may outlast the reader's short timeout; allow it and
+let the next tick retry. Denial is shown as Activity unavailable.
+
+### Verification
+
+Run `python3 -m unittest discover -s tests -p 'test*.py'`, `node tests/focus.cjs`,
+the existing voice/sources/screen suites, and `python3 preflight.py`.
+The privacy test exhausts the named public schema across start/arm, drift, pause,
+resume, snooze, excuse, extend and finish, asserting primitive boolean/numeric
+values only; ledger tests assert the aggregate schema separately.
+
+For the physical live loop, bring Chrome forward yourself (background automation
+clicks do not necessarily activate it). Start on Jarvis, switch to a work site,
+and wait for Target locked. Switch to another host and hear a callout within
+three seconds. Switch back: drift tint clears. Reload Jarvis: countdown rejoins.
+Say/type **end the session** and hear the report. Listen on the Mac itself;
+a running `say` process alone does not prove audible output or speaker volume.
+
+Implementation verification (2026-10-13): 31 Python checks and the focus, voice,
+source-camera, and screen browser suites passed; the Swift card compiled. Full
+live preflight reported `13 pass, 0 fail, 2 warn` (inactive API backend skipped).
+The viewer FOCUS control and server speech process were exercised. A physical
+foreground tab-switch / audible three-second callout / audible report loop remains
+**pending**: the user could not perform that check in this session. No claim of
+an observed three-second live callout is made. No focus session was left running.

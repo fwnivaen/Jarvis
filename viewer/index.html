@@ -186,7 +186,7 @@ button { transition: background var(--transition), color var(--transition), bord
 <main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
 <div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
 <aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
 <script src="graph-data.js"></script>
 <dialog id="brain-picker" aria-labelledby="brain-picker-title">
  <div class="brain-picker-heading"><h2 id="brain-picker-title">Choose a brain</h2><button id="brain-picker-close" type="button" aria-label="Close brain chooser">Close</button></div>
@@ -258,11 +258,11 @@ class MacRecognition {
   const el = id => document.getElementById(id);
   const synth = window.speechSynthesis;
   let Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || MacRecognition;
-  let activated = false, thinking = false, speaking = false, enabled = false;
+  let activated = false, thinking = false, speaking = false, externalSpeaking = false, enabled = false;
   let recognition = null, timer = null, buffer = [], pending = false, generation = 0;
   let notice = '', submit = null;
   function status() {
-    el('voice-status').textContent = thinking ? 'Thinking…' : speaking ? 'Speaking…' :
+    el('voice-status').textContent = thinking ? 'Thinking…' : (speaking || externalSpeaking) ? 'Speaking…' :
       enabled ? notice || 'Listening…' : notice || 'Ready';
     el('mic').disabled = thinking || !Recognition;
     el('mic').setAttribute('aria-pressed', String(enabled));
@@ -309,23 +309,23 @@ class MacRecognition {
   }
   function schedule() {
     clearTimeout(timer);
-    if (!buffer.length || pending || thinking) return;
+    if (!buffer.length || pending || thinking || externalSpeaking) return;
     timer = setTimeout(() => {
       const question = buffer.join(' ').trim();
       clearBuffer();
-      if (!thinking && enabled && question && submit) {
+      if (!thinking && !externalSpeaking && enabled && question && submit) {
         el('question').value = question; submit(question);
       }
     }, FINISH_MS);
   }
   function listen() {
-    if (!enabled || thinking || recognition || !Recognition) return;
+    if (!enabled || thinking || externalSpeaking || recognition || !Recognition) return;
     const current = new Recognition(); recognition = current;
     current.onstatus = message => { if(recognition===current){notice=message;status();} };
     const finals = new Set();
     current.lang = 'en-GB'; current.continuous = true; current.interimResults = true;
     current.onresult = event => {
-      if (recognition !== current || thinking) return;
+      if (recognition !== current || thinking || externalSpeaking) return;
       if(event.native){
         const text=event.text.trim();
         if(/^(stop|wait)[.!?,]*$/i.test(text)){stopSpeech();return;}
@@ -383,6 +383,13 @@ class MacRecognition {
   window.JarvisVoice = {
     speak,
     setSubmit(handler) { submit = handler; },
+    setExternalSpeaking(value) {
+      if (externalSpeaking === value) return;
+      externalSpeaking = value;
+      if (value) { stopSpeech(); clearBuffer(); haltRecognition(); }
+      else listen();
+      status();
+    },
     setThinking(value) {
       thinking = value;
       if (value) { stopSpeech(); clearBuffer(); haltRecognition(); }
@@ -584,6 +591,7 @@ async function birthCapture(data){
  const wasBusy=busy;busy=false;focusNode(node);busy=wasBusy;
  setTimeout(()=>{delete node.fx;delete node.fy;delete node.fz;graph.d3ReheatSimulation()},reducedMotion?0:SETTINGS.cameraMs);
 }
-async function ask(question){if(window.JarvisVoice.interrupt(question))return;if(busy||!question.trim())return;const swapping=isModelCommand(question),capture=!swapping&&CAPTURE_TRIGGER.test(question.trim()),seeing=screenMode&&!capture&&!swapping,shareVersion=screenGeneration;let saved=false;busy=true;holdCamera();window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent=swapping?'CHANGING BRAIN':capture?'FILING YOUR NOTE':seeing?'LOOKING AT YOUR SCREEN':'CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent=swapping?'Checking that exact brain…':capture?'Saving and indexing…':seeing?'Inspecting this frame and thinking…':'Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),capture?SETTINGS.captureTimeoutMs:seeing?SEE_REQUEST_TIMEOUT_MS:SETTINGS.chatTimeoutMs);try{let frame={};if(seeing){try{frame=screenFrame()}catch(error){error.screenError=true;throw error}}const response=await fetch(swapping?'/model':capture?'/remember':seeing?'/see':'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,...frame}),signal:controller.signal}),data=await response.json();if(data.brain){brainRevision++;showBrain(data)}if(seeing&&(shareVersion!==screenGeneration||!screenStream?.active)){const error=new Error('The screen share ended or changed while I was thinking, sir. Please share again and ask for a fresh look.');error.screenError=true;throw error}if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?(data.about_notes===true?'FROM YOUR NOTES':'JARVIS'):'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){if(capture){saved=true;await birthCapture(data)}else showAnswerSources(data);$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.screenError?error.message:capture?(saved?'Saved and indexed, sir, but the star could not be displayed. Your note is available for questions.':'I could not confirm that capture, sir. Check your notes before retrying; the connection may have failed after saving.'):error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
+async function ask(question){if(window.JarvisVoice.interrupt(question))return;if(window.JarvisFocus?.matches(question)){await window.JarvisFocus.command({question});return;}if(busy||!question.trim())return;const swapping=isModelCommand(question),capture=!swapping&&CAPTURE_TRIGGER.test(question.trim()),seeing=screenMode&&!capture&&!swapping,shareVersion=screenGeneration;let saved=false;busy=true;holdCamera();window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent=swapping?'CHANGING BRAIN':capture?'FILING YOUR NOTE':seeing?'LOOKING AT YOUR SCREEN':'CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent=swapping?'Checking that exact brain…':capture?'Saving and indexing…':seeing?'Inspecting this frame and thinking…':'Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),capture?SETTINGS.captureTimeoutMs:seeing?SEE_REQUEST_TIMEOUT_MS:SETTINGS.chatTimeoutMs);try{let frame={};if(seeing){try{frame=screenFrame()}catch(error){error.screenError=true;throw error}}const response=await fetch(swapping?'/model':capture?'/remember':seeing?'/see':'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,...frame}),signal:controller.signal}),data=await response.json();if(data.brain){brainRevision++;showBrain(data)}if(seeing&&(shareVersion!==screenGeneration||!screenStream?.active)){const error=new Error('The screen share ended or changed while I was thinking, sir. Please share again and ask for a fresh look.');error.screenError=true;throw error}if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?(data.about_notes===true?'FROM YOUR NOTES':'JARVIS'):'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){if(capture){saved=true;await birthCapture(data)}else showAnswerSources(data);$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.screenError?error.message:capture?(saved?'Saved and indexed, sir, but the star could not be displayed. Your note is available for questions.':'I could not confirm that capture, sir. Check your notes before retrying; the connection may have failed after saving.'):error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
 
-</script></body></html>
+</script><script src="/focus.js"></script>
+</body></html>

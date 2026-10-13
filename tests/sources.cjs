@@ -12,8 +12,8 @@ const graph={camera:()=>camera,controls:()=>controls,cameraPosition(p,t){flights
 const context={console,AbortController,performance:{now:()=>now},matchMedia:()=>({matches:false}),
  GRAPH:{nodes:Array.from({length:6},(_,id)=>({id,label:`Note ${id}`,group:'Finance',excerpt:'NOTE TEXT MUST NOT BE SPOKEN',x:id,y:0,z:0})),links:[{source:0,target:1},{source:1,target:2},{source:2,target:3}]},
  document:{getElementById:el,createElement:()=>el(`element-${++next}`)},
- requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame(id){frames.delete(id);},setTimeout(){return ++next;},clearTimeout(){},
- fetch(path){lastPath=path;requests++;return new Promise(resolve=>resolveReply=resolve);},window:{JarvisVoice:{interrupt:()=>false,setThinking(){},speak(text){spoken.push({text,panel:el('detail').hidden,frames:frames.size});}}}};
+ requestAnimationFrame(fn){frames.set(++next,fn);return next;},cancelAnimationFrame(id){frames.delete(id);},setTimeout(){return ++next;},clearTimeout(){},setInterval(){},
+ fetch(path){if(path==='/model')return Promise.resolve({ok:false});lastPath=path;requests++;return new Promise(resolve=>resolveReply=resolve);},window:{JarvisVoice:{interrupt:()=>false,setThinking(){},speak(text){spoken.push({text,panel:el('detail').hidden,frames:frames.size});}}}};
 vm.createContext(context);
 vm.runInContext(moduleSource.slice(moduleSource.indexOf('const SETTINGS'),moduleSource.indexOf("$('search').addEventListener"))+moduleSource.slice(moduleSource.indexOf('// Intent is decided')),context);
 context.graphDouble=graph;vm.runInContext('graph=graphDouble',context);

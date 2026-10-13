@@ -12,7 +12,7 @@ const ctx={console,AbortController,JSON,Math,Error,screenStream:undefined,
  document:{createElement(type){if(type==='video')return video;assert.equal(type,'canvas');return {width:0,height:0,getContext(){return {drawImage:(...args)=>draws.push(args)}} ,toDataURL(mime,q){assert.equal(mime,'image/jpeg');assert.equal(q,.82);assert.equal(this.width,1600);assert.equal(this.height,900);return 'data:image/jpeg;base64,'+content}}}},
  navigator:{mediaDevices:{getDisplayMedia:async options=>{assert.equal(options.audio,false);return stream}}},
  window:{JarvisVoice:{interrupt:()=>false,setThinking(v){thinking=v},speak(t){spoken.push(t)}}},
- setTimeout:()=>1,clearTimeout(){},holdCamera(){},showAnswerSources(){},fetch(path,options){requests.push({path,body:JSON.parse(options.body)});return new Promise(resolve=>resolveReply=resolve)},el};
+ setInterval(){},setTimeout:()=>1,clearTimeout(){},holdCamera(){},showAnswerSources(){},fetch(path,options){if(path==='/model')return Promise.resolve({ok:false});requests.push({path,body:JSON.parse(options.body)});return new Promise(resolve=>resolveReply=resolve)},el};
 vm.createContext(ctx);
 vm.runInContext(src.slice(0,src.indexOf('const $='))+'\nconst $=el;let busy=false;'+src.slice(src.indexOf('let screenStream='),src.indexOf('async function birthCapture'))+src.slice(src.indexOf('async function ask')),ctx);
 (async()=>{

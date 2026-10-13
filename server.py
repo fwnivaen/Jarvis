@@ -46,7 +46,9 @@ from pathlib import Path
 
 import build
 import voice_bridge
+import focus
 
+FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
 VIEWER_DIR = ROOT / "viewer"
 CONFIG_PATH = ROOT / "config.json"
@@ -138,6 +140,7 @@ ANSWER_SCHEMA = {"type": "object", "properties": {
     "required": ["answer", "about_notes", "nodes"], "additionalProperties": False}
 PUBLIC_FILES = {"/": ("index.html", "text/html; charset=utf-8"),
                 "/index.html": ("index.html", "text/html; charset=utf-8"),
+                "/focus.js": ("focus.js", "text/javascript; charset=utf-8"),
                 "/graph-data.js": ("graph-data.js", "text/javascript; charset=utf-8")}
 CAPTURE_TITLE_WORDS = 7
 CAPTURE_TITLE_CHARS = 80
@@ -638,6 +641,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/focus":
+            self.send_bytes(json.dumps(FOCUS.state()).encode(), "application/json", head=head)
+            return
         if path == "/model":
             try:
                 self.send_bytes(json.dumps(model_catalog()).encode(), "application/json", head=head)
@@ -664,7 +670,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
+        if self.path not in ("/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -678,6 +684,19 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path == "/see" else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
+            if self.path == "/focus":
+                if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
+                    self.send_json({"error": True, "answer": "Local viewer requests only."}, 403)
+                    return
+                parsed = focus.parse_command(body.get("question", "")) if isinstance(body.get("question", ""), str) else None
+                action, seconds = parsed or (body.get("action"), body.get("seconds"))
+                try:
+                    answer = FOCUS.command(action, seconds)
+                    self.send_json({"answer": answer, "nodes": [], "about_notes": False,
+                                    "spoken": action in ("abort", "end"), "state": FOCUS.state()})
+                except ValueError as error:
+                    self.send_json({"error": True, "answer": str(error), "nodes": []}, 400)
+                return
             if self.path.startswith("/voice/"):
                 # Voice control must originate in our own viewer, never a cross-site POST.
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
@@ -788,10 +807,12 @@ def main():
         raise SystemExit(1) from None
     print(f"Jarvis: http://{HOST}:{PORT} — {len(NOTES)} notes, {len(graph['links'])} connections", flush=True)
     try:
+        FOCUS.start_loop()
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nJarvis stopped.")
     finally:
+        FOCUS.close()
         server.server_close()
 
 

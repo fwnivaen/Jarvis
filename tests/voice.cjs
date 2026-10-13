@@ -94,6 +94,14 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
   heard='My next question';echo.tick(150);
   for(let i=0;i<12;i++)await Promise.resolve();
   echo.tick(FINISH);assert.deepEqual(echo.sent,['My next question']);
+  const external = setup('?mute=1');
+  external.mic(); const oldRecognition = external.current();
+  external.voice.setExternalSpeaking(true);
+  oldRecognition.result([['Back to work sir', true]]); external.tick(FINISH);
+  assert.deepEqual(external.sent, []);
+  external.voice.setExternalSpeaking(false);
+  external.current().result([['pause', true]]); external.tick(FINISH);
+  assert.deepEqual(external.sent, ['pause']);
   const app = setup('?mute=1');
   let resolveReply, request;
   const response = new Promise(resolve => { resolveReply = resolve; });
@@ -101,7 +109,7 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
     Object.assign(app.el(id), {value: '', classList: {add() {}, remove() {}}, replaceChildren() {}, focus() {}});
   }
   Object.assign(app.context, {console, AbortController, fetch: (path, options) => {request = {path, options}; return response;}});
-  vm.runInNewContext("const $ = id => document.getElementById(id); let screenMode = false, screenGeneration = 0; let busy = false, highlighted, activeLinks, selected; const GRAPH = {nodes: [], links: []}; const SETTINGS = {chatTimeoutMs: 100000, timePrecision: 2}; function holdCamera() {} function showAnswerSources() {} function linkKey() {} function refreshHighlights() {}", app.context);
+  vm.runInNewContext("const $ = id => document.getElementById(id); let screenMode = false, screenGeneration = 0; let busy = false, highlighted, activeLinks, selected; const GRAPH = {nodes: [], links: []}; const SETTINGS = {chatTimeoutMs: 100000, timePrecision: 2}; function isModelCommand() { return false; } function holdCamera() {} function showAnswerSources() {} function linkKey() {} function refreshHighlights() {}", app.context);
   vm.runInNewContext(html.match(/async function ask\(question\)\{[\s\S]*?(?=\n<\/script>)/)[0], app.context);
   vm.runInNewContext(html.match(/const CAPTURE_TRIGGER = .*;/)[0], app.context);
   const pendingReply = app.context.ask('A typed question');
