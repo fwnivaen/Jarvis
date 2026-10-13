@@ -149,7 +149,20 @@ a running `say` process alone does not prove audible output or speaker volume.
 Implementation verification (2026-10-13): 31 Python checks and the focus, voice,
 source-camera, and screen browser suites passed; the Swift card compiled. Full
 live preflight reported `13 pass, 0 fail, 2 warn` (inactive API backend skipped).
-The viewer FOCUS control and server speech process were exercised. A physical
-foreground tab-switch / audible three-second callout / audible report loop remains
-**pending**: the user could not perform that check in this session. No claim of
-an observed three-second live callout is made. No focus session was left running.
+
+The authorized automatic foreground test passed against the real running server:
+Chrome switched between two disposable local-site tabs, the server recorded one
+drift, and the callout speech process started **1.50 seconds** after initiating
+the switch. Returning to the target cleared drift; Jarvis home remained exempt;
+reloading rejoined the same countdown. The final report retained exactly one
+drift, its speech process completed, and the test closed its temporary Chrome
+window. No focus session was left running. This timing measures the native speech
+process starting, not an acoustic recording of speaker output. The user separately
+reported hearing the callout within three seconds and seeing the tint clear.
+
+To repeat the physical automation deliberately, run
+`python3 tools/verify_focus_live.py`. It activates Chrome, switches test tabs,
+plays speech, and adds one real test session to aggregate totals. It refuses to
+interrupt an existing session and closes only its own disposable window. The
+local test URLs may show Not found: only their differing hosts matter to this
+reader test. Do not run it while you need uninterrupted foreground control.
