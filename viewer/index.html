@@ -168,6 +168,17 @@ button { transition: background var(--transition), color var(--transition), bord
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
+.brain-chip { display:inline-block; padding:var(--space-2) var(--space-3); margin-bottom:var(--space-2); border:var(--hairline) solid #69e0ff40; border-radius:var(--small-radius); color:var(--accent); font-size:var(--type-xs); }
+#brain-picker { color:var(--accent); background:#071b29; border:var(--hairline) solid #69e0ff60; border-radius:var(--small-radius); padding:var(--space-5); max-width:calc(100vw - var(--space-5)); }
+#brain-picker::backdrop { background:#000a; }
+.brain-picker-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); }
+#brain-picker h2 { font-size:var(--type-icon); }
+#brain-picker p { color:#88adc5; font-size:var(--type-xs); }
+#brain-picker-close { color:var(--accent); padding:var(--space-2); }
+.brain-choice { display:block; width:100%; text-align:left; color:var(--accent); padding:var(--space-3); margin-top:var(--space-2); border:var(--hairline) solid #69e0ff40; border-radius:var(--small-radius); }
+.brain-choice:hover, .brain-choice:focus-visible { background:#163c50; }
+.brain-choice[aria-disabled="true"] { color:#88adc5; }
+.brain-choice small { display:block; margin-top:var(--space-2); }
 </style></head>
 <body>
 <header class="app-header"><div class="brand"><span class="brand-icon">✧</span>JARVIS<small>PERSONAL INTELLIGENCE / V.01</small></div><div class="header-right"><span class="local-label"><i class="status-dot"></i>LOCAL WORKSPACE</span><span id="screen-indicator" role="status" hidden style="color:#ffb4b4;border:var(--focus-width) solid #ff6060;padding:var(--space-3)">● SCREEN SHARING LIVE</span><span class="avatar">JK</span></div></header>
@@ -175,8 +186,14 @@ button { transition: background var(--transition), color var(--transition), bord
 <main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
 <div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
 <aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
 <script src="graph-data.js"></script>
+<dialog id="brain-picker" aria-labelledby="brain-picker-title">
+ <div class="brain-picker-heading"><h2 id="brain-picker-title">Choose a brain</h2><button id="brain-picker-close" type="button" aria-label="Close brain chooser">Close</button></div>
+ <p>Click a model or say “switch to Luna”. Changes last until restart.</p>
+ <div id="brain-options"></div>
+ <button class="brain-choice" id="brain-reset" type="button">Return to normal brain</button>
+</dialog>
 <script id="boot-greeting">
 // Local boot copy only: the conversational persona lives at the top of server.py.
 const GREETING_SETTINGS = Object.freeze({afternoonHour: 12, eveningHour: 18});
@@ -498,6 +515,45 @@ function screenFrame(){
   return {image:data.split(',')[1],media_type:'image/jpeg'};
  }finally{canvas.width=canvas.height=0;}
 }
+const BRAIN_REFRESH_MS = 5000;
+let brainRevision = 0, modelCatalog = null, modelMenuSignature = '';
+function isModelCommand(question) {
+ const name=question.trim().replace(/[.!?]+$/, '').trim();
+ const normalized=name.toLowerCase().replace(/-/g,' ').replace(/\s+/g,' ');
+ return modelCatalog && (new RegExp(modelCatalog.command_pattern,'i').test(name) ||
+   modelCatalog.aliases.includes(normalized) || new RegExp('^'+modelCatalog.version_pattern+'$','i').test(normalized) ||
+   ['normal brain','your normal brain'].includes(normalized));
+}
+function showBrain(data) {
+ if(data?.brain?.label)$('brain-chip').textContent=data.brain.label+' ▾';
+ if(data?.choices)modelCatalog=data;
+ if(!modelCatalog)return;
+ const signature=JSON.stringify([modelCatalog.choices,data.brain]);
+ if(signature===modelMenuSignature)return;
+ modelMenuSignature=signature;
+ $('brain-options').replaceChildren();
+ for(const choice of modelCatalog.choices){
+   const button=document.createElement('button');button.type='button';button.className='brain-choice';
+   const active=data.brain?.backend===choice.backend&&data.brain?.model===choice.model;
+   button.textContent=choice.label+(active?' · Current':'');
+   button.setAttribute('aria-disabled',String(!choice.available));
+   const detail=document.createElement('small');
+   detail.textContent=(choice.backend==='codex-cli'?'Codex':'OpenRouter')+' · '+(choice.reason||'Ready');button.append(detail);
+   // Unavailable entries remain focusable so clicking explains the exact reason aloud.
+   button.onclick=()=>{if(busy)return;$('brain-picker').close();ask('switch to '+choice.name)};
+   $('brain-options').append(button);
+ }
+}
+async function refreshBrain() {
+ const revision=brainRevision;
+ try { const response=await fetch('/model'); if(!response.ok)throw new Error(); const data=await response.json(); if(revision===brainRevision)showBrain(data); }
+ catch { if(revision===brainRevision)$('brain-chip').textContent='BRAIN · UNAVAILABLE ▾'; }
+}
+$('brain-chip').onclick=()=>{if(busy)return;$('brain-picker').showModal();refreshBrain()};
+$('brain-picker-close').onclick=()=>$('brain-picker').close();
+$('brain-reset').onclick=()=>{if(busy)return;$('brain-picker').close();ask('go back to your normal brain')};
+refreshBrain();
+setInterval(()=>{if(!busy)refreshBrain()}, BRAIN_REFRESH_MS);
 const CAPTURE_TRIGGER = /^(?:remember that|note to self|don['’]t let me forget|log this)(?=$|[\s:,.!?])/i;
 async function birthCapture(data){
  const anchor=GRAPH.nodes[data.parent],old=new Map(GRAPH.nodes.map(n=>[n.id,n]));
@@ -528,6 +584,6 @@ async function birthCapture(data){
  const wasBusy=busy;busy=false;focusNode(node);busy=wasBusy;
  setTimeout(()=>{delete node.fx;delete node.fy;delete node.fz;graph.d3ReheatSimulation()},reducedMotion?0:SETTINGS.cameraMs);
 }
-async function ask(question){if(window.JarvisVoice.interrupt(question))return;if(busy||!question.trim())return;const capture=CAPTURE_TRIGGER.test(question.trim()),seeing=screenMode&&!capture,shareVersion=screenGeneration;let saved=false;busy=true;holdCamera();window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent=capture?'FILING YOUR NOTE':seeing?'LOOKING AT YOUR SCREEN':'CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent=capture?'Saving and indexing…':seeing?'Inspecting this frame and thinking…':'Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),capture?SETTINGS.captureTimeoutMs:seeing?SEE_REQUEST_TIMEOUT_MS:SETTINGS.chatTimeoutMs);try{let frame={};if(seeing){try{frame=screenFrame()}catch(error){error.screenError=true;throw error}}const response=await fetch(capture?'/remember':seeing?'/see':'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,...frame}),signal:controller.signal}),data=await response.json();if(seeing&&(shareVersion!==screenGeneration||!screenStream?.active)){const error=new Error('The screen share ended or changed while I was thinking, sir. Please share again and ask for a fresh look.');error.screenError=true;throw error}if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?(data.about_notes===true?'FROM YOUR NOTES':'JARVIS'):'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){if(capture){saved=true;await birthCapture(data)}else showAnswerSources(data);$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.screenError?error.message:capture?(saved?'Saved and indexed, sir, but the star could not be displayed. Your note is available for questions.':'I could not confirm that capture, sir. Check your notes before retrying; the connection may have failed after saving.'):error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
+async function ask(question){if(window.JarvisVoice.interrupt(question))return;if(busy||!question.trim())return;const swapping=isModelCommand(question),capture=!swapping&&CAPTURE_TRIGGER.test(question.trim()),seeing=screenMode&&!capture&&!swapping,shareVersion=screenGeneration;let saved=false;busy=true;holdCamera();window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent=swapping?'CHANGING BRAIN':capture?'FILING YOUR NOTE':seeing?'LOOKING AT YOUR SCREEN':'CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent=swapping?'Checking that exact brain…':capture?'Saving and indexing…':seeing?'Inspecting this frame and thinking…':'Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),capture?SETTINGS.captureTimeoutMs:seeing?SEE_REQUEST_TIMEOUT_MS:SETTINGS.chatTimeoutMs);try{let frame={};if(seeing){try{frame=screenFrame()}catch(error){error.screenError=true;throw error}}const response=await fetch(swapping?'/model':capture?'/remember':seeing?'/see':'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,...frame}),signal:controller.signal}),data=await response.json();if(data.brain){brainRevision++;showBrain(data)}if(seeing&&(shareVersion!==screenGeneration||!screenStream?.active)){const error=new Error('The screen share ended or changed while I was thinking, sir. Please share again and ask for a fresh look.');error.screenError=true;throw error}if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?(data.about_notes===true?'FROM YOUR NOTES':'JARVIS'):'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){if(capture){saved=true;await birthCapture(data)}else showAnswerSources(data);$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.screenError?error.message:capture?(saved?'Saved and indexed, sir, but the star could not be displayed. Your note is available for questions.':'I could not confirm that capture, sir. Check your notes before retrying; the connection may have failed after saving.'):error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
 
 </script></body></html>

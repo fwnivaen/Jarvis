@@ -87,6 +87,32 @@ TIME_PRECISION = 2
 MIN_WORD_CHARS = 2
 PRIVATE_FILE_MODE = 0o600
 OPENAI_URL = "https://api.openai.com/v1/responses"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
+MODEL_CATALOG_TIMEOUT_S = 20
+MAX_CATALOG_BYTES = 10_000_000
+PLACEHOLDER_KEY = "PUT-YOUR-KEY-HERE"
+# Exact aliases only. Each entry declares its backend; never match substrings.
+SPOKEN_MODELS = {
+    "astra": ("codex-cli", "gpt-6-astra"),
+    "gpt 6 astra": ("codex-cli", "gpt-6-astra"),
+    "luna": ("codex-cli", "gpt-6-luna"),
+    "gpt 6 luna": ("codex-cli", "gpt-6-luna"),
+    "openrouter astra": ("openrouter", "openai/gpt-6-astra"),
+    "fable 5.1": ("openrouter", "anthropic/claude-fable-5.1"),
+    "claude fable 5.1": ("openrouter", "anthropic/claude-fable-5.1"),
+}
+# Both CLI IDs passed real minimal calls with this Mac's login on 2026-10-12.
+CODEX_KNOWN_MODELS = frozenset({"gpt-6-astra", "gpt-6-luna"})
+# Verified against the public catalog; intersect again at startup when keyed.
+OPENROUTER_KNOWN_MODELS = frozenset({"openai/gpt-6-astra", "anthropic/claude-fable-5.1"})
+MODEL_COMMAND_PATTERN = r"^(?:(?:hey )?jarvis[, ]+)?(?:please )?(?:(?:switch|change)(?: (?:your|the))?(?: (?:brain|model))? to|try on|go back to)(?=$|\s)\s*"
+MODEL_VERSION_PATTERN = r"(?:claude )?(opus|sonnet|fable|haiku) (\d+(?:[. ]\d+)*)"
+MODEL_TRIGGER = re.compile(MODEL_COMMAND_PATTERN, re.I)
+MODEL_LOCK = threading.RLock()
+ACTIVE_BRAIN = None
+OPENROUTER_AVAILABLE = frozenset()
+OPENROUTER_IMAGES = frozenset()
 CLI_CANDIDATES = (
     "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
     "/Applications/Codex.app/Contents/Resources/codex",
@@ -140,13 +166,22 @@ def find_codex():
 
 
 def initialize_config():
-    # Exclusive create: never read, overwrite, print or relocate an existing key file.
+    # Create privately; extend existing settings only when the router field is missing.
     if not CONFIG_PATH.exists():
         fd = os.open(str(CONFIG_PATH), os.O_WRONLY | os.O_CREAT | os.O_EXCL, PRIVATE_FILE_MODE)
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump({"brain": "codex-cli", "model": "gpt-6-astra",
-                       "openai_api_key": "PUT-YOUR-KEY-HERE"}, handle)
+                       "openai_api_key": "PUT-YOUR-KEY-HERE",
+                       "openrouter_api_key": PLACEHOLDER_KEY}, handle)
             handle.write("\n")
+    else:
+        config = load_config()
+        if "openrouter_api_key" not in config:
+            # Preserve every existing value, including real keys; never relocate this file.
+            config["openrouter_api_key"] = PLACEHOLDER_KEY
+            with CONFIG_PATH.open("w", encoding="utf-8") as handle:
+                json.dump(config, handle, indent=2)
+                handle.write("\n")
 
 
 def load_config():
@@ -157,6 +192,122 @@ def load_config():
         return config
     except (OSError, ValueError):
         raise BrainError("I couldn't read my settings. Check the JSON syntax in the project's configuration file.") from None
+
+
+def model_label(model):
+    name = model.rsplit("/", 1)[-1]
+    return re.sub(r"(?<=\d)-(?=\d)", ".", name).replace("-", " ").upper()
+
+
+def has_router_key(config):
+    key = config.get("openrouter_api_key")
+    return isinstance(key, str) and bool(key.strip()) and key.strip() != PLACEHOLDER_KEY
+
+
+def refresh_router_catalog(config):
+    global OPENROUTER_AVAILABLE, OPENROUTER_IMAGES
+    available, images = set(), set()
+    if has_router_key(config):
+        try:
+            with urllib.request.urlopen(OPENROUTER_MODELS_URL, timeout=MODEL_CATALOG_TIMEOUT_S) as response:
+                catalog = json.loads(response.read(MAX_CATALOG_BYTES))
+            for item in catalog["data"]:
+                if item["id"] in OPENROUTER_KNOWN_MODELS:
+                    available.add(item["id"])
+                    if "image" in item.get("architecture", {}).get("input_modalities", []):
+                        images.add(item["id"])
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            available.clear()
+            images.clear()
+            print("OpenRouter catalog unavailable; OpenRouter choices disabled for this run.", flush=True)
+    with MODEL_LOCK:
+        OPENROUTER_AVAILABLE, OPENROUTER_IMAGES = frozenset(available), frozenset(images)
+
+
+def active_settings():
+    config = load_config().copy()
+    with MODEL_LOCK:
+        if ACTIVE_BRAIN is not None:
+            config["brain"], config["model"] = ACTIVE_BRAIN
+    return config
+
+
+def brain_status():
+    config = active_settings()
+    backend = config.get("brain", "codex-cli")
+    label = {"codex-cli": "CODEX", "openrouter": "OPENROUTER", "openai-api": "OPENAI"}.get(backend, "UNKNOWN")
+    return {"backend": backend, "model": config["model"], "label": label + " · " + model_label(config["model"])}
+
+
+def available_names(config, cli_only=False):
+    ids = sorted(CODEX_KNOWN_MODELS)
+    if not cli_only and has_router_key(config):
+        ids += sorted(OPENROUTER_AVAILABLE)
+    return ", ".join(model_label(model) for model in ids)
+
+
+def resolve_model(name):
+    # Preserve every version digit. Punctuation normalization is never fuzzy matching.
+    normalized = re.sub(r"\s+", " ", name.casefold().replace("-", " ")).strip()
+    if normalized in SPOKEN_MODELS:
+        return SPOKEN_MODELS[normalized]
+    match = re.fullmatch(MODEL_VERSION_PATTERN, normalized)
+    if match:
+        family, version = match.groups()
+        return "openrouter", "anthropic/claude-" + family + "-" + version.replace(" ", ".")
+    return None
+
+
+def is_model_command(question):
+    name = question.strip().rstrip(".!?").strip()
+    # Exact standalone names also work when recognition delivers just "Luna".
+    # Full questions like "What does Luna mean?" remain ordinary questions.
+    return bool(MODEL_TRIGGER.match(name) or resolve_model(name) or
+                name.casefold() in ("your normal brain", "normal brain"))
+
+
+def model_catalog():
+    config = load_config()
+    choices, seen = [], set()
+    for alias, (backend, model) in SPOKEN_MODELS.items():
+        if (backend, model) in seen:
+            continue
+        seen.add((backend, model))
+        reason = ""
+        if backend == "openrouter":
+            if not has_router_key(config):
+                reason = "Needs an OpenRouter key"
+            elif model not in OPENROUTER_AVAILABLE:
+                reason = "Unavailable in verified catalog"
+        elif model not in CODEX_KNOWN_MODELS:
+            reason = "Not verified with this login"
+        choices.append({"name": alias, "backend": backend, "model": model,
+                        "label": model_label(model), "available": not reason, "reason": reason})
+    return {"brain": brain_status(), "choices": choices, "aliases": list(SPOKEN_MODELS),
+            "command_pattern": MODEL_COMMAND_PATTERN, "version_pattern": MODEL_VERSION_PATTERN}
+
+
+def swap_model(question):
+    global ACTIVE_BRAIN
+    config = load_config()
+    name = MODEL_TRIGGER.sub("", question.strip()).rstrip(".!?").strip()
+    with MODEL_LOCK:
+        if name.casefold() in ("your normal brain", "normal brain"):
+            ACTIVE_BRAIN = None
+            answer, refused = "Back to my normal brain, sir. Familiar surroundings.", False
+        else:
+            choice = resolve_model(name)
+            known = choice and choice[1] in (CODEX_KNOWN_MODELS if choice[0] == "codex-cli" else OPENROUTER_KNOWN_MODELS)
+            if not known:
+                answer, refused = "I don't have that exact brain, sir. I can offer: " + available_names(config) + ".", True
+            elif choice[0] == "openrouter" and not has_router_key(config):
+                answer, refused = "That brain needs an OpenRouter key, sir. I can offer: " + available_names(config, cli_only=True) + ".", True
+            elif choice[0] == "openrouter" and choice[1] not in OPENROUTER_AVAILABLE:
+                answer, refused = "That exact brain is not in my verified OpenRouter catalog, sir. I can offer: " + available_names(config) + ".", True
+            else:
+                ACTIVE_BRAIN = choice
+                answer, refused = "Now using " + model_label(choice[1]) + ", sir. A change of mind, quite literally.", False
+        return {"answer": answer, "error": refused, "about_notes": False, "nodes": [], "brain": brain_status()}
 
 
 def words(text):
@@ -320,12 +471,12 @@ def cli_command(executable, model, workspace, schema_path, answer_path):
 
 
 def ask_brain(system, notes, history, question, image=None):
-    """One boundary for both backends; reload settings on every request."""
+    """One boundary for all backends, with a consistent per-request model snapshot."""
     started = time.monotonic()
     backend = "unavailable"
     timeout = SEE_TIMEOUT_S if image is not None else BRAIN_TIMEOUT_S
     try:
-        config = load_config()
+        config = active_settings()
         backend = config.get("brain", "codex-cli")
         payload = json.dumps({"notes": notes, "history": history, "question": question}, ensure_ascii=True)
         if backend == "codex-cli":
@@ -378,6 +529,33 @@ def ask_brain(system, notes, history, question, image=None):
                 if not answer_path.exists() or answer_path.stat().st_size > MAX_BRAIN_BYTES:
                     raise BrainError("Codex didn't return a usable answer. Please try again.")
                 raw = answer_path.read_text(encoding="utf-8")
+        elif backend == "openrouter":
+            if not has_router_key(config):
+                raise BrainError("That brain needs an OpenRouter key, sir. I can offer: " + available_names(config, cli_only=True) + ".")
+            if config["model"] not in OPENROUTER_AVAILABLE:
+                raise BrainError("That exact brain is not in my verified OpenRouter catalog, sir.")
+            if image is not None and config["model"] not in OPENROUTER_IMAGES:
+                raise BrainError("This brain cannot inspect images, sir. Please choose an image-capable brain.")
+            content = payload if image is None else [
+                {"type": "text", "text": payload},
+                {"type": "image_url", "image_url": {"url": "data:" + JPEG_MIME + ";base64," + base64.b64encode(image).decode("ascii")}}]
+            body = {"model": config["model"], "messages": [
+                {"role": "system", "content": system}, {"role": "user", "content": content}],
+                "provider": {"allow_fallbacks": False, "require_parameters": True},
+                "response_format": {"type": "json_schema", "json_schema": {
+                    "name": "note_answer", "strict": True, "schema": ANSWER_SCHEMA}}}
+            request = urllib.request.Request(OPENROUTER_URL, data=json.dumps(body).encode(),
+                headers={"Content-Type": "application/json", "Authorization": "Bearer " + config["openrouter_api_key"].strip()})
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    result = json.loads(response.read(MAX_BRAIN_BYTES))
+                if result.get("model") != config["model"]:
+                    raise BrainError("The provider reported a different brain, sir. I cannot accept that answer.")
+                raw = result["choices"][0]["message"]["content"]
+                if not isinstance(raw, str):
+                    raise ValueError
+            except (OSError, ValueError, KeyError, IndexError, AttributeError, TypeError):
+                raise BrainError("I couldn't reach that exact OpenRouter brain, sir. Check your key, connection, and model access.") from None
         elif backend == "openai-api":
             key = config.get("openai_api_key", "")
             if not isinstance(key, str) or not key.strip() or key == "PUT-YOUR-KEY-HERE":
@@ -400,14 +578,14 @@ def ask_brain(system, notes, history, question, image=None):
             except (urllib.error.URLError, ValueError, TimeoutError, AttributeError, TypeError):
                 raise BrainError("I couldn't reach the API brain. Check the connection, API key, and model setting, then try again.") from None
         else:
-            raise BrainError("Choose codex-cli or openai-api as the brain in your local configuration file.")
+            raise BrainError("Choose codex-cli, openai-api or openrouter as the brain in your local configuration file.")
         return validate_answer(raw, notes)
     except BrainError as error:
         return {"answer": str(error), "nodes": [], "about_notes": False, "error": True}
     except (OSError, ValueError, TypeError):
         return {"answer": "My brain couldn't start safely. Check your Codex installation and settings, then try again.", "nodes": [], "about_notes": False, "error": True}
     finally:
-        safe_backend = backend if backend in ("codex-cli", "openai-api") else "unavailable"
+        safe_backend = backend if backend in ("codex-cli", "openai-api", "openrouter") else "unavailable"
         print(f"Brain [{safe_backend}] {time.monotonic() - started:.{TIME_PRECISION}f}s", flush=True)
 
 
@@ -460,6 +638,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/model":
+            try:
+                self.send_bytes(json.dumps(model_catalog()).encode(), "application/json", head=head)
+            except BrainError as error:
+                self.send_json({"error": True, "answer": str(error)}, 503)
+            return
         if path == "/preflight/status":
             self.send_bytes(json.dumps({"protocol": PREFLIGHT_PROTOCOL}).encode(), "application/json", head=head)
             return
@@ -480,7 +664,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/chat", "/remember", "/see", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
+        if self.path not in ("/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -523,6 +707,13 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError
         except (ValueError, binascii.Error, AttributeError, UnicodeDecodeError, TimeoutError):
             self.send_json({"answer": "Send a fresh JPEG frame with image/jpeg and a short question, sir." if self.path == "/see" else "Please send a short, nonempty question.", "nodes": []}, 400)
+            return
+        if self.path == "/model" or (self.path in ("/chat", "/see") and is_model_command(question)):
+            try:
+                result = swap_model(question)
+                self.send_json(result, 400 if result["error"] else 200)
+            except BrainError as error:
+                self.send_json({"error": True, "answer": str(error), "nodes": []}, 503)
             return
         if self.path == "/remember":
             try:
@@ -578,8 +769,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    global NOTES
+    global NOTES, ACTIVE_BRAIN
     initialize_config()
+    ACTIVE_BRAIN = None
+    refresh_router_catalog(load_config())
     try:
         NOTES, graph = build.build()
     except FileNotFoundError:

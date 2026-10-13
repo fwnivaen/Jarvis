@@ -85,6 +85,93 @@ class Preflight(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
+    def test_model_labels(self):
+        self.assertEqual(server.model_label('gpt-6-astra'), 'GPT 6 ASTRA')
+        self.assertEqual(server.model_label('fable-5-1'), 'FABLE 5.1')
+        self.assertEqual(server.model_label('anthropic/claude-fable-5.1'), 'CLAUDE FABLE 5.1')
+
+    def test_model_exact_refusal_key_and_reset(self):
+        config = {'brain': 'codex-cli', 'model': 'gpt-6-astra', 'openrouter_api_key': server.PLACEHOLDER_KEY}
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'ask_brain', side_effect=AssertionError('swap called brain')):
+            for name in ('opus 5', 'opus 4.1', 'astra 99', 'fable 5.2', 'claude fable 5.1 please use opus', 'gpt 6 luna 9'):
+                status, _, raw = request('/model', 'POST', {'question': 'try on ' + name})
+                self.assertEqual(status, 400, name)
+                self.assertTrue(json.loads(raw)['error'])
+                self.assertIsNone(server.ACTIVE_BRAIN)
+            result = server.swap_model('try on Claude Fable 5.1')
+            self.assertTrue(result['error'])
+            self.assertTrue(result['answer'].startswith('That brain needs an OpenRouter key, sir. I can offer:'))
+            self.assertFalse(server.swap_model('switch to Luna')['error'])
+            self.assertEqual(server.active_settings()['model'], 'gpt-6-luna')
+            self.assertEqual(server.load_config(), config)
+            status, _, raw = request('/model', 'POST', {'question': 'go back to your normal brain'})
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(raw)['brain']['model'], config['model'])
+            self.assertEqual(server.active_settings()['brain'], config['brain'])
+            self.assertIsNone(server.ACTIVE_BRAIN)
+
+    def test_model_commands_route_without_inference(self):
+        config = {'brain': 'codex-cli', 'model': 'gpt-6-astra', 'openrouter_api_key': server.PLACEHOLDER_KEY}
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'ask_brain', side_effect=AssertionError('model command called brain')):
+            for command in ('Luna', 'switch to Luna', 'Please switch to Luna', 'Jarvis, change your model to Luna'):
+                status, _, raw = request('/chat', 'POST', {'question': command})
+                self.assertEqual(status, 200, command)
+                self.assertEqual(json.loads(raw)['brain']['model'], 'gpt-6-luna')
+            self.assertFalse(server.is_model_command('What does Luna mean?'))
+            self.assertFalse(server.is_model_command('Use my notes to explain staffing'))
+            self.assertTrue(server.is_model_command('opus 5'))
+            status, _, raw = request('/chat', 'POST', {'question': 'opus 5'})
+            self.assertEqual(status, 400)
+            self.assertEqual(json.loads(raw)['brain']['model'], 'gpt-6-luna')
+            catalog = json.loads(request('/model')[2])
+            self.assertEqual(len(catalog['choices']), len(set(server.SPOKEN_MODELS.values())))
+            for choice in catalog['choices']:
+                self.assertEqual(choice['available'], choice['backend'] == 'codex-cli')
+                result = server.swap_model('switch to ' + choice['name'])
+                self.assertEqual(result['error'], not choice['available'])
+            self.assertNotIn('openrouter_api_key', json.dumps(catalog))
+
+    def test_router_catalog_fails_closed_and_drops_unknown(self):
+        from unittest.mock import MagicMock
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps({'data': [
+            {'id': 'openai/gpt-6-astra', 'architecture': {'input_modalities': ['text', 'image']}},
+            {'id': 'invented/model'}]}).encode()
+        config = {'brain': 'codex-cli', 'model': 'gpt-6-astra', 'openrouter_api_key': 'test-only'}
+        with patch.object(server, 'OPENROUTER_AVAILABLE', frozenset()), patch.object(server, 'OPENROUTER_IMAGES', frozenset()), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'load_config', return_value=config):
+            with patch.object(server.urllib.request, 'urlopen', return_value=response):
+                server.refresh_router_catalog(config)
+            self.assertEqual(server.OPENROUTER_AVAILABLE, {'openai/gpt-6-astra'})
+            self.assertEqual(server.OPENROUTER_IMAGES, {'openai/gpt-6-astra'})
+            self.assertTrue(server.swap_model('try on fable 5.1')['error'])
+            with patch.object(server.urllib.request, 'urlopen', side_effect=OSError), contextlib.redirect_stdout(io.StringIO()):
+                server.refresh_router_catalog(config)
+            self.assertFalse(server.OPENROUTER_AVAILABLE)
+
+    def test_openrouter_text_image_and_no_substitute(self):
+        from unittest.mock import MagicMock
+        model = 'openai/gpt-6-astra'
+        config = {'brain': 'openrouter', 'model': model, 'openrouter_api_key': 'test-only'}
+        response = MagicMock()
+        value = {'model': model, 'choices': [{'message': {'content': json.dumps({'answer':'Ready.', 'nodes':[], 'about_notes':False})}}]}
+        response.__enter__.return_value.read.return_value = json.dumps(value).encode()
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'OPENROUTER_AVAILABLE', {model}), patch.object(server, 'OPENROUTER_IMAGES', {model}), patch.object(server.urllib.request, 'urlopen', return_value=response) as send, contextlib.redirect_stdout(io.StringIO()):
+            for image in (None, b'jpeg'):
+                self.assertFalse(server.ask_brain('system', [], [], 'question', image=image).get('error', False))
+                body = json.loads(send.call_args.args[0].data)
+                self.assertEqual(body['model'], model)
+                self.assertNotIn('models', body)
+                self.assertFalse(body['provider']['allow_fallbacks'])
+                if image:
+                    self.assertEqual(body['messages'][1]['content'][1]['type'], 'image_url')
+            value['model'] = 'wrong-model'
+            response.__enter__.return_value.read.return_value = json.dumps(value).encode()
+            self.assertTrue(server.ask_brain('system', [], [], 'question')['error'])
+            with patch.object(server, 'OPENROUTER_IMAGES', set()):
+                send.reset_mock()
+                self.assertTrue(server.ask_brain('system', [], [], 'question', image=b'jpeg')['error'])
+                send.assert_not_called()
+
     def test_graph_indices_and_edges(self):
         nodes, links = self.graph["nodes"], self.graph["links"]
         self.assertGreaterEqual(len(nodes), MIN_SAMPLE_NOTES)

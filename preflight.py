@@ -174,7 +174,7 @@ class Harness:
                 self.config_error = True
                 raise CheckFailure('configuration could not be loaded; inspect it locally') from None
         backend = self.config.get('brain', 'codex-cli')
-        require(backend in ('codex-cli', 'openai-api'), 'unsupported brain backend in configuration')
+        require(backend in ('codex-cli', 'openai-api', 'openrouter'), 'unsupported brain backend in configuration')
         return self.config
 
     def viewer(self):
@@ -213,7 +213,9 @@ class Harness:
         return 'installed Codex CLI found and login status succeeded'
 
     def minimal_brain(self):
-        self.settings()
+        config = self.settings()
+        if config.get("brain") == "openrouter":
+            server.refresh_router_catalog(config)
         # Call the exact boundary used by /chat; never substitute a fake model.
         with contextlib.redirect_stdout(io.StringIO()):
             value = server.ask_brain(server.SYSTEM_PROMPT, [], [], BRAIN_QUESTION)
@@ -227,10 +229,11 @@ class Harness:
             raise CheckWarning('skipped: codex-cli brain active')
         if self.quick:
             raise CheckWarning('skipped: --quick (live API authentication call)')
-        key = config.get('openai_api_key')
+        router = config.get('brain') == 'openrouter'
+        key = config.get('openrouter_api_key' if router else 'openai_api_key')
         require(isinstance(key, str) and bool(key.strip()) and key != PLACEHOLDER_KEY,
                 'OpenAI API key is missing or still the placeholder')
-        request = urllib.request.Request(OPENAI_MODELS_URL, headers={'Authorization': 'Bearer ' + key})
+        request = urllib.request.Request(server.OPENROUTER_MODELS_URL if router else OPENAI_MODELS_URL, headers={'Authorization': 'Bearer ' + key})
         try:
             with urllib.request.build_opener(NoRedirect()).open(request, timeout=server.BRAIN_TIMEOUT_S) as response:
                 value = json.loads(response.read(server.MAX_BRAIN_BYTES))
@@ -246,6 +249,34 @@ class Harness:
         if self.quick:
             raise CheckWarning('skipped: --quick (real brain call)')
         return self.minimal_brain()
+
+    def model_swaps(self):
+        config = self.settings()
+        try:
+            status, before = self.json_request('/model')
+            require(status == 200, 'model status unavailable; restart the server')
+            status, value = self.json_request('/model', {'question': 'try on opus 5'})
+            require(status == 400 and value.get('error') is True, 'fake version was not refused')
+            require(value.get('brain') == before.get('brain'), 'refusal changed the active brain')
+            if not server.has_router_key(config):
+                status, value = self.json_request('/model', {'question': 'try on Claude Fable 5.1'})
+                require(status == 400 and value.get('error') is True and value.get('answer', '').startswith(
+                    'That brain needs an OpenRouter key, sir. I can offer:'), 'placeholder key was not honestly refused')
+                require(value.get('brain') == before.get('brain'), 'key refusal changed the active brain')
+            status, value = self.json_request('/model', {'question': 'switch to Luna'})
+            require(status == 200 and value.get('brain', {}).get('backend') == 'codex-cli'
+                    and value['brain']['model'] == 'gpt-6-luna', 'exact Codex swap failed')
+            if not self.quick:
+                status, answer = self.json_request('/chat', {'question': BRAIN_QUESTION}, CHAT_TIMEOUT_S)
+                require(status == 200, 'swapped Codex model could not answer')
+                valid_answer(answer)
+        finally:
+            status, value = self.json_request('/model', {'question': 'go back to your normal brain'})
+            require(status == 200 and value.get('brain', {}).get('backend') == config.get('brain', 'codex-cli')
+                    and value['brain']['model'] == config['model'], 'reset did not restore configuration')
+        if self.quick:
+            raise CheckWarning('exact refusals, swap and reset passed; swapped inference skipped: --quick')
+        return 'fake version/key refusals, real Codex swap and answer, reset to config passed'
 
     def capture(self):
         # Refuse to write a probe to a stale server without guaranteed cleanup support.
@@ -380,6 +411,7 @@ class Harness:
         self.run('Offline regressions', self.offline)
         self.run('Server and viewer', self.viewer)
         self.run('Graph data', self.load_graph)
+        self.run('/model exact swaps and reset', self.model_swaps)
         self.run('/chat live answer', self.chat, brain=True)
         try:
             backend = self.settings().get('brain', 'codex-cli')
