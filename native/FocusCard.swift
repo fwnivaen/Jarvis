@@ -61,7 +61,7 @@ func poll() {
             let known = state["known"] as? Bool == true
             let home = state["home"] as? Bool == true
             let drift = state["drifting"] as? Bool == true && !home
-            title.stringValue = !known ? "ACTIVITY UNAVAILABLE" : state["armed"] as? Bool == true ? "SWITCH TO YOUR TASK" : state["paused"] as? Bool == true ? "FOCUS · PAUSED" : home ? "FOCUS · HOME BASE" : state["excused"] as? Bool == true ? "FOCUS · EXCUSED" : drift ? "RETURN TO YOUR TASK" : "FOCUS · ON TARGET"
+            title.stringValue = state["lock_deferred"] as? Bool == true ? "WAITING TO LOCK ON" : !known ? "ACTIVITY UNAVAILABLE" : state["paused"] as? Bool == true ? "FOCUS · PAUSED" : home ? "FOCUS · HOME BASE" : state["excused"] as? Bool == true ? "FOCUS · EXCUSED" : drift ? "RETURN TO YOUR TASK" : "FOCUS · ON TARGET"
             let remaining = state["remaining_s"] as? Int ?? 0
             countdown.stringValue = String(format: "%02d:%02d", remaining / secondsPerMinute, remaining % secondsPerMinute)
             content.layer?.backgroundColor = (drift ? driftColor : focusedColor).cgColor

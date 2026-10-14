@@ -4,6 +4,7 @@ import subprocess
 from urllib.parse import urlsplit
 
 QUERY_TIMEOUT_S = 0.6
+SETTLE_TICKS = 2
 HOME_PORT = 4700
 HOME_HOSTS = frozenset({'localhost', '127.0.0.1'})
 CHROME_IDS = frozenset({'com.google.Chrome', 'com.google.Chrome.beta', 'com.google.Chrome.dev',
@@ -16,6 +17,9 @@ class Reader:
     def __init__(self, query=None):
         self._query = query or self._osascript
         self._target = None
+        self._candidate = None
+        self._ticks = 0
+        self._app_only = False
 
     @staticmethod
     def _osascript(script):
@@ -27,26 +31,54 @@ class Reader:
 
     def clear(self):
         self._target = None
+        self._candidate = None
+        self._ticks = 0
+        self._app_only = False
 
-    def sample(self, arm=False):
+    def sample(self, arm=False, settle=False, app_only=False):
         try:
             # A new CLI process queries System Events EVERY sample. Never NSWorkspace notifications.
             bundle = self._query(FRONT_SCRIPT)
             if not bundle:
                 raise ValueError
             host_hash, home = None, False
-            if bundle in CHROME_IDS:
-                url = self._query(f'tell application id "{bundle}" to get URL of active tab of front window')
+            if bundle in CHROME_IDS and not (app_only or self._app_only):
+                surface = self._query(f'''tell application id "{bundle}"
+set focusedWindow to front window
+set browserTitle to name of focusedWindow
+set browserWindowID to id of focusedWindow
+set focusedTab to active tab of focusedWindow
+set surface to (URL of focusedTab) & linefeed & (browserWindowID as text) & linefeed & (id of focusedTab as text)
+end tell
+tell application "System Events"
+set frontProcess to first application process whose frontmost is true
+if bundle identifier of frontProcess is not "{bundle}" then error "Foreground changed"
+set focusedTitle to name of (value of attribute "AXFocusedWindow" of frontProcess)
+end tell
+if focusedTitle is not browserTitle then error "Focused window unavailable"
+return surface''')
+                url, window_id, tab_id = surface.rsplit('\n', 2)
                 parsed = urlsplit(url)
                 host = (parsed.hostname or '').lower().rstrip('.')
                 if not url:
                     raise ValueError
                 home = parsed.scheme == 'http' and host in HOME_HOSTS and parsed.port == HOME_PORT and parsed.path in ('/', '/index.html')
-                host_hash = hashlib.sha256(host.encode()).digest()
+                host_hash = hashlib.sha256(f'{host}\n{window_id}\n{tab_id}'.encode()).digest()
+            # Never scan other windows. Discard a read if foreground changed during scripting.
+            if self._query(FRONT_SCRIPT) != bundle:
+                raise ValueError
             identity = (bundle, host_hash)
-            if arm and not home:
-                self._target = identity
+            if arm:
+                if home:
+                    self._candidate, self._ticks = None, 0
+                else:
+                    self._ticks = self._ticks + 1 if self._candidate == identity else 1
+                    self._candidate = identity
+                    if not settle or self._ticks >= SETTLE_TICKS:
+                        self._target = identity
+                        self._app_only = app_only
             return {'known': True, 'home': home, 'target': identity == self._target,
                     'locked': self._target is not None}
         except (OSError, ValueError, subprocess.TimeoutExpired):
+            self._candidate, self._ticks = None, 0
             return {'known': False, 'home': False, 'target': False, 'locked': self._target is not None}

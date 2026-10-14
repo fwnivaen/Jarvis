@@ -691,9 +691,11 @@ class Handler(BaseHTTPRequestHandler):
                 parsed = focus.parse_command(body.get("question", "")) if isinstance(body.get("question", ""), str) else None
                 action, seconds = parsed or (body.get("action"), body.get("seconds"))
                 try:
-                    answer = FOCUS.command(action, seconds)
+                    answer = FOCUS.set_intent(body.get("intent")) if action == "intent" else FOCUS.command(action, seconds, defer_lock=body.get("defer_lock") is True)
+                    if action in ("start", "intent"):
+                        FOCUS.speak(answer)
                     self.send_json({"answer": answer, "nodes": [], "about_notes": False,
-                                    "spoken": action in ("abort", "end"), "state": FOCUS.state()})
+                                    "spoken": action in ("start", "intent", "abort", "end"), "state": FOCUS.state()})
                 except ValueError as error:
                     self.send_json({"error": True, "answer": str(error), "nodes": []}, 400)
                 return

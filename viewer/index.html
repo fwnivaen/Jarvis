@@ -186,7 +186,7 @@ button { transition: background var(--transition), color var(--transition), bord
 <main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
 <div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
 <aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><details><summary>Focus details</summary><pre id="focus-debug"></pre></details><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
 <script src="graph-data.js"></script>
 <dialog id="brain-picker" aria-labelledby="brain-picker-title">
  <div class="brain-picker-heading"><h2 id="brain-picker-title">Choose a brain</h2><button id="brain-picker-close" type="button" aria-label="Close brain chooser">Close</button></div>
@@ -260,7 +260,7 @@ class MacRecognition {
   let Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || MacRecognition;
   let activated = false, thinking = false, speaking = false, externalSpeaking = false, enabled = false;
   let recognition = null, timer = null, buffer = [], pending = false, generation = 0;
-  let notice = '', submit = null;
+  let notice = '', submit = null, answerHandler = null, restoreEnabled = false;
   function status() {
     el('voice-status').textContent = thinking ? 'Thinking…' : (speaking || externalSpeaking) ? 'Speaking…' :
       enabled ? notice || 'Listening…' : notice || 'Ready';
@@ -295,7 +295,7 @@ class MacRecognition {
       speaking = false;
       // Discard the native recognizer's cumulative transcript of our own voice.
       if (Recognition === MacRecognition && enabled && !thinking) { haltRecognition(); clearBuffer(); listen(); }
-      status();
+      listen(); status();
     } };
     utterance.onend = finish;
     utterance.onerror = () => {
@@ -314,12 +314,16 @@ class MacRecognition {
       const question = buffer.join(' ').trim();
       clearBuffer();
       if (!thinking && !externalSpeaking && enabled && question && submit) {
-        el('question').value = question; submit(question);
+        el('question').value = question;
+        if (answerHandler) {
+          const handler = answerHandler; answerHandler = null;
+          enabled = restoreEnabled; haltRecognition(); status(); handler(question);
+        } else submit(question);
       }
     }, FINISH_MS);
   }
   function listen() {
-    if (!enabled || thinking || externalSpeaking || recognition || !Recognition) return;
+    if (!enabled || thinking || speaking || externalSpeaking || recognition || !Recognition) return;
     const current = new Recognition(); recognition = current;
     current.onstatus = message => { if(recognition===current){notice=message;status();} };
     const finals = new Set();
@@ -371,6 +375,7 @@ class MacRecognition {
   document.addEventListener('click', event => {
     if (!event.isTrusted || activated) return;
     activated = true;
+    if (event.target?.closest?.('#focus')) return;
     speak(el('answer').textContent);
   }, {capture: true});
   el('mic').onclick = () => {
@@ -382,6 +387,14 @@ class MacRecognition {
   el('stop-speech').onclick = stopSpeech;
   window.JarvisVoice = {
     speak,
+    cancelAnswer() {
+      if (!answerHandler) return;
+      answerHandler = null; enabled = restoreEnabled; clearBuffer(); haltRecognition(); listen(); status();
+    },
+    answerOnce(handler) {
+      restoreEnabled = enabled; answerHandler = handler; enabled = true;
+      clearBuffer(); haltRecognition(); status();
+    },
     setSubmit(handler) { submit = handler; },
     setExternalSpeaking(value) {
       if (externalSpeaking === value) return;

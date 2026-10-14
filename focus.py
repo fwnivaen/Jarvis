@@ -3,6 +3,7 @@ import json
 import math
 import os
 import random
+import queue
 import re
 import subprocess
 import threading
@@ -10,6 +11,10 @@ import time
 from pathlib import Path
 from focus_reader import Reader
 
+DEFER_TIMEOUT_S = 45
+INTENT_MAX_CHARS = 4000
+INTENT_LABEL_WORDS = 5
+INTENT_LABEL_CHARS = 60
 TICK_S = 1.0
 GRACE_S = 0.8
 MIN_DURATION_S = 1
@@ -28,7 +33,7 @@ POOLS = (
     ('A small detour, sir. Back to the task.', 'Your task is waiting. Shall we return?'),
     ('The detour is becoming a holiday. Back to work.', 'Focus, sir. That was not the assignment.'),
     ('We are now professionally avoiding the task. Return to it.', 'Your future self has lodged a complaint. Back to work.'))
-PUBLIC_KEYS = frozenset({'active', 'armed', 'paused', 'drifting', 'excused', 'known', 'home',
+PUBLIC_KEYS = frozenset({'active', 'armed', 'lock_deferred', 'app_only', 'has_intent', 'paused', 'drifting', 'excused', 'known', 'home',
     'remaining_s', 'planned_s', 'elapsed_s', 'on_target_s', 'drift_s', 'drifts', 'tier',
     'nag_s', 'snooze_s', 'streak', 'completed', 'aborted', 'ledger_ok', 'speaking'})
 NUMBER_WORDS = {'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
@@ -72,18 +77,29 @@ def parse_command(text):
 
 class Speaker:
     def __init__(self):
+        self.pending = queue.Queue()
         self.process = None
+        self.speaking = False
+        threading.Thread(target=self._run, daemon=True).start()
 
     def busy(self):
-        return self.process is not None and self.process.poll() is None
+        return self.speaking or not self.pending.empty()
 
     def __call__(self, text):
-        if self.busy():
-            self.process.terminate()
-        try:
-            self.process = subprocess.Popen(['/usr/bin/say', text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except OSError:
-            self.process = None
+        self.pending.put(text)
+
+    def _run(self):
+        while True:
+            text = self.pending.get()
+            self.speaking = True
+            try:
+                self.process = subprocess.Popen(['/usr/bin/say', text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.process.wait()
+            except OSError:
+                pass
+            finally:
+                self.speaking = False
+                self.pending.task_done()
 
 
 class Focus:
@@ -116,11 +132,15 @@ class Focus:
         self.excused = self.counted = False
         self.excursion_time = 0.0
         self.next_nag = 0.0
+        self.defer_since = 0.0
+        self.app_only = False
+        self.intent = ''
 
     def state(self):
         with self.lock:
             # Never serialize __dict__, the reader, samples, or arbitrary client data.
-            return dict(active=self.active, armed=self.armed, paused=self.paused,
+            return dict(active=self.active, armed=self.armed, lock_deferred=self.armed,
+                app_only=self.app_only, has_intent=bool(self.intent), paused=self.paused,
                 drifting=self.counted and not self.excused and not self.home, excused=self.excused,
                 known=self.known, home=self.home, remaining_s=math.ceil(max(0, self.planned-self.elapsed)),
                 planned_s=self.planned, elapsed_s=self.elapsed, on_target_s=self.on_target,
@@ -142,7 +162,8 @@ class Focus:
             self.last = now
             if not self.active or self.paused:
                 return
-            sample = self.reader.sample(arm=self.armed)
+            fallback = self.armed and now-self.defer_since >= DEFER_TIMEOUT_S
+            sample = self.reader.sample(arm=self.armed, settle=self.armed and not fallback, app_only=fallback)
             self.known, self.home = sample['known'], sample['home']
             if not self.known:
                 # A permission/query failure freezes accounting, never fabricates focus.
@@ -151,6 +172,8 @@ class Focus:
                 if not sample['locked']:
                     return
                 self.armed = False
+                self.app_only = fallback
+                self.speak('Locked on, sir.' if not fallback else 'App-only focus locked, sir.')
                 self.last = self.clock()
                 return
             dt = min(dt, max(0, self.planned-self.elapsed))
@@ -176,12 +199,24 @@ class Focus:
                         self.drifts += 1
                         self.counted = True
                         self.next_nag = now
-                    if now >= self.next_nag and now >= self.snooze_until:
+                    if now >= self.next_nag and now >= self.snooze_until and not (isinstance(self.speak, Speaker) and self.speak.busy()):
                         self.tier = min(len(POOLS), self.tier+1)
-                        self.speak(random.choice(POOLS[self.tier-1]))
+                        self.speak(f'Back to {self.intent_label()}, sir.' if self.drifts == 1 and self.tier == 1 and self.intent else random.choice(POOLS[self.tier-1]))
                         self.next_nag = now+self.nag
             if self.elapsed >= self.planned:
                 self._finish(False)
+
+    def intent_label(self):
+        words = self.intent.split()
+        label = ' '.join(words[:INTENT_LABEL_WORDS])[:INTENT_LABEL_CHARS]
+        return label + ('…' if label != self.intent else '')
+
+    def set_intent(self, text):
+        with self.lock:
+            if not self.active or self.intent or not isinstance(text, str) or not text.strip():
+                raise ValueError('No focus answer is pending.')
+            self.intent = ' '.join(text.split())[:INTENT_MAX_CHARS]
+            return 'Noted, sir.'
 
     def _finish(self, aborted):
         self.active = self.armed = self.paused = False
@@ -206,12 +241,14 @@ class Focus:
         self._clear_excursion()
         report = (f"{'Aborted' if aborted else 'Session complete'}. {self.on_target/SECONDS_PER_MINUTE:.{REPORT_DECIMALS}f} minutes on target "
                   f"out of {self.planned/SECONDS_PER_MINUTE:.{REPORT_DECIMALS}f} planned. {self.drifts} drifts. Streak: {self.ledger['streak']}.")
+        if self.intent:
+            report += f' Focus: {self.intent_label()}.'
         if not self.ledger_ok:
             report += ' The aggregate ledger could not be saved.'
         self.speak(report)
         return report
 
-    def command(self, action, seconds=None):
+    def command(self, action, seconds=None, defer_lock=False):
         with self.lock:
             if action not in ('start', 'pause', 'resume', 'extend', 'abort', 'end', 'nag', 'snooze', 'excuse'):
                 raise ValueError('Unknown focus command.')
@@ -223,6 +260,8 @@ class Focus:
                 if self.active:
                     raise ValueError('A focus session is already running.')
                 self.reader.clear()
+                self.intent = ''
+                self.app_only = False
                 self.planned = seconds or DEFAULT_DURATION_S
                 self.elapsed = self.on_target = self.drift_time = 0.0
                 self.drifts = 0
@@ -230,11 +269,12 @@ class Focus:
                 self.snooze_until = 0.0
                 self.completed = self.aborted = self.paused = False
                 self.active = self.armed = True
-                sample = self.reader.sample(arm=True)
+                sample = self.reader.sample(arm=not defer_lock)
                 self.known, self.home = sample['known'], sample['home']
                 self.armed = not sample['locked']
                 self.last = self.clock()
-                message = 'Focus armed. Switch to your task to lock the target.' if self.armed else 'Focus started. Target locked.'
+                self.defer_since = self.last
+                message = ("Go to what you're working on and I'll lock on there. And what are we focusing on?" if self.armed else 'Focus started. Target locked. And what are we focusing on?')
             elif not self.active:
                 raise ValueError('Start a focus session first.')
             elif action in ('abort', 'end'):

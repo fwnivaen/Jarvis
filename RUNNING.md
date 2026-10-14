@@ -318,3 +318,32 @@ and ended shares. Installed CLI help confirms `-i, --image <FILE>...`.
 Live verification remains pending: this session cannot bind port 4700, and a real
 CLI attachment probe returned a brain-connection error. No live screen answer
 was obtained; the automated doubles are not an end-to-end demo.
+
+
+## Prompt 10: deferred focus and one-answer intent
+
+Clicking FOCUS defers its target. The opening line says: “Go to what you're
+working on and I'll lock on there. And what are we focusing on?” The first
+non-Jarvis foreground surface observed on two consecutive ticks locks with
+“Locked on, sir.” A failed read or a different surface resets settling.
+The reader never searches background windows; browser window titles must match
+the macOS focused window. Browser identity includes window and tab IDs plus the
+host, hashed only in memory. After 45 seconds without a lock, the currently
+verified foreground app becomes an app-only target. Unavailable foreground
+reads still defer rather than guessing.
+
+The microphone opens after speech for one answer, without a wake word, and
+returns to its prior enabled state. “Noted, sir” acknowledges the answer. Intent
+stays in session memory, with at most five words / 60 characters used in the
+first callout and the final spoken/displayed report. Nothing is added to notes
+or the aggregate ledger. The public state exposes boolean `lock_deferred`,
+`app_only`, and `has_intent`; Focus details shows these flags.
+
+Acceptance: click FOCUS on Jarvis, listen for the go-to-work question, switch
+to a work tab for two ticks, listen for “Locked on, sir,” then switch away
+and listen for the first callout. Answer the question once and verify “Noted,
+sir,” then end the session to see the short intent in the report. Staying on
+Jarvis for 45 seconds should announce app-only focus without selecting a tab.
+
+Regression checks: `python3 -m unittest discover -s tests -p test_focus.py`,
+`node tests/focus.cjs`, `node tests/voice.cjs`, and full `python3 preflight.py`.

@@ -23,12 +23,13 @@ class FocusTests(unittest.TestCase):
         self.clock = Clock()
         self.bundle = 'com.google.Chrome'
         self.url = 'https://private-work.example/customer/SECRET?token=SECRET#SECRET'
+        self.tab_id = 1
         self.queries = []
         def query(script):
             self.queries.append(script)
             if self.bundle is None:
                 raise OSError('private diagnostic')
-            return self.bundle if script == FRONT_SCRIPT else self.url
+            return self.bundle if script == FRONT_SCRIPT else f'{self.url}\n1\n{self.tab_id}'
         self.reader = Reader(query)
         self.speech = []
         self.path = Path(self.temp.name) / 'ledger.json'
@@ -52,7 +53,7 @@ class FocusTests(unittest.TestCase):
         self.url = 'https://private-work.example/different/path?other=secret'
         self.tick()
         self.assertFalse(self.focus.state()['drifting'])
-        self.assertEqual(self.queries.count(FRONT_SCRIPT), 2)
+        self.assertEqual(self.queries.count(FRONT_SCRIPT), 4)
         self.url = 'https://evil.example/'
         self.tick()
         self.assertEqual(len(self.speech), 0)
@@ -186,6 +187,95 @@ class FocusTests(unittest.TestCase):
             self.tick()
             self.assertTrue(self.focus.state()['known'])
             self.assertTrue(self.focus.state()['drifting'])
+
+    def test_deferred_two_ticks_reset_and_audible_lock(self):
+        self.url = 'http://localhost:4700/'
+        message = self.focus.command('start', 100)
+        self.assertEqual(message, "Go to what you're working on and I'll lock on there. And what are we focusing on?")
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.url = 'https://work.example/'
+        self.tick()
+        self.url = 'http://localhost:4700/'
+        self.tick()
+        self.url = 'https://work.example/'
+        self.tick()
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.tick()
+        self.assertFalse(self.focus.state()['lock_deferred'])
+        self.assertEqual(self.speech, ['Locked on, sir.'])
+        self.assertEqual(self.focus.set_intent('finish the quarterly budget and reconcile all the vendor invoices'), 'Noted, sir.')
+        self.url = 'https://elsewhere.example/'
+        self.tick()
+        self.tick()
+        self.assertIn('quarterly budget', self.speech[-1])
+        report = self.focus.command('end')
+        self.assertIn('quarterly budget', report)
+        self.assertNotIn('vendor invoices', report)
+
+    def test_different_tab_same_host_does_not_settle_or_match(self):
+        self.url = 'http://localhost:4700/'
+        self.focus.command('start', 100)
+        self.url = 'https://work.example/'
+        self.tick()
+        self.tab_id = 2
+        self.tick()
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.tick()
+        self.tab_id = 3
+        self.tick()
+        self.tick()
+        self.assertTrue(self.focus.state()['drifting'])
+
+    def test_viewer_click_always_defers_and_intent_is_single_answer(self):
+        self.focus.command('start', 100, defer_lock=True)
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.assertIsNone(self.reader._target)
+        self.tick()
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.tick()
+        self.assertFalse(self.focus.state()['lock_deferred'])
+        self.focus.set_intent('x' * 3000)
+        self.assertLess(len(self.focus.intent_label()), 70)
+        with self.assertRaises(ValueError):
+            self.focus.set_intent('second answer')
+        self.assert_private()
+
+    def test_window_mismatch_cannot_arm(self):
+        def mismatch(script):
+            if script == FRONT_SCRIPT:
+                return 'com.google.Chrome'
+            self.assertIn('AXFocusedWindow', script)
+            self.assertNotIn('every window', script)
+            raise OSError('Focused window does not match browser window')
+        reader = Reader(mismatch)
+        for _ in range(3):
+            self.assertFalse(reader.sample(arm=True, settle=True)['locked'])
+
+    def test_failed_click_and_failed_tick_restart_settling(self):
+        self.bundle = None
+        self.focus.command('start', 100)
+        self.bundle = 'com.google.Chrome'
+        self.tick()
+        self.bundle = None
+        self.tick()
+        self.bundle = 'com.google.Chrome'
+        self.tick()
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.tick()
+        self.assertFalse(self.focus.state()['lock_deferred'])
+
+    def test_home_timeout_is_app_only_and_does_not_read_background(self):
+        self.url = 'http://localhost:4700/'
+        self.focus.command('start', 100)
+        self.tick(44)
+        self.assertTrue(self.focus.state()['lock_deferred'])
+        self.queries.clear()
+        self.tick()
+        self.assertTrue(self.focus.state()['app_only'])
+        self.assertEqual(self.queries, [FRONT_SCRIPT, FRONT_SCRIPT])
+        self.url = 'https://any-tab.example/'
+        self.tick()
+        self.assertFalse(self.focus.state()['drifting'])
 
     def test_voice_grammar(self):
         for text, expected in [

@@ -1,4 +1,5 @@
 /* Focus state contains only booleans and counters. Speech for autonomous events is server-owned. */
+const FOCUS_DEBUG_INDENT = 2;
 const FOCUS_POLL_MS = 1000;
 const FOCUS_SECONDS_PER_MINUTE = 60;
 const FOCUS_REQUEST_TIMEOUT_MS = 4000;
@@ -11,9 +12,11 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
   const status = document.getElementById('focus-status');
   let pending = false;
   function render(s) {
+    document.getElementById('focus-debug').textContent = JSON.stringify({lock_deferred: Boolean(s.lock_deferred), app_only: Boolean(s.app_only), has_intent: Boolean(s.has_intent)}, null, FOCUS_DEBUG_INDENT);
+    if (!s.active) window.JarvisVoice?.cancelAnswer?.();
     window.JarvisVoice?.setExternalSpeaking?.(Boolean(s.speaking));
     const remaining = `${Math.floor(s.remaining_s / FOCUS_SECONDS_PER_MINUTE)}:${String(s.remaining_s % FOCUS_SECONDS_PER_MINUTE).padStart(2, '0')}`;
-    status.textContent = s.active ? !s.known ? 'Focus · activity unavailable' : s.armed ? 'Switch to your task…' : `${remaining} · ${s.paused ? 'Paused' : s.excused ? 'Excused' : s.home ? 'Home base' : s.drifting ? 'Return to task' : 'Focused'}` : s.completed || s.aborted ? `Streak ${s.streak} · ${s.drifts} drifts` : '';
+    status.textContent = s.active ? s.lock_deferred ? 'Focus · waiting to lock on…' : !s.known ? 'Focus · activity unavailable' : s.armed ? 'Switch to your task…' : `${remaining} · ${s.paused ? 'Paused' : s.excused ? 'Excused' : s.home ? 'Home base' : s.drifting ? 'Return to task' : 'Focused'}` : s.completed || s.aborted ? `Streak ${s.streak} · ${s.drifts} drifts` : '';
     status.style.color = s.drifting && !s.home ? '#ffad84' : '#a5dacf';
     button.textContent = s.active ? 'FOCUS ON' : 'FOCUS';
     button.disabled = pending || s.active;
@@ -26,6 +29,10 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
       const response = await fetch('/focus', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: AbortSignal.timeout(FOCUS_REQUEST_TIMEOUT_MS)});
       const data = await response.json();
       document.getElementById('answer').textContent = data.answer;
+      window.JarvisVoice?.setThinking(false);
+      if (response.ok && data.state?.active && (body.action === 'start' || (!body.action && /focusing on\?/.test(data.answer)))) {
+        window.JarvisVoice?.answerOnce?.(answer => command({action: 'intent', intent: answer}));
+      }
       if (!data.spoken) window.JarvisVoice?.speak(data.answer);
       if (data.state) render(data.state);
     } catch (_) { status.textContent = 'Focus request unconfirmed · checking server'; }
@@ -46,7 +53,7 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
     }
     return !/ on this$/i.test(clean) || FOCUS_DURATION.test(clean);
   }};
-  button.addEventListener('click', () => command({action: 'start'}));
+  button.addEventListener('click', () => command({action: 'start', defer_lock: true}));
   async function loop() { await poll(); setTimeout(loop, FOCUS_POLL_MS); }
   loop();
 })();
