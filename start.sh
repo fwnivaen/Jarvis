@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-if [ ! -x .local/JarvisFocusCard ]; then
+if [ ! -x .local/JarvisFocusCard ] || [ native/FocusCard.swift -nt .local/JarvisFocusCard ]; then
     native/build_focus.sh
 fi
 python3 build.py

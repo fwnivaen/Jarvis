@@ -338,7 +338,8 @@ class MacRecognition {
       clearBuffer();
       if (!thinking && !externalSpeaking && enabled && question && submit) {
         el('question').value = question;
-        if (answerHandler) {
+        if (window.JarvisFocus?.matches(question)) { submit(question); }
+        else if (answerHandler) {
           const handler = answerHandler; answerHandler = null;
           enabled = restoreEnabled; haltRecognition(); status(); handler(question);
         } else submit(question);

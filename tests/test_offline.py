@@ -85,6 +85,38 @@ class Preflight(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
+    def test_focus_retarget_http_surfaces(self):
+        from focus import Focus
+        from focus_reader import Reader, FRONT_SCRIPT
+        surface = {'bundle': 'com.google.Chrome', 'url': 'https://work.example/', 'tab': 1}
+        scripts, speech = [], []
+        def query(script):
+            scripts.append(script)
+            return surface['bundle'] if script == FRONT_SCRIPT else f"{surface['url']}\n1\n{surface['tab']}"
+        focus = Focus(Reader(query), speak=speech.append, ledger=Path(self.scratch.name) / 'focus.json')
+        focus.command('start', 100)
+        headers = {'Origin': f'http://127.0.0.1:{TEST_PORT}'}
+        with patch.object(server, 'FOCUS', focus):
+            for body, url, bundle, expected, deferred in (
+                ({'question': "okay, I'm gonna need you to keep me in this tab."},
+                 'https://work.example/', 'com.google.Chrome', 'Locked on, sir.', False),
+                ({'question': 'this is the tab'}, 'http://localhost:4700/',
+                 'com.google.Chrome', "Go to it, sir — I'll lock on where you land.", True),
+                ({'action': 'retarget', 'from_card': True}, 'https://work.example/',
+                 'JarvisFocusCard', 'Locked on, sir.', False)):
+                surface.update(url=url, bundle=bundle, tab=surface['tab'] + 1)
+                status, _, raw = request('/focus', 'POST', body, headers)
+                result = json.loads(raw)
+                self.assertEqual(status, 200)
+                self.assertEqual(result['answer'], expected)
+                self.assertTrue(result['spoken'])
+                self.assertEqual(result['state']['lock_deferred'], deferred)
+                self.assertEqual(speech[-1], expected)
+            self.assertEqual(len(speech), 3)
+            self.assertIn('front window', scripts[-1])
+            self.assertNotIn('AXFocusedWindow', scripts[-1])
+            self.assertEqual(request('/focus', 'POST', {'action': 'retarget'})[0], 403)
+
     def test_model_labels(self):
         self.assertEqual(server.model_label('gpt-6-astra'), 'GPT 6 ASTRA')
         self.assertEqual(server.model_label('fable-5-1'), 'FABLE 5.1')

@@ -277,6 +277,68 @@ class FocusTests(unittest.TestCase):
         self.tick()
         self.assertFalse(self.focus.state()['drifting'])
 
+    def test_retarget_phrases(self):
+        for text in ('lock on this tab', 'lock this tab', 'keep me in this tab',
+                     'this is the tab', 'stay on this tab',
+                     "okay, I'm gonna need you to keep me in this tab."):
+            self.assertEqual(parse_command(text), ('retarget', None))
+        self.assertIsNone(parse_command('lock my screen'))
+
+    def test_retarget_work_refunds_only_current_drift(self):
+        self.focus.command('start', 100)
+        self.focus.set_intent('write report')
+        self.tab_id = 2
+        self.tick(); self.tick()
+        elapsed = self.focus.elapsed
+        spoken = list(self.speech)
+        self.assertEqual(self.focus.command('retarget'), 'Locked on, sir.')
+        self.assertEqual(self.speech, spoken)  # HTTP layer owns the one confirmation.
+        self.assertEqual(self.focus.drifts, 0)
+        self.assertEqual(self.focus.drift_time, 0)
+        self.assertEqual(self.focus.elapsed, elapsed)
+        self.assertEqual(self.focus.intent, 'write report')
+        self.tick(); self.tick()
+        self.assertFalse(self.focus.state()['drifting'])
+
+    def test_retarget_home_rearms_and_preserves_pause(self):
+        self.focus.command('start', 100)
+        self.focus.command('pause')
+        self.url = 'http://localhost:4700/'
+        self.assertEqual(self.focus.command('retarget'), "Go to it, sir — I'll lock on where you land.")
+        self.assertTrue(self.focus.armed)
+        self.assertTrue(self.focus.paused)
+        self.focus.command('resume')
+        self.tab_id = 2
+        self.url = 'https://work.example/'
+        self.tick(); self.tick()
+        self.assertFalse(self.focus.armed)
+        self.assertEqual(self.speech, ['Locked on, sir.'])
+
+    def test_retarget_card_and_own_process_read_browser_front_window(self):
+        for from_card, bundle in ((True, 'com.apple.finder'), (False, 'JarvisFocusCard')):
+            self.bundle = 'com.google.Chrome'
+            self.focus.command('start', 100)
+            self.bundle = bundle
+            self.tab_id += 1
+            self.queries.clear()
+            self.assertEqual(self.focus.command('retarget', from_card=from_card), 'Locked on, sir.')
+            browser_script = self.queries[-1]
+            self.assertIn('front window', browser_script)
+            self.assertNotIn('AXFocusedWindow', browser_script)
+            self.assertEqual(self.focus.reader._target[0], 'com.google.Chrome')
+            self.focus.command('abort')
+
+    def test_retarget_app_and_failure_preserves_target(self):
+        self.focus.command('start', 100)
+        self.bundle = 'com.apple.TextEdit'
+        self.assertEqual(self.focus.command('retarget'), 'Locked on, sir.')
+        target = self.focus.reader._target
+        self.assertEqual(target, ('com.apple.TextEdit', None))
+        self.bundle = None
+        with self.assertRaises(ValueError):
+            self.focus.command('retarget')
+        self.assertEqual(self.focus.reader._target, target)
+
     def test_native_speech_pins_daniel(self):
         from unittest.mock import patch, MagicMock
         with patch('focus.subprocess.Popen', return_value=MagicMock()) as launch:

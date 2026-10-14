@@ -360,3 +360,27 @@ recognizer. It keeps no audio or transcript, refuses to take over an existing
 Mac microphone session, and does not alter volume or audio routing. With
 headphones or echo cancellation, the acoustic check may fail even if playback
 is audible; a completed speech process alone is not an acoustic pass.
+
+
+### Move an active focus target
+
+Go to the desired tab and say “lock on this tab”, “lock this tab”, “keep me in this tab”,
+“this is the tab”, or “stay on this tab”. “Okay, I'm gonna need you to keep me in this tab”
+also works. Jarvis replies “Locked on, sir.” and refunds only the current drift without
+resetting the timer or task intent. From a non-browser app, the same command locks that app.
+From the Jarvis home tab, it replies “Go to it, sir — I'll lock on where you land.”
+and waits for the next target to settle. A paused session stays paused.
+
+The desktop card has LOCK THIS TAB beside PAUSE/RESUME and ABORT. It sends
+`retarget` with `from_card: true`, reads the browser's front window even in the
+background, and flashes LOCKED for one second (ARMED if the browser is on Jarvis).
+The helper itself is never selected as a target. Restart with `./start.sh` after updates;
+the launcher rebuilds the card whenever its source is newer.
+
+Verification: `python3 -m unittest discover -s tests`, `node tests/focus.cjs`,
+`node tests/voice.cjs`, and `native/build_focus.sh`. The HTTP regression exercises
+the real route with controlled work-tab, home-tab, and foreground-card identities,
+including the spoken response and card flag. To check physically, run a session,
+switch to a work tab and say the phrase; repeat from Jarvis and land on another tab;
+then switch to another work tab and click LOCK THIS TAB. Verify the flash, confirmation,
+and continued timer, then change tabs to confirm drift detection follows the new target.

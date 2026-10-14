@@ -45,9 +45,14 @@ NUMBER_WORDS = {'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'fiv
 LEDGER_KEYS = ('sessions', 'aborted', 'planned_s', 'on_target_s', 'drifts', 'streak')
 
 
+RETARGET_PATTERN = r"(?:(?:okay|ok)\s+)?(?:(?:i'm|i’m|im|i am) (?:gonna need|going to need|need) you to )?(?:lock (?:on )?this tab|keep me in this tab|this is the tab|stay on this tab)"
+
+
 def parse_command(text):
     text = re.sub(r'[,.!?]', '', text.casefold()).strip()
     text = re.sub(r'^(?:(?:hey )?jarvis\s+)?(?:please\s+)?', '', text)
+    if re.fullmatch(RETARGET_PATTERN, text):
+        return 'retarget', None
     for word in sorted(NUMBER_WORDS, key=len, reverse=True):
         text = re.sub(r'\b' + word + r'\b', str(NUMBER_WORDS[word]), text)
     text = re.sub(r'\b(20|30|40|50|60)\s+(\d)\b', lambda m: str(int(m[1])+int(m[2])), text)
@@ -249,9 +254,9 @@ class Focus:
         self.speak(report)
         return report
 
-    def command(self, action, seconds=None, defer_lock=False):
+    def command(self, action, seconds=None, defer_lock=False, from_card=False):
         with self.lock:
-            if action not in ('start', 'pause', 'resume', 'extend', 'abort', 'end', 'nag', 'snooze', 'excuse'):
+            if action not in ('start', 'pause', 'resume', 'extend', 'abort', 'end', 'nag', 'snooze', 'excuse', 'retarget'):
                 raise ValueError('Unknown focus command.')
             if seconds is not None and (type(seconds) not in (int, float) or not math.isfinite(seconds) or not MIN_DURATION_S <= seconds <= MAX_DURATION_S):
                 raise ValueError('Choose a duration between one second and twelve hours.')
@@ -278,6 +283,25 @@ class Focus:
                 message = ("Go to what you're working on and I'll lock on there. And what are we focusing on?" if self.armed else 'Focus started. Target locked. And what are we focusing on?')
             elif not self.active:
                 raise ValueError('Start a focus session first.')
+            elif action == 'retarget':
+                # Read into a fresh reader so a permission failure preserves the old target.
+                candidate = Reader(self.reader._query)
+                candidate._browser = self.reader._browser
+                sample = candidate.sample(arm=True, from_card=from_card)
+                if not sample['known']:
+                    raise ValueError('I could not read the target, sir. Go to the tab and say "lock on this tab" again.')
+                self.reader = candidate
+                if not self.excused:
+                    self.drift_time = max(0, self.drift_time-self.excursion_time)
+                    self.on_target += self.excursion_time
+                    self.drifts -= int(self.counted)
+                self._clear_excursion()
+                self.next_nag = self.snooze_until = 0.0
+                self.known, self.home = sample['known'], sample['home']
+                self.armed = not sample['locked']
+                self.app_only = False
+                self.last = self.defer_since = self.clock()
+                message = "Go to it, sir — I'll lock on where you land." if self.armed else 'Locked on, sir.'
             elif action in ('abort', 'end'):
                 return self._finish(action == 'abort')
             elif action == 'pause':

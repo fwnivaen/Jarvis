@@ -9,6 +9,10 @@ PERSONA_PROMPT = (
 # ========================== END JARVIS PERSONA ============================
 
 SYSTEM_PROMPT = PERSONA_PROMPT + (
+    "To change a focus target, tell the user to go to the desired tab and say 'lock on this tab'. "
+    "From Jarvis this re-arms the lock for the next tab; from another app it locks that app. "
+    "The desktop countdown card also has LOCK THIS TAB. Never suggest bringing a tab forward "
+    "then clicking FOCUS: FOCUS lives in the Jarvis tab. Never suggest aborting and restarting to move a target. "
     "First decide whether the current question is about the notes, using history only to resolve genuine follow-ups. "
     "Greetings, thanks, jokes and general small talk are not about notes, even after a note question. "
     "For small talk, reply naturally and set about_notes false and nodes empty. "
@@ -691,11 +695,11 @@ class Handler(BaseHTTPRequestHandler):
                 parsed = focus.parse_command(body.get("question", "")) if isinstance(body.get("question", ""), str) else None
                 action, seconds = parsed or (body.get("action"), body.get("seconds"))
                 try:
-                    answer = FOCUS.set_intent(body.get("intent")) if action == "intent" else FOCUS.command(action, seconds, defer_lock=body.get("defer_lock") is True)
-                    if action in ("start", "intent"):
+                    answer = FOCUS.set_intent(body.get("intent")) if action == "intent" else FOCUS.command(action, seconds, defer_lock=body.get("defer_lock") is True, from_card=body.get("from_card") is True)
+                    if action in ("start", "intent", "retarget"):
                         FOCUS.speak(answer)
                     self.send_json({"answer": answer, "nodes": [], "about_notes": False,
-                                    "spoken": action in ("start", "intent", "abort", "end"), "state": FOCUS.state()})
+                                    "spoken": action in ("start", "intent", "retarget", "abort", "end"), "state": FOCUS.state()})
                 except ValueError as error:
                     self.send_json({"error": True, "answer": str(error), "nodes": []}, 400)
                 return

@@ -15,10 +15,10 @@ vm.runInContext(fs.readFileSync('viewer/focus.js', 'utf8'), context);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(el('focus-status').textContent, '28:54 · Focused');
   assert.equal(requests[0].path, '/focus'); // Rejoins without starting another session.
-  for (const text of ['thirty minutes on this', 'call me out every thirty seconds', 'give me fifteen seconds', "it's okay, I'm doing research", 'pause', 'resume', 'extend by five minutes', 'abort']) {
+  for (const text of ['thirty minutes on this', 'call me out every thirty seconds', 'give me fifteen seconds', "it's okay, I'm doing research", 'pause', 'resume', 'extend by five minutes', 'abort', 'lock on this tab', 'lock this tab', 'keep me in this tab', 'this is the tab', 'stay on this tab', "okay, I'm gonna need you to keep me in this tab."]) {
     assert.equal(context.window.JarvisFocus.matches(text), true, text);
   }
-  for (const text of ['What are our Quarterly Goals?', 'give me a summary', 'add a note']) assert.equal(context.window.JarvisFocus.matches(text), false);
+  for (const text of ['What are our Quarterly Goals?', 'give me a summary', 'add a note', 'lock my screen']) assert.equal(context.window.JarvisFocus.matches(text), false);
   const html = fs.readFileSync('viewer/index.html', 'utf8');
   vm.runInContext(html.match(/async function ask\(question\)\{[\s\S]*?(?=\n<\/script>)/)[0], context);
   await context.ask('pause');
@@ -27,5 +27,7 @@ vm.runInContext(fs.readFileSync('viewer/focus.js', 'utf8'), context);
   assert.equal(posts[0].path, '/focus');
   assert.equal(JSON.parse(posts[0].options.body).question, 'pause');
   assert.deepEqual(spoken, ['Focus paused.']);
+  await context.ask('lock this tab');
+  assert.equal(JSON.parse(requests.filter(r => r.options?.method === 'POST').at(-1).options.body).question, 'lock this tab');
   console.log('FOCUS PASS: reload joins numeric server state; voice/text commands bypass brain and screen routes; local confirmation.');
 })().catch(error => {console.error(error); process.exitCode = 1;});
