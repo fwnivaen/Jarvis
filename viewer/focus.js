@@ -48,7 +48,7 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
   }
   window.JarvisFocus = {command, matches: text => {
     const clean = text.trim().replace(/[,.!?]/g, '').replace(FOCUS_PREFIX, '');
-    if (FOCUS_RETARGET.test(clean)) return true;
+    if (/^(?:drill sergeant|normal) mode$/i.test(clean) || FOCUS_RETARGET.test(clean)) return true;
     if (!FOCUS_COMMAND.test(clean)) return false;
     if (/^(?:give me|snooze|call me out every|extend|add)\b/i.test(clean)) {
       return FOCUS_DURATION.test(clean.replace(/^(?:give me|snooze(?: for)?|call me out every|extend(?: focus| the session)?(?: by)?|add) /i, ''));

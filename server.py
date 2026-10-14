@@ -13,6 +13,8 @@ SYSTEM_PROMPT = PERSONA_PROMPT + (
     "From Jarvis this re-arms the lock for the next tab; from another app it locks that app. "
     "The desktop countdown card also has LOCK THIS TAB. Never suggest bringing a tab forward "
     "then clicking FOCUS: FOCUS lives in the Jarvis tab. Never suggest aborting and restarting to move a target. "
+    "During focus I name the distraction out loud in the moment and never write it down. "
+    "Say drill sergeant mode for firmer named callouts, or normal mode to switch back. "
     "First decide whether the current question is about the notes, using history only to resolve genuine follow-ups. "
     "Greetings, thanks, jokes and general small talk are not about notes, even after a note question. "
     "For small talk, reply naturally and set about_notes false and nodes empty. "

@@ -77,7 +77,7 @@ excuse it there. Returning to the actual target closes the excursion.
 The server samples once per second using a **fresh `osascript` process** to query
 System Events, then the active Chrome-family tab when relevant. No cached
 NSWorkspace notification state is used. The reader compares identities internally;
-only booleans leave it. `/focus` explicitly constructs a whitelist of booleans and
+an optional distraction label leaves it only for the current engine tick and spoken callout. The label is never written to session state, reports, the ledger, episode logs, or notes. `/focus` explicitly constructs a whitelist of booleans and
 numeric counters. No app name, bundle ID, URL, host, or hash enters viewer/card
 state, speech, or the ledger. Raw CLI diagnostics are discarded. Failed queries
 freeze the countdown and show Activity unavailable; they do not invent focus.
@@ -166,3 +166,5 @@ plays speech, and adds one real test session to aggregate totals. It refuses to
 interrupt an existing session and closes only its own disposable window. The
 local test URLs may show Not found: only their differing hosts matter to this
 reader test. Do not run it while you need uninterrupted foreground control.
+
+Distraction naming: `NAME_DISTRACTIONS` at the top of `focus.py` disables naming when false. Say “drill sergeant mode” or “normal mode” during a session. Each tier cycles four lines; the first callout includes the work intention when supplied.

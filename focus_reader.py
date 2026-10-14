@@ -1,7 +1,18 @@
-"""Identity boundary: only booleans leave Reader; no titles or URLs are logged."""
+"""Identity boundary: labels are opt-in, transient samples; no titles or URLs are logged."""
 import hashlib
 import subprocess
 from urllib.parse import urlsplit
+
+HOST_LABELS = {'instagram.com': 'Instagram', 'youtube.com': 'YouTube', 'youtu.be': 'YouTube',
+    'x.com': 'X', 'twitter.com': 'X', 'reddit.com': 'Reddit', 'tiktok.com': 'TikTok',
+    'netflix.com': 'Netflix', 'mail.google.com': 'Gmail', 'gmail.com': 'Gmail'}
+
+def host_label(host):
+    for domain, label in HOST_LABELS.items():
+        if host == domain or host.endswith('.' + domain):
+            return label
+    return host.removeprefix('www.')
+
 
 QUERY_TIMEOUT_S = 0.6
 SETTLE_TICKS = 2
@@ -14,7 +25,7 @@ OWN_IDS = frozenset({'JarvisFocusCard', 'JarvisVoice', 'com.jarvis.FocusCard', '
 FRONT_SCRIPT = '''tell application "System Events"
 set p to first application process whose frontmost is true
 if name of p is in {"JarvisFocusCard", "JarvisVoice"} then return name of p
-return bundle identifier of p
+return (bundle identifier of p) & linefeed & (name of p)
 end tell'''
 BROWSER_SCRIPT = 'tell application "System Events" to get bundle identifier of every application process whose background only is false'
 
@@ -42,10 +53,12 @@ class Reader:
         self._ticks = 0
         self._app_only = False
 
-    def sample(self, arm=False, settle=False, app_only=False, from_card=False):
+    def sample(self, arm=False, settle=False, app_only=False, from_card=False, naming=False):
         try:
             # A new CLI process queries System Events EVERY sample. Never NSWorkspace notifications.
-            bundle = self._query(FRONT_SCRIPT)
+            front = self._query(FRONT_SCRIPT)
+            bundle, _, app_name = front.partition('\n')
+            label = app_name if naming else ''
             if not bundle:
                 raise ValueError
             background = from_card or bundle in OWN_IDS
@@ -84,9 +97,10 @@ return surface'''
                 if not url:
                     raise ValueError
                 home = parsed.scheme == 'http' and host in HOME_HOSTS and parsed.port == HOME_PORT and parsed.path in ('/', '/index.html')
+                label = host_label(host) if naming and parsed.scheme in ('http', 'https') and not home else ''
                 host_hash = hashlib.sha256(f'{host}\n{window_id}\n{tab_id}'.encode()).digest()
             # Never scan other windows. Discard a read if foreground changed during scripting.
-            if not background and self._query(FRONT_SCRIPT) != bundle:
+            if not background and self._query(FRONT_SCRIPT).partition('\n')[0] != bundle:
                 raise ValueError
             identity = (bundle, host_hash)
             if arm:
@@ -98,8 +112,11 @@ return surface'''
                     if not settle or self._ticks >= SETTLE_TICKS:
                         self._target = identity
                         self._app_only = app_only
-            return {'known': True, 'home': home, 'target': identity == self._target,
-                    'locked': self._target is not None}
+            result = {'known': True, 'home': home, 'target': identity == self._target,
+                      'locked': self._target is not None}
+            if naming:
+                result['label'] = label if not home and not background and identity != self._target else ''
+            return result
         except (OSError, ValueError, subprocess.TimeoutExpired):
             self._candidate, self._ticks = None, 0
             return {'known': False, 'home': False, 'target': False, 'locked': self._target is not None}

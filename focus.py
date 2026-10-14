@@ -2,7 +2,6 @@
 import json
 import math
 import os
-import random
 import queue
 import re
 import subprocess
@@ -11,6 +10,7 @@ import time
 from pathlib import Path
 from focus_reader import Reader
 
+NAME_DISTRACTIONS = True
 SPEECH_VOICE = 'Daniel'
 DEFER_TIMEOUT_S = 45
 INTENT_MAX_CHARS = 4000
@@ -31,9 +31,26 @@ PRIVATE_MODE = 0o600
 CARD_PATH = Path(__file__).resolve().parent / '.local' / 'JarvisFocusCard'
 CARD_STOP_TIMEOUT_S = 2
 POOLS = (
-    ('A small detour, sir. Back to the task.', 'Your task is waiting. Shall we return?'),
-    ('The detour is becoming a holiday. Back to work.', 'Focus, sir. That was not the assignment.'),
-    ('We are now professionally avoiding the task. Return to it.', 'Your future self has lodged a complaint. Back to work.'))
+    ('A small detour, sir. Back to the task.', 'Your task is waiting. Shall we return?',
+     'Sir, the assignment awaits.', 'Back to your chosen work, sir.'),
+    ('The detour is becoming a holiday. Back to work.', 'Focus, sir. That was not the assignment.',
+     'Sir, we have wandered far enough.', 'The task has not finished itself, sir.'),
+    ('We are now professionally avoiding the task. Return to it.', 'Your future self has lodged a complaint. Back to work.',
+     'Sir, the detours are becoming the project.', 'Enough reconnaissance, sir. Back to work.'))
+NAMED_POOLS = (
+    ('Sir, {label} can wait.', 'A detour into {label}, sir. Back to the task.',
+     '{label} will survive your absence, sir.', 'Sir, leave {label} and return to your work.'),
+    ('Still in {label}, sir. It is starting to look deliberate.', '{label} is becoming a holiday, sir.',
+     'Sir, {label} was not the assignment.', 'Enough time in {label}, sir. Back to work.'),
+    ('Sir, {label} is becoming the project.', 'We are now professionally browsing {label}, sir.',
+     'Your future self has lodged a complaint about {label}, sir.', 'Leave {label}, sir. The task needs you.'))
+DRILL_POOLS = (
+    ('Close the detour into {label}, sir. Execute the task.', 'Eyes off {label}, sir. Back to work.',
+     'Leave {label}, sir. Move.', 'Sir, {label} is off mission. Return.'),
+    ('Enough {label}, sir. Execute.', 'Sir, disengage from {label}. Now.',
+     '{label} is costing work time, sir. Move.', 'Back from {label}, sir. Stay on task.'),
+    ('Sir, end the {label} detour. No more delay.', 'Leave {label}. Finish what you started, sir.',
+     'Sir, {label} has had enough attention. Work.', 'Disengage from {label}, sir. The assignment stands.'))
 PUBLIC_KEYS = frozenset({'active', 'armed', 'lock_deferred', 'app_only', 'has_intent', 'paused', 'drifting', 'excused', 'known', 'home',
     'remaining_s', 'planned_s', 'elapsed_s', 'on_target_s', 'drift_s', 'drifts', 'tier',
     'nag_s', 'snooze_s', 'streak', 'completed', 'aborted', 'ledger_ok', 'speaking'})
@@ -53,6 +70,8 @@ def parse_command(text):
     text = re.sub(r'^(?:(?:hey )?jarvis\s+)?(?:please\s+)?', '', text)
     if re.fullmatch(RETARGET_PATTERN, text):
         return 'retarget', None
+    if text in ('drill sergeant mode', 'normal mode'):
+        return ('drill' if text.startswith('drill') else 'normal'), None
     for word in sorted(NUMBER_WORDS, key=len, reverse=True):
         text = re.sub(r'\b' + word + r'\b', str(NUMBER_WORDS[word]), text)
     text = re.sub(r'\b(20|30|40|50|60)\s+(\d)\b', lambda m: str(int(m[1])+int(m[2])), text)
@@ -104,6 +123,8 @@ class Speaker:
             except OSError:
                 pass
             finally:
+                self.process = None
+                del text
                 self.speaking = False
                 self.pending.task_done()
 
@@ -141,6 +162,9 @@ class Focus:
         self.defer_since = 0.0
         self.app_only = False
         self.intent = ''
+        self.drill = False
+        self.callouts = 0
+        self.pool_positions = [0] * len(POOLS)
 
     def state(self):
         with self.lock:
@@ -169,7 +193,7 @@ class Focus:
             if not self.active or self.paused:
                 return
             fallback = self.armed and now-self.defer_since >= DEFER_TIMEOUT_S
-            sample = self.reader.sample(arm=self.armed, settle=self.armed and not fallback, app_only=fallback)
+            sample = self.reader.sample(arm=self.armed, settle=self.armed and not fallback, app_only=fallback, naming=NAME_DISTRACTIONS)
             self.known, self.home = sample['known'], sample['home']
             if not self.known:
                 # A permission/query failure freezes accounting, never fabricates focus.
@@ -207,10 +231,24 @@ class Focus:
                         self.next_nag = now
                     if now >= self.next_nag and now >= self.snooze_until and not (isinstance(self.speak, Speaker) and self.speak.busy()):
                         self.tier = min(len(POOLS), self.tier+1)
-                        self.speak(f'Back to {self.intent_label()}, sir.' if self.drifts == 1 and self.tier == 1 and self.intent else random.choice(POOLS[self.tier-1]))
+                        self.speak(self.callout(sample.get('label', '') if NAME_DISTRACTIONS else ''))
                         self.next_nag = now+self.nag
             if self.elapsed >= self.planned:
                 self._finish(False)
+
+    def callout(self, label):
+        # Only counters persist: neither the sampled label nor rendered line is retained.
+        first = self.callouts == 0
+        self.callouts += 1
+        if first and self.intent:
+            if label:
+                return f"Sir — {label} does not look like '{self.intent_label()}' to me."
+            return f'Back to {self.intent_label()}, sir.'
+        tier = self.tier - 1
+        pool = (DRILL_POOLS if self.drill else NAMED_POOLS)[tier] if label else POOLS[tier]
+        line = pool[self.pool_positions[tier] % len(pool)]
+        self.pool_positions[tier] += 1
+        return line.format(label=label)
 
     def intent_label(self):
         words = self.intent.split()
@@ -256,7 +294,7 @@ class Focus:
 
     def command(self, action, seconds=None, defer_lock=False, from_card=False):
         with self.lock:
-            if action not in ('start', 'pause', 'resume', 'extend', 'abort', 'end', 'nag', 'snooze', 'excuse', 'retarget'):
+            if action not in ('start', 'pause', 'resume', 'extend', 'abort', 'end', 'nag', 'snooze', 'excuse', 'retarget', 'drill', 'normal'):
                 raise ValueError('Unknown focus command.')
             if seconds is not None and (type(seconds) not in (int, float) or not math.isfinite(seconds) or not MIN_DURATION_S <= seconds <= MAX_DURATION_S):
                 raise ValueError('Choose a duration between one second and twelve hours.')
@@ -271,6 +309,8 @@ class Focus:
                 self.planned = seconds or DEFAULT_DURATION_S
                 self.elapsed = self.on_target = self.drift_time = 0.0
                 self.drifts = 0
+                self.callouts = 0
+                self.pool_positions = [0] * len(POOLS)
                 self._clear_excursion()
                 self.snooze_until = 0.0
                 self.completed = self.aborted = self.paused = False
@@ -283,6 +323,9 @@ class Focus:
                 message = ("Go to what you're working on and I'll lock on there. And what are we focusing on?" if self.armed else 'Focus started. Target locked. And what are we focusing on?')
             elif not self.active:
                 raise ValueError('Start a focus session first.')
+            elif action in ('drill', 'normal'):
+                self.drill = action == 'drill'
+                message = 'Drill-sergeant mode, sir.' if self.drill else 'Normal callouts, sir.'
             elif action == 'retarget':
                 # Read into a fresh reader so a permission failure preserves the old target.
                 candidate = Reader(self.reader._query)

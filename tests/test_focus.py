@@ -348,6 +348,80 @@ class FocusTests(unittest.TestCase):
             self.assertEqual(launch.call_args.args[0],
                              ['/usr/bin/say', '-v', 'Daniel', 'Locked on, sir.'])
 
+    def test_transient_unique_label_never_persisted(self):
+        import uuid
+        sentinel = 'drift-' + uuid.uuid4().hex + '.example'
+        root = Path(__file__).resolve().parents[1]
+        notes_before = {str(p): p.read_bytes() for p in (root / 'notes').rglob('*') if p.is_file()}
+        self.focus.command('start', 100)
+        self.focus.set_intent('the thumbnail sprint')
+        self.url = 'https://' + sentinel + '/secret?private=yes'
+        self.tick(); self.tick()
+        self.assertIn(sentinel, self.speech[-1])
+        self.assertIn('the thumbnail sprint', self.speech[-1])
+        self.assertNotIn(sentinel, repr(self.focus.state()))
+        # Inspect private engine fields too, excluding injected test fixtures/speech sink.
+        fields = {k: v for k, v in vars(self.focus).items() if k not in ('reader', 'speak', 'clock')}
+        self.assertNotIn(sentinel, repr(fields))
+        self.assertNotIn(sentinel, repr({k: v for k, v in vars(self.reader).items() if k != '_query'}))
+        report = self.focus.command('end')
+        self.assertNotIn(sentinel, report)
+        self.assertNotIn(sentinel, self.path.read_text())
+        self.assertNotIn(sentinel, repr(self.focus.state()))
+        notes_after = {str(p): p.read_bytes() for p in (root / 'notes').rglob('*') if p.is_file()}
+        self.assertEqual(notes_before, notes_after)
+        for path in root.rglob('*'):
+            if path.is_file() and (path.suffix in ('.json', '.jsonl', '.log', '.md')):
+                self.assertNotIn(sentinel.encode(), path.read_bytes(), str(path))
+
+    def test_named_browser_and_display_name_callouts(self):
+        for url, bundle, expected in (
+            ('https://www.instagram.com/reels/private', 'com.google.Chrome', 'Instagram'),
+            ('https://www.example.com/private?q=hidden', 'com.google.Chrome', 'example.com'),
+            ('', 'com.tinyspeck.slackmacgap\nSlack', 'Slack')):
+            with self.subTest(expected=expected):
+                self.bundle = 'com.google.Chrome'
+                self.url = 'https://work.example/'
+                self.focus.command('start', 100)
+                self.bundle, self.url = bundle, url
+                self.tick(); self.tick()
+                self.assertEqual(self.speech[-1], f'Sir, {expected} can wait.')
+                self.focus.command('end')
+
+    def test_naming_switch_home_and_current_tick(self):
+        from unittest.mock import patch
+        self.focus.command('start', 200)
+        self.url = 'https://instagram.com/'
+        self.tick()
+        self.url = 'https://youtube.com/'
+        self.tick()
+        self.assertEqual(self.speech[-1], 'Sir, YouTube can wait.')
+        self.url = 'http://localhost:4700/'
+        self.assertEqual(self.reader.sample(naming=True)['label'], '')
+        self.tick(30)
+        self.assertEqual(len(self.speech), 1)
+        self.url = 'https://instagram.com/'
+        with patch('focus.NAME_DISTRACTIONS', False):
+            self.tick(30)
+        self.assertNotIn('Instagram', self.speech[-1])
+
+    def test_pools_four_lines_and_drill_command(self):
+        from focus import POOLS, NAMED_POOLS, DRILL_POOLS
+        for pools in (POOLS, NAMED_POOLS, DRILL_POOLS):
+            self.assertTrue(all(len(set(pool)) == 4 for pool in pools))
+        self.focus.command('start', 500)
+        self.assertEqual(parse_command('drill sergeant mode'), ('drill', None))
+        self.focus.command('drill')
+        self.url = 'https://reddit.com/'
+        self.tick(); self.tick()
+        self.assertIn('Reddit', self.speech[-1])
+        self.assertIn('Execute', self.speech[-1])
+        self.focus.command('normal')
+        self.focus.command('nag', 3)
+        for _ in range(6):
+            self.tick(3)
+        self.assertEqual(len(set(self.speech[-4:])), 4)
+
     def test_voice_grammar(self):
         for text, expected in [
             ('thirty minutes on this', ('start', 1800)),

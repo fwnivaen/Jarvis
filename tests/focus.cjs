@@ -15,7 +15,7 @@ vm.runInContext(fs.readFileSync('viewer/focus.js', 'utf8'), context);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(el('focus-status').textContent, '28:54 · Focused');
   assert.equal(requests[0].path, '/focus'); // Rejoins without starting another session.
-  for (const text of ['thirty minutes on this', 'call me out every thirty seconds', 'give me fifteen seconds', "it's okay, I'm doing research", 'pause', 'resume', 'extend by five minutes', 'abort', 'lock on this tab', 'lock this tab', 'keep me in this tab', 'this is the tab', 'stay on this tab', "okay, I'm gonna need you to keep me in this tab."]) {
+  for (const text of ['drill sergeant mode', 'normal mode', 'thirty minutes on this', 'call me out every thirty seconds', 'give me fifteen seconds', "it's okay, I'm doing research", 'pause', 'resume', 'extend by five minutes', 'abort', 'lock on this tab', 'lock this tab', 'keep me in this tab', 'this is the tab', 'stay on this tab', "okay, I'm gonna need you to keep me in this tab."]) {
     assert.equal(context.window.JarvisFocus.matches(text), true, text);
   }
   for (const text of ['What are our Quarterly Goals?', 'give me a summary', 'add a note', 'lock my screen']) assert.equal(context.window.JarvisFocus.matches(text), false);
