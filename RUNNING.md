@@ -384,3 +384,27 @@ including the spoken response and card flag. To check physically, run a session,
 switch to a work tab and say the phrase; repeat from Jarvis and land on another tab;
 then switch to another work tab and click LOCK THIS TAB. Verify the flash, confirmation,
 and continued timer, then change tabs to confirm drift detection follows the new target.
+
+## Eyes verification — 2026-10-14
+
+50 Python tests and the eyes, voice, focus, screen and source browser-controller
+suites pass. Virtual-clock execution of the actual sampling/nudge path first
+nudges at 700 ms, waits 30 seconds before repeating, and stays silent across
+180 seconds after relief. The posture endpoint accepts only four booleans;
+phone accounting and native tab-nudge relief are covered independently.
+
+Chrome loaded both bundled landmark models after adding the WebAssembly-only
+CSP allowance. Camera permission remained pending in the automated test tab;
+no live camera frame or physical phone movement was used as evidence. A live
+/look request using the existing synthetic red JPEG returned a valid Astra
+answer. One preceding image request returned transient HTTP 503; retry passed.
+All browser test tabs used ?mute=1. The surviving test page was reloaded with
+Eyes and Mic off. Physical posture accuracy, subsecond real-camera latency,
+and audible speech still require the user's desk test.
+
+Full preflight passed once with `13 pass, 0 fail, 2 warn`. The final full rerun
+reported `12 pass, 1 fail, 2 warn`: /see returned HTTP 503. Subsequent standalone
+/see calls passed; a capture diagnostic also encountered a transient recall 503.
+This is an unresolved intermittent brain-service failure, not a clean final live
+suite. The two warnings skip the inactive OpenAI API backend. No automatic image
+retry was introduced: each explicit look sends exactly one frame once.

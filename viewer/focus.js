@@ -27,7 +27,7 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
     pending = true; button.disabled = true;
     window.JarvisVoice?.setThinking(true);
     try {
-      const response = await fetch('/focus', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: AbortSignal.timeout(FOCUS_REQUEST_TIMEOUT_MS)});
+      const response = await fetch('/focus', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({...body, muted: new URLSearchParams(location.search).getAll('mute').includes('1')}), signal: AbortSignal.timeout(FOCUS_REQUEST_TIMEOUT_MS)});
       const data = await response.json();
       document.getElementById('answer').textContent = data.answer;
       window.JarvisVoice?.setThinking(false);

@@ -100,8 +100,7 @@ Commands (speech and typed input use the same handler):
 
 One persistent excursion counts once and escalates across three canned speech
 pools with each nag. The macOS `say` process speaks autonomous callouts and the
-report even if the viewer reloads or closes. Browser `?mute=1` does not mute this
-server-owned accountability speech. The session lives in server memory; restarting
+report even if the viewer reloads or closes. Starting or controlling focus from `?mute=1` also mutes server-owned accountability speech for that session. The session lives in server memory; restarting
 the server ends it. Reloading the viewer only fetches its current state.
 
 The report gives minutes permitted/on-target out of planned minutes, drift count,
@@ -168,3 +167,36 @@ local test URLs may show Not found: only their differing hosts matter to this
 reader test. Do not run it while you need uninterrupted foreground control.
 
 Distraction naming: `NAME_DISTRACTIONS` at the top of `focus.py` disables naming when false. Say “drill sergeant mode” or “normal mode” during a session. Each tier cycles four lines; the first callout includes the work intention when supplied.
+
+
+## Eyes
+
+Click **Eyes**, allow camera access, and sit upright during the brief calibration.
+Face and pose landmarks run in the browser using bundled MediaPipe Tasks Vision
+0.10.21 and the Google face / lite pose model assets. No CDN is contacted at runtime
+by the eyes organ. The only posture payload is four booleans: eyes_active, present,
+head_down, slouched. Pixels and landmarks are never posted for posture detection.
+Head-down is a posture heuristic, not recognition of a phone object. Lighting,
+camera placement and calibration affect accuracy; restarting Eyes recalibrates.
+
+A sustained head-down or slouch lasts 700 ms before a dry nudge, with a shared
+30-second cooldown. Absence has 12 seconds of grace. Head-down episodes count as
+focus drifts and their time is deducted while fresh signals are available.
+Say or type **give me a minute** or **no Jarvis, I need to do something important**
+for three minutes without eye or tab nudges. Accounting continues during relief.
+Only the ear button enables the microphone; organs and follow-up prompts cannot.
+
+**look at me** and **what do you think of my shirt?** explicitly send one current
+JPEG to GPT-6 Astra through the Codex backend. This is the intentional cloud-image
+exception. It does not change the selected normal brain. **what do you think of
+this screen** stays on the screen route when screen sharing is enabled.
+Stopping Eyes stops the camera and drops the landmark models.
+
+Tests: `node tests/eyes.cjs` plus the voice/focus/screen/source and Python suites.
+Physical acceptance still requires a person: open `http://localhost:4700/?mute=1`
+for silent testing, enable Eyes and calibrate, lower the head toward a phone,
+and check the visible nudge. Say the relief line with the ear button enabled,
+then hold that posture and switch tabs; no nudge should occur for 180 seconds.
+Muted test tabs intentionally cannot prove audible output. A subsecond physical
+response is not yet verified: inference speed and the posture heuristic must be
+measured on this camera. The deterministic timer crosses at exactly 700 ms.

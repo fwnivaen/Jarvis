@@ -67,11 +67,13 @@ oneAnswer.voice.answerOnce(text => answers.push(text));
 oneAnswer.voice.setExternalSpeaking(true);
 assert.equal(oneAnswer.current(), undefined);
 oneAnswer.voice.setExternalSpeaking(false);
+assert.equal(oneAnswer.current(), undefined); // An organ cannot open the microphone.
+oneAnswer.mic();
 const answerRecognition = oneAnswer.current();
 answerRecognition.result([['Finish the quarterly budget', true]]); oneAnswer.tick(FINISH);
 assert.deepEqual(answers, ['Finish the quarterly budget']);
 assert.deepEqual(oneAnswer.sent, []);
-assert.equal(oneAnswer.el('mic').textContent, 'Mic');
+assert.equal(oneAnswer.el('mic').textContent, 'Mic on');
 answerRecognition.result([['Do not submit twice', true]]); oneAnswer.tick(FINISH);
 assert.equal(answers.length, 1);
 const muted = setup('?mute=1'); muted.click(); muted.mic(); muted.voice.speak('Never audible');

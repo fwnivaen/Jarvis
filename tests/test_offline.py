@@ -55,6 +55,19 @@ def request(path, method="GET", body=None, headers=None):
 
 
 class Preflight(unittest.TestCase):
+    def test_webcam_route_is_one_image_with_separate_prompt(self):
+        import base64
+        body = dict(question='look at me', media_type='image/jpeg', image=base64.b64encode(b'\xff\xd8\xfftest\xff\xd9').decode())
+        with patch.object(server, 'ask_brain', return_value={'answer': 'A shirt, sir.', 'nodes': []}) as brain:
+            status, _, raw = request('/look', 'POST', body)
+            self.assertEqual(status, 200)
+            self.assertEqual(brain.call_count, 1)
+            self.assertEqual(brain.call_args.args[0], server.LOOK_PROMPT)
+            self.assertTrue(brain.call_args.kwargs['webcam'])
+            self.assertEqual(brain.call_args.kwargs['image'], b'\xff\xd8\xfftest\xff\xd9')
+        with patch.object(server, 'active_settings', side_effect=AssertionError('webcam must pin Astra')), patch.object(server, 'find_codex', return_value=None):
+            self.assertTrue(server.ask_brain('system', [], [], 'look', image=b'jpeg', webcam=True)['error'])
+
     def setUp(self):
         self.scratch = tempfile.TemporaryDirectory()
         self.addCleanup(self.scratch.cleanup)

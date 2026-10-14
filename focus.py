@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from focus_reader import Reader
 
+EYES_STALE_S = 2
+RELIEF_S = 180
 NAME_DISTRACTIONS = True
 SPEECH_VOICE = 'Daniel'
 DEFER_TIMEOUT_S = 45
@@ -53,7 +55,7 @@ DRILL_POOLS = (
      'Sir, {label} has had enough attention. Work.', 'Disengage from {label}, sir. The assignment stands.'))
 PUBLIC_KEYS = frozenset({'active', 'armed', 'lock_deferred', 'app_only', 'has_intent', 'paused', 'drifting', 'excused', 'known', 'home',
     'remaining_s', 'planned_s', 'elapsed_s', 'on_target_s', 'drift_s', 'drifts', 'tier',
-    'nag_s', 'snooze_s', 'streak', 'completed', 'aborted', 'ledger_ok', 'speaking'})
+    'present', 'head_down', 'slouched', 'eyes_active', 'nag_s', 'snooze_s', 'streak', 'completed', 'aborted', 'ledger_ok', 'speaking'})
 NUMBER_WORDS = {'a': 1, 'an': 1, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
     'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12,
     'thirteen': 13, 'fourteen': 14, 'fifteen': 15, 'sixteen': 16, 'seventeen': 17,
@@ -103,22 +105,40 @@ def parse_command(text):
 class Speaker:
     def __init__(self):
         self.pending = queue.Queue()
+        self.gate = threading.Lock()
+        self.generation = 0
         self.process = None
         self.speaking = False
         threading.Thread(target=self._run, daemon=True).start()
+
+    def cancel(self):
+        with self.gate:
+            self.generation += 1
+            while True:
+                try:
+                    self.pending.get_nowait()
+                    self.pending.task_done()
+                except queue.Empty:
+                    break
+            if self.process and self.process.poll() is None:
+                self.process.terminate()
 
     def busy(self):
         return self.speaking or not self.pending.empty()
 
     def __call__(self, text):
-        self.pending.put(text)
+        with self.gate:
+            self.pending.put((self.generation, text))
 
     def _run(self):
         while True:
-            text = self.pending.get()
+            generation, text = self.pending.get()
             self.speaking = True
             try:
-                self.process = subprocess.Popen(['/usr/bin/say', '-v', SPEECH_VOICE, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                with self.gate:
+                    if generation != self.generation:
+                        continue
+                    self.process = subprocess.Popen(['/usr/bin/say', '-v', SPEECH_VOICE, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 self.process.wait()
             except OSError:
                 pass
@@ -165,17 +185,48 @@ class Focus:
         self.drill = False
         self.callouts = 0
         self.pool_positions = [0] * len(POOLS)
+        self.muted = False
+        self.relief_until = 0.0
+        self.eyes = dict(present=False, head_down=False, slouched=False, eyes_active=False)
+        self.eyes_seen = 0
+        self.eye_counted = False
+
+    def say(self, text):
+        if not self.muted:
+            self.speak(text)
+
+    def relief(self):
+        with self.lock:
+            self.relief_until = self.clock() + RELIEF_S
+            if isinstance(self.speak, Speaker):
+                self.speak.cancel()
+
+    def eyes_update(self, body):
+        keys = {'present', 'head_down', 'slouched', 'eyes_active'}
+        if set(body) != keys or any(type(v) is not bool for v in body.values()):
+            raise ValueError('Eyes accepts only posture booleans.')
+        with self.lock:
+            self.eyes = dict(body)
+            self.eyes_seen = self.clock()
+            if not body['head_down'] or not body['eyes_active']:
+                self.eye_counted = False
+            elif self.active and not self.paused and not self.armed and not self.eye_counted:
+                self.drifts += 1
+                self.eye_counted = True
 
     def state(self):
         with self.lock:
+            if self.clock()-self.eyes_seen >= EYES_STALE_S:
+                self.eyes = dict(present=False, head_down=False, slouched=False, eyes_active=False)
+                self.eye_counted = False
             # Never serialize __dict__, the reader, samples, or arbitrary client data.
-            return dict(active=self.active, armed=self.armed, lock_deferred=self.armed,
+            return dict(**self.eyes, active=self.active, armed=self.armed, lock_deferred=self.armed,
                 app_only=self.app_only, has_intent=bool(self.intent), paused=self.paused,
-                drifting=self.counted and not self.excused and not self.home, excused=self.excused,
+                drifting=(self.counted and not self.excused and not self.home) or (self.active and self.eyes['eyes_active'] and self.eyes['head_down']), excused=self.excused,
                 known=self.known, home=self.home, remaining_s=math.ceil(max(0, self.planned-self.elapsed)),
                 planned_s=self.planned, elapsed_s=self.elapsed, on_target_s=self.on_target,
                 drift_s=self.drift_time, drifts=self.drifts, tier=self.tier, nag_s=self.nag,
-                snooze_s=math.ceil(max(0, self.snooze_until-self.clock())), streak=self.ledger['streak'],
+                snooze_s=math.ceil(max(0, max(self.snooze_until, self.relief_until)-self.clock())), streak=self.ledger['streak'],
                 completed=self.completed, aborted=self.aborted, ledger_ok=self.ledger_ok,
                 speaking=isinstance(self.speak, Speaker) and self.speak.busy())
 
@@ -203,12 +254,18 @@ class Focus:
                     return
                 self.armed = False
                 self.app_only = fallback
-                self.speak('Locked on, sir.' if not fallback else 'App-only focus locked, sir.')
+                self.say('Locked on, sir.' if not fallback else 'App-only focus locked, sir.')
                 self.last = self.clock()
                 return
             dt = min(dt, max(0, self.planned-self.elapsed))
             self.elapsed += dt
-            safe = sample['target'] or self.home
+            phone = self.eyes['eyes_active'] and self.eyes['head_down'] and now-self.eyes_seen < EYES_STALE_S
+            safe = (sample['target'] or self.home) and not phone
+            if phone:
+                self.drift_time += dt
+                if self.elapsed >= self.planned:
+                    self._finish(False)
+                return
             if safe:
                 self.on_target += dt
                 # Home is neutral, but only the actual target ends an excused excursion.
@@ -229,9 +286,9 @@ class Focus:
                         self.drifts += 1
                         self.counted = True
                         self.next_nag = now
-                    if now >= self.next_nag and now >= self.snooze_until and not (isinstance(self.speak, Speaker) and self.speak.busy()):
+                    if now >= self.next_nag and now >= max(self.snooze_until, self.relief_until) and not (isinstance(self.speak, Speaker) and self.speak.busy()):
                         self.tier = min(len(POOLS), self.tier+1)
-                        self.speak(self.callout(sample.get('label', '') if NAME_DISTRACTIONS else ''))
+                        self.say(self.callout(sample.get('label', '') if NAME_DISTRACTIONS else ''))
                         self.next_nag = now+self.nag
             if self.elapsed >= self.planned:
                 self._finish(False)
@@ -289,7 +346,7 @@ class Focus:
             report += f' Focus: {self.intent_label()}.'
         if not self.ledger_ok:
             report += ' The aggregate ledger could not be saved.'
-        self.speak(report)
+        self.say(report)
         return report
 
     def command(self, action, seconds=None, defer_lock=False, from_card=False):
@@ -309,6 +366,7 @@ class Focus:
                 self.planned = seconds or DEFAULT_DURATION_S
                 self.elapsed = self.on_target = self.drift_time = 0.0
                 self.drifts = 0
+                self.eye_counted = False
                 self.callouts = 0
                 self.pool_positions = [0] * len(POOLS)
                 self._clear_excursion()

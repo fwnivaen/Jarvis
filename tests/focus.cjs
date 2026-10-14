@@ -6,7 +6,7 @@ const el = id => {
   if (!elements.has(id)) elements.set(id, {textContent: '', style: {}, addEventListener(event, fn) {this[event] = fn;}});
   return elements.get(id);
 };
-const context = {document: {getElementById: el}, AbortSignal, setTimeout() {},
+const context = {URLSearchParams, location:{search:'?mute=1'}, document: {getElementById: el}, AbortSignal, setTimeout() {},
   window: {JarvisVoice: {interrupt: () => false, setThinking() {}, speak(text) {spoken.push(text);}}},
   fetch: async (path, options) => {requests.push({path, options}); return {ok: true, json: async () => options?.method === 'POST' ? {answer: 'Focus paused.', state} : state};}};
 vm.createContext(context);

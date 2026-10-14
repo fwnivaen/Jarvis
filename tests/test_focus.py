@@ -35,6 +35,26 @@ class FocusTests(unittest.TestCase):
         self.path = Path(self.temp.name) / 'ledger.json'
         self.focus = Focus(self.reader, self.clock, self.speech.append, self.path)
 
+    def test_eyes_privacy_counting_and_relief(self):
+        self.focus.command('start', 600)
+        signal = dict(eyes_active=True, present=True, head_down=True, slouched=False)
+        self.focus.eyes_update(signal)
+        self.focus.eyes_update(signal)
+        self.assertEqual(self.focus.drifts, 1)
+        self.tick()
+        self.assertEqual(self.focus.on_target, 0)
+        self.assertEqual(self.focus.drift_time, 1)
+        with self.assertRaises(ValueError):
+            self.focus.eyes_update(dict(signal, image='forbidden'))
+        self.focus.relief()
+        self.assertEqual(self.focus.state()['snooze_s'], 180)
+        self.focus.eyes_update(dict(signal, head_down=False))
+        self.url = 'https://away.example'
+        self.tick()
+        self.tick()
+        self.assertEqual(self.speech, [])
+        self.assert_private()
+
     def tick(self, seconds=1):
         self.clock.value += seconds
         self.focus.tick()
