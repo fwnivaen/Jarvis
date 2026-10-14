@@ -213,6 +213,8 @@ function bootGreeting(now = new Date()) {
 document.getElementById('answer').textContent = bootGreeting();
 </script>
 <script id="voice-controller">
+const SPEECH_VOICE_NAME = /^Daniel(?:\b|$)/i;
+const SPEECH_VOICE_LOAD_MS = 1500;
 const FINISH_MS = 900;
 const NATIVE_POLL_MS = 150;
 class MacRecognition {
@@ -280,17 +282,38 @@ class MacRecognition {
     status();
   }
   // All synthesis, including the greeting, passes through this single gate.
-  function speak(text) {
+  async function speak(text) {
     if (new URLSearchParams(location.search).getAll('mute').includes('1') ||
         !activated || !synth || !text) return;
     stopSpeech();
     const token = generation;
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = synth.getVoices();
-    utterance.voice = voices.find(v => /^en[-_]GB$/i.test(v.lang)) ||
-      voices.find(v => /^en\b/i.test(v.lang)) || null;
-    utterance.lang = utterance.voice ? utterance.voice.lang : 'en-GB';
     speaking = true; status();
+    let voices = synth.getVoices();
+    if (!voices.length) {
+      await new Promise(resolve => {
+        const ready = () => {
+          clearTimeout(timeout);
+          synth.removeEventListener?.('voiceschanged', ready);
+          resolve();
+        };
+        const timeout = setTimeout(ready, SPEECH_VOICE_LOAD_MS);
+        synth.addEventListener?.('voiceschanged', ready, {once: true});
+      });
+      if (token !== generation) return;
+      voices = synth.getVoices();
+    }
+    const candidates = voices.filter(v => /^en[-_]GB$/i.test(v.lang) && SPEECH_VOICE_NAME.test(v.name));
+    const selected = candidates.find(v => /premium/i.test(v.voiceURI + ' ' + v.name)) ||
+      candidates.find(v => /enhanced/i.test(v.voiceURI + ' ' + v.name)) || candidates[0];
+    if (!selected) {
+      speaking = false;
+      notice = 'Daniel British voice unavailable · answer shown above';
+      listen(); status(); return;
+    }
+    notice = '';
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.voice = selected;
+    utterance.lang = 'en-GB';
     const finish = () => { if (token === generation) {
       speaking = false;
       // Discard the native recognizer's cumulative transcript of our own voice.

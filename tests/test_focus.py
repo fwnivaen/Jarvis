@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from focus import Focus, PUBLIC_KEYS, LEDGER_KEYS, parse_command
+from focus import Focus, PUBLIC_KEYS, LEDGER_KEYS, parse_command, Speaker
 from focus_reader import Reader, FRONT_SCRIPT
 
 
@@ -276,6 +276,15 @@ class FocusTests(unittest.TestCase):
         self.url = 'https://any-tab.example/'
         self.tick()
         self.assertFalse(self.focus.state()['drifting'])
+
+    def test_native_speech_pins_daniel(self):
+        from unittest.mock import patch, MagicMock
+        with patch('focus.subprocess.Popen', return_value=MagicMock()) as launch:
+            speaker = Speaker()
+            speaker('Locked on, sir.')
+            speaker.pending.join()
+            self.assertEqual(launch.call_args.args[0],
+                             ['/usr/bin/say', '-v', 'Daniel', 'Locked on, sir.'])
 
     def test_voice_grammar(self):
         for text, expected in [

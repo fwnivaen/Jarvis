@@ -152,8 +152,10 @@ Voice uses the browser's Speech Synthesis and `webkitSpeechRecognition` APIs;
 there is no speech subscription, API key, or backend change. Use Chrome on
 localhost and allow microphone access. Recognition may use the browser vendor's
 online recognition service, so this is not a promise of offline transcription.
-British English playback is preferred when an installed voice is available;
-otherwise an English or system default voice is used.
+Speech explicitly selects Daniel (British English, male) in both the browser
+and native focus speaker. The browser prefers an installed enhanced/premium
+Daniel and waits briefly for its voice list to load. If Daniel is unavailable,
+it shows that error instead of silently switching to another voice.
 
 The first trusted page click speaks the welcome line. No speech is queued before
 that click. Click **Mic** to enable listening (click again to turn it off). Mic
@@ -347,3 +349,14 @@ Jarvis for 45 seconds should announce app-only focus without selecting a tab.
 
 Regression checks: `python3 -m unittest discover -s tests -p test_focus.py`,
 `node tests/focus.cjs`, `node tests/voice.cjs`, and full `python3 preflight.py`.
+
+
+### British voice verification
+
+All native focus lines use `say -v Daniel`; browser greetings and answers select
+Daniel in `en-GB`. Run `python3 tools/verify_voice_audio.py` for an opt-in
+speaker-to-microphone check using the actual speech queue and on-device speech
+recognizer. It keeps no audio or transcript, refuses to take over an existing
+Mac microphone session, and does not alter volume or audio routing. With
+headphones or echo cancellation, the acoustic check may fail even if playback
+is audible; a completed speech process alone is not an acoustic pass.

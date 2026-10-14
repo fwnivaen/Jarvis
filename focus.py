@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from focus_reader import Reader
 
+SPEECH_VOICE = 'Daniel'
 DEFER_TIMEOUT_S = 45
 INTENT_MAX_CHARS = 4000
 INTENT_LABEL_WORDS = 5
@@ -93,7 +94,7 @@ class Speaker:
             text = self.pending.get()
             self.speaking = True
             try:
-                self.process = subprocess.Popen(['/usr/bin/say', text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.process = subprocess.Popen(['/usr/bin/say', '-v', SPEECH_VOICE, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 self.process.wait()
             except OSError:
                 pass

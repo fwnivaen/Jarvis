@@ -19,7 +19,7 @@ function setup(search = '', supported = true) {
     abort() { this.onend?.(); }
     result(parts) { this.onresult({resultIndex: 0, results: parts.map(([text, final]) => Object.assign([{transcript: text}], {isFinal: final}))}); }
   }
-  const synth = {getVoices: () => [{lang: 'en-US'}, {lang: 'en-GB'}], cancel() {cancels++;}, speak(u) {speech.push(u);}};
+  const synth = {getVoices: () => [{name: 'Samantha', lang: 'en-US'}, {name: 'Serena', lang: 'en-GB'}, {name: 'Daniel (English (UK))', lang: 'en-GB', voiceURI: 'com.apple.voice.enhanced.en-GB.Daniel'}], cancel() {cancels++;}, speak(u) {speech.push(u);}};
   const context = {URLSearchParams, location: {search}, SpeechSynthesisUtterance: function(text) {this.text = text;},
     document: {getElementById: el, addEventListener(_, fn) {click = fn;}},
     setTimeout(fn, ms) {timers.set(++next, {fn, at: now + ms}); return next;},
@@ -32,7 +32,7 @@ function setup(search = '', supported = true) {
 }
 const a = setup();
 assert.equal(a.speech.length, 0);
-a.click(); assert.equal(a.speech.length, 1); assert.equal(a.speech[0].voice.lang, 'en-GB');
+a.click(); assert.equal(a.speech.length, 1); assert.equal(a.speech[0].voice.lang, 'en-GB'); assert.equal(a.speech[0].voice.name, 'Daniel (English (UK))');
 a.click(); assert.equal(a.speech.length, 1);
 a.speech[0].onend(); a.mic();
 assert.equal(a.el('voice-status').textContent, 'Listening…');
@@ -77,12 +77,30 @@ assert.equal(answers.length, 1);
 const muted = setup('?mute=1'); muted.click(); muted.mic(); muted.voice.speak('Never audible');
 assert.equal(muted.speech.length, 0);
 muted.current().result([['Still works', true]]); muted.tick(FINISH); assert.deepEqual(muted.sent, ['Still works']);
+const missingVoice = setup();
+missingVoice.context.window.speechSynthesis.getVoices = () => [{name: 'Samantha', lang: 'en-US'}];
+missingVoice.click();
+assert.equal(missingVoice.speech.length, 0);
+assert.match(missingVoice.el('voice-status').textContent, /Daniel British voice unavailable/);
 const denied = setup(); denied.mic(); denied.current().onerror({error: 'not-allowed'});
 assert.match(denied.el('voice-status').textContent, /permission denied/);
 const unsupported = setup('', false); assert.equal(unsupported.el('mic').disabled, false);
 console.log('VOICE PASS: activation, British voice, 900ms buffering, interim speech, session restart, 8s thinking, busy mic, immediate interrupts, mute, permission and unsupported states.');
 
 (async () => {
+  const loadingVoice = setup();
+  const loadingSynth = loadingVoice.context.window.speechSynthesis;
+  const installedVoices = loadingSynth.getVoices();
+  let voicesReady;
+  loadingSynth.getVoices = () => [];
+  loadingSynth.addEventListener = (_, handler) => { voicesReady = handler; };
+  loadingSynth.removeEventListener = () => {};
+  loadingVoice.click();
+  assert.equal(loadingVoice.speech.length, 0);
+  loadingSynth.getVoices = () => installedVoices;
+  voicesReady(); await Promise.resolve();
+  assert.equal(loadingVoice.speech[0].voice.name, 'Daniel (English (UK))');
+
   const native = setup('?mute=1');
   const calls=[];
   native.context.fetch=async(path)=>{calls.push(path);return {ok:true,json:async()=>path.endsWith('/start')?{token:'test',status:'starting'}:path.endsWith('/stop')?{status:'stopped'}:{status:'listening',sequence:1,text:'A native sentence'}}};
