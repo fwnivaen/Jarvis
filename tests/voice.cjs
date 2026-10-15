@@ -135,6 +135,18 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
   external.voice.setExternalSpeaking(false);
   external.current().result([['pause', true]]); external.tick(FINISH);
   assert.deepEqual(external.sent, ['pause']);
+  const relief = setup('?mute=1');
+  let reliefCount=0;
+  relief.context.window.JarvisEyes={isRelief:t=>t==='give me a minute',relief:()=>{reliefCount++;}};
+  relief.voice.setExternalSpeaking(true);
+  assert.equal(relief.current(),undefined); // A callout never enables the mic.
+  relief.mic();
+  relief.current().result([['Back to work sir',true]]);relief.tick(FINISH);
+  assert.deepEqual(relief.sent,[]);
+  relief.current().result([['give me',true],['a minute',true]]);
+  assert.equal(reliefCount,1);assert.deepEqual(relief.sent,[]);
+  relief.mic(); relief.voice.setExternalSpeaking(false);
+  assert.equal(relief.voice.isEnabled(),false);
   const app = setup('?mute=1');
   let resolveReply, request;
   const response = new Promise(resolve => { resolveReply = resolve; });

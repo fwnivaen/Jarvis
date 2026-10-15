@@ -408,3 +408,29 @@ reported `12 pass, 1 fail, 2 warn`: /see returned HTTP 503. Subsequent standalon
 This is an unresolved intermittent brain-service failure, not a clean final live
 suite. The two warnings skip the inactive OpenAI API backend. No automatic image
 retry was introduced: each explicit look sends exactly one frame once.
+
+## Eyes tracking repair — 2026-10-15
+
+The user reported camera startup worked but posture tracking did not. The old
+classifier required confident shoulders even for head-down, and used a 2D facial
+ratio. It is replaced with calibrated 3D facial rotation. Head and shoulder
+tracking/calibration are independent; loss of shoulders no longer disables phone
+posture. Stable calibration, hysteresis, local preview markers, measured tilt,
+reset and sensitivity controls make tracking observable and adjustable.
+
+`node tests/posture.cjs` tests the real geometry using controlled rotation
+matrices, including a face-only crop, nonzero camera orientation, upward/sideways
+movement, release threshold, slouch, weak shoulders, tracking loss and reset.
+The lifecycle test checks camera audio:false, no startup image upload, one-frame
+look, refusal of muted frames, and late permission cleanup after cancellation.
+Voice tests now cover relief during native speech without enabling a disabled mic.
+The prior capability fix was verified with a real brain call: it acknowledged
+that Eyes is implemented and correctly reported an off camera.
+
+Physical tracking is being retested by the user; simulated geometry is not a
+claim of measured real-camera accuracy or subsecond acoustic delivery.
+
+Repair validation: 51 Python tests, the posture geometry and eyes lifecycle
+suites, and all existing eyes/voice/focus/screen/source controller suites passed.
+Full live preflight: `13 pass, 0 fail, 2 warn` (inactive API backend skipped).
+No new camera frame was uploaded or inspected remotely for this repair.

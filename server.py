@@ -8,7 +8,21 @@ PERSONA_PROMPT = (
 )
 # ========================== END JARVIS PERSONA ============================
 
-SYSTEM_PROMPT = PERSONA_PROMPT + (
+EYES_CAPABILITIES = (
+    "Jarvis has a working Eyes organ, not a prop or placeholder. The Eyes button or 'turn on your eyes' "
+    "starts local browser webcam face and pose landmarks after camera permission. "
+    "It detects presence, sustained head-down posture (a phone-posture heuristic, not phone object recognition), "
+    "and slouching. Camera frames and landmarks stay local for posture; only booleans reach the local session. "
+    "After upright calibration, head-down/slouch gets 700 ms grace and a shared 30-second nudge cooldown; "
+    "absence gets 12 seconds. Phone posture counts as a focus drift. "
+    "'Give me a minute' or 'no Jarvis, I need to do something important' silences nudges for three minutes. "
+    "Only explicit 'look at me' and 'what do you think of my shirt?' send one current webcam photo to GPT-6 Astra. "
+    "Ordinary chat has NO webcam photo: never invent clothing, identity, objects, or visual details. "
+    "Screen questions use the separate Screen organ. Eyes never enables the microphone; the user must tap the ear button. "
+    "Do not deny these implemented capabilities based on an earlier mistaken answer in chat history. "
+    "Runtime eyes_active false means off or unavailable, not that Eyes is unimplemented. "
+)
+SYSTEM_PROMPT = PERSONA_PROMPT + EYES_CAPABILITIES + (
     "To change a focus target, tell the user to go to the desired tab and say 'lock on this tab'. "
     "From Jarvis this re-arms the lock for the next tab; from another app it locks that app. "
     "The desktop countdown card also has LOCK THIS TAB. Never suggest bringing a tab forward "
@@ -147,6 +161,7 @@ ANSWER_SCHEMA = {"type": "object", "properties": {
     "required": ["answer", "about_notes", "nodes"], "additionalProperties": False}
 PUBLIC_FILES = {"/": ("index.html", "text/html; charset=utf-8"),
                 "/index.html": ("index.html", "text/html; charset=utf-8"),
+                "/posture.js": ("posture.js", "text/javascript; charset=utf-8"),
                 "/eyes.js": ("eyes.js", "text/javascript; charset=utf-8"),
                 "/focus.js": ("focus.js", "text/javascript; charset=utf-8"),
                 "/graph-data.js": ("graph-data.js", "text/javascript; charset=utf-8")}
@@ -799,7 +814,10 @@ class Handler(BaseHTTPRequestHandler):
                 history = list(SESSIONS[sid]["history"])
             notes = retrieve(question, history)
             start = time.monotonic()
-            result = ask_brain(SYSTEM_PROMPT, notes, history, question)
+            eyes = FOCUS.state()
+            eye_status = {key: eyes[key] for key in ('eyes_active', 'present', 'head_down', 'slouched')}
+            system = SYSTEM_PROMPT + " Current local posture status (no image): " + json.dumps(eye_status)
+            result = ask_brain(system, notes, history, question)
             result["elapsed_s"] = round(time.monotonic() - start, TIME_PRECISION)
             if not result.get("error"):
                 with SESSION_LOCK:

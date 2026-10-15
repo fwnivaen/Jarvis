@@ -200,3 +200,23 @@ then hold that posture and switch tabs; no nudge should occur for 180 seconds.
 Muted test tabs intentionally cannot prove audible output. A subsecond physical
 response is not yet verified: inference speed and the posture heuristic must be
 measured on this camera. The deterministic timer crosses at exactly 700 ms.
+
+Eyes also responds to **turn on your eyes**, **turn off your eyes**, and
+**can you see me** locally. The latter reports actual camera readiness without
+sending a photo. Other questions about capabilities receive the implemented
+Eyes description and only current posture booleans, so chat cannot confuse an
+off camera with an unimplemented feature. Camera startup shows model loading,
+permission and calibration progress; **Cancel eyes** stops startup. A permission
+request left unanswered for 30 seconds times out and can be retried. If permission
+was blocked, use the browser's camera permission control for this local site.
+The microphone is never included in the camera permission request.
+
+Tracking uses the local Face Landmarker 3D head rotation, measured relative to
+your upright calibration. Head-down detection works even when your shoulders
+are outside the webcam crop. Slouch detection requires visible, confident
+shoulders and its own upright baseline; the status says when it is unavailable.
+Calibration waits for a steady forward-facing pose instead of averaging movement.
+The local preview draws face/shoulder markers without encoding or uploading an
+image. It shows head tilt and nudge cooldown/relief status. Use **Reset upright
+posture** after moving the camera or chair; choose **Sensitive** if a small phone
+head tilt is missed. Looking up and turning sideways are not head-down signals.

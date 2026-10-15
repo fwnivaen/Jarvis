@@ -55,6 +55,16 @@ def request(path, method="GET", body=None, headers=None):
 
 
 class Preflight(unittest.TestCase):
+    def test_chat_knows_real_eyes_and_only_receives_boolean_status(self):
+        with patch.object(server, 'ask_brain', return_value={'answer':'Eyes exist.', 'nodes':[], 'about_notes':False}) as brain:
+            status, _, _ = request('/chat', 'POST', {'question':'Are your eyes merely a prop?'})
+            self.assertEqual(status, 200)
+            system=brain.call_args.args[0]
+            self.assertIn('working Eyes organ, not a prop', system)
+            self.assertIn('Current local posture status (no image)', system)
+            self.assertEqual(set(json.loads(system.split('Current local posture status (no image): ')[1])), {'eyes_active','present','head_down','slouched'})
+            self.assertNotIn('image', brain.call_args.kwargs)
+
     def test_webcam_route_is_one_image_with_separate_prompt(self):
         import base64
         body = dict(question='look at me', media_type='image/jpeg', image=base64.b64encode(b'\xff\xd8\xfftest\xff\xd9').decode())
