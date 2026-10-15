@@ -217,6 +217,7 @@ const SPEECH_VOICE_NAME = /^Daniel(?:\b|$)/i;
 const SPEECH_VOICE_LOAD_MS = 1500;
 const FINISH_MS = 900;
 const NATIVE_POLL_MS = 150;
+const ATTENTION_HEARTBEAT_MS = 1000;
 class MacRecognition {
   constructor() { this.closed=false; this.token=null; this.sequence=0; this.lastText=''; }
   async call(action, data={}) {
@@ -262,7 +263,14 @@ class MacRecognition {
   let Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || MacRecognition;
   let activated = false, thinking = false, speaking = false, externalSpeaking = false, enabled = false;
   let recognition = null, timer = null, buffer = [], pending = false, generation = 0;
-  let notice = '', submit = null, answerHandler = null;
+  let notice = '', submit = null, answerHandler = null, outputText = '', quietUntil = 0;
+  const normalizeSpeech = text => text.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
+  function attention() {
+    if(typeof fetch==='function')fetch('/attention',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});
+  }
+  function attentionLoop() { if(enabled && (pending || buffer.length || thinking || speaking))attention(); setTimeout(attentionLoop,ATTENTION_HEARTBEAT_MS); }
+  attentionLoop();
+  function bargeIn() { generation++; speaking=false; externalSpeaking=false; synth?.cancel(); attention(); status(); }
   function status() {
     el('voice-status').textContent = thinking ? 'Thinking…' : (speaking || externalSpeaking) ? 'Speaking…' :
       enabled ? notice || 'Listening…' : notice || 'Ready';
@@ -284,9 +292,10 @@ class MacRecognition {
   // All synthesis, including the greeting, passes through this single gate.
   async function speak(text) {
     if (new URLSearchParams(location.search).getAll('mute').includes('1') ||
-        !activated || !synth || !text) return;
+        !activated || !synth || !text || pending || buffer.length || Date.now()<quietUntil) return;
     stopSpeech();
     const token = generation;
+    outputText=normalizeSpeech(text);
     speaking = true; status();
     let voices = synth.getVoices();
     if (!voices.length) {
@@ -357,7 +366,10 @@ class MacRecognition {
       // During a callout, accept only the relief phrase. Never submit our own speech.
       const interruptText = event.native ? event.text.trim() : Array.from(event.results).map(r => r[0].transcript.trim()).join(' ');
       if (window.JarvisEyes?.isRelief(interruptText)) { clearBuffer(); window.JarvisEyes.relief(interruptText); return; }
-      if (externalSpeaking) return;
+      const heard=normalizeSpeech(interruptText);
+      if(speaking && heard && outputText.includes(heard))return;
+      if(speaking || externalSpeaking)bargeIn();
+      attention();
       if(event.native){
         const text=event.text.trim();
         if(window.JarvisEyes?.isRelief(text)){window.JarvisEyes.relief(text);return;}
@@ -380,7 +392,7 @@ class MacRecognition {
       }
       schedule();
     };
-    current.onspeechstart = () => { if (recognition === current) { clearTimeout(timer); pending = true; } };
+    current.onspeechstart = () => { if (recognition === current) { clearTimeout(timer); pending = true; bargeIn(); } };
     current.onerror = event => {
       if (recognition !== current) return;
       if (event.error === 'no-speech') { pending = false; schedule(); return; }
@@ -417,6 +429,8 @@ class MacRecognition {
   el('stop-speech').onclick = stopSpeech;
   window.JarvisVoice = {
     speak,
+    isOccupied: () => thinking || speaking || externalSpeaking || pending || buffer.length>0 || Date.now()<quietUntil,
+    quietFor(ms) { quietUntil=Date.now()+ms; },
     isEnabled: () => enabled,
     stopSpeech,
     cancelAnswer() {
@@ -432,8 +446,8 @@ class MacRecognition {
       if (externalSpeaking === value) return;
       externalSpeaking = value;
       if (value) stopSpeech();
-      clearBuffer(); haltRecognition(); listen();
-      status();
+      if (value) { clearBuffer(); haltRecognition(); }
+      listen(); status();
     },
     setThinking(value) {
       thinking = value;

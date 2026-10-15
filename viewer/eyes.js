@@ -9,7 +9,7 @@ let tracking={};
 const EAR_NOTICE = 'My ears are off, sir — tap the ear button and just talk.';
 const LINES = {head_down: ['Sir, the phone has had its audience.', 'Your task is up here, sir.'], slouched: ['Sir, the chair is winning.', 'A little spine, sir. Literally.'], absent: ['Your desk has reported you missing, sir.']};
 const clean = text => text.toLowerCase().replace(/[,.!?]/g, '').trim();
-const isRelief = text => /^(?:no jarvis i need to do something important|give me a minute)$/.test(clean(text));
+const isRelief = text => /^(?:(?:hey |no )?jarvis )?(?:(?:please )?(?:give me|gimme) (?:a|one|three|3) (?:minute|minutes|min|mins)|i need to do something important|(?:be quiet|stop talking|shut up))(?: please)?$/.test(clean(text));
 const matches = text => /^(?:(?:hey )?jarvis )?(?:look at me|what do you think of my shirt)$/.test(clean(text));
 const START_COMMAND = /^(?:(?:hey )?jarvis )?(?:(?:turn|switch) on (?:your |the )?eyes|(?:enable|open) (?:your |the )?eyes|eyes on)$/;
 const STOP_COMMAND = /^(?:(?:hey )?jarvis )?(?:(?:turn|switch) off (?:your |the )?eyes|(?:disable|close) (?:your |the )?eyes|eyes off)$/;
@@ -73,7 +73,7 @@ async function sample(token) {
   el('eyes-tracking').textContent=`Face: ${raw.face?'tracked':'not found'} · Shoulders: ${raw.shoulders?'tracked':'out of view'}${tracking.pitch!==null&&tracking.pitch!==undefined?` · Head tilt: ${Math.round(tracking.pitch)}°`:''}`;
   el('eyes-nudge-status').textContent=now<quietUntil?`Relief · ${Math.ceil((quietUntil-now)/1000)} seconds quiet`:now<nextNudge?`Nudge cooldown · ${Math.ceil((nextNudge-now)/1000)} seconds`:'Nudges ready';
   const kind=signals.head_down?'head_down':signals.slouched?'slouched':absent?'absent':null;
-  if (kind && now>=quietUntil && now>=nextNudge && !looking && !state.paused) {
+  if (kind && now>=quietUntil && now>=nextNudge && !looking && !state.paused && !window.JarvisVoice?.isOccupied?.()) {
    nextNudge=now+COOLDOWN_MS;
    const pool=LINES[kind], index=positions[kind]||0; positions[kind]=index+1;
    announce(pool[index%pool.length]);
@@ -137,6 +137,7 @@ async function command(text) {
 async function relief(text) {
  if(!isRelief(text))return false;
  quietUntil=performance.now()+RELIEF_MS;
+ window.JarvisVoice?.quietFor?.(RELIEF_MS);
  window.JarvisVoice?.stopSpeech();
  try {await post('/relief',{});el('answer').textContent='Three minutes of peace, sir.';}
  catch(_){el('answer').textContent='Eyes are quiet; focus silence could not be confirmed. Retry the relief command.';}
@@ -157,7 +158,7 @@ async function look(question) {
  }catch(_){announce('I could not complete that look, sir.');}
  finally{looking=false;window.JarvisVoice?.setThinking(false);}
 }
-window.JarvisEyes={matches,isRelief,relief,look,isCommand,command};
+window.JarvisEyes={isQuiet:()=>performance.now()<quietUntil,matches,isRelief,relief,look,isCommand,command};
 el('eyes').onclick=()=>stream||starting?stop():start();
 el('eyes-recalibrate').onclick=recalibrate;
 el('eyes-sensitivity').onchange=event=>{tracker.setThreshold(event.target.value);since={};};

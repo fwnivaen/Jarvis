@@ -137,11 +137,11 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
   assert.deepEqual(external.sent, ['pause']);
   const relief = setup('?mute=1');
   let reliefCount=0;
-  relief.context.window.JarvisEyes={isRelief:t=>t==='give me a minute',relief:()=>{reliefCount++;}};
+  relief.context.window.JarvisEyes={isRelief:t=>t==='give me a minute',matches:()=>false,isCommand:()=>false,relief:()=>{reliefCount++;}};
   relief.voice.setExternalSpeaking(true);
   assert.equal(relief.current(),undefined); // A callout never enables the mic.
   relief.mic();
-  relief.current().result([['Back to work sir',true]]);relief.tick(FINISH);
+  relief.current().result([['Back to work sir',true]]);
   assert.deepEqual(relief.sent,[]);
   relief.current().result([['give me',true],['a minute',true]]);
   assert.equal(reliefCount,1);assert.deepEqual(relief.sent,[]);
@@ -171,3 +171,11 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
   assert.equal(app.speech.length, 0);
   console.log('CHAT PASS: shared /chat request, full delayed-response thinking, response display, mic recovery, mute.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
+
+const barge = setup(); barge.click(); barge.speech[0].onend(); barge.mic();
+barge.voice.speak('Long reply'); const before=barge.cancels();
+barge.current().onspeechstart(); assert.ok(barge.cancels()>before);
+barge.voice.speak('Unwanted posture nudge'); assert.equal(barge.speech.length,2);
+barge.current().result([['Actually listen to me',true]]); barge.tick(FINISH);
+assert.deepEqual(barge.sent,['Actually listen to me']);
+barge.voice.quietFor(180000); barge.voice.speak('Late response'); assert.equal(barge.speech.length,2);

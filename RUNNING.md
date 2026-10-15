@@ -434,3 +434,9 @@ Repair validation: 51 Python tests, the posture geometry and eyes lifecycle
 suites, and all existing eyes/voice/focus/screen/source controller suites passed.
 Full live preflight: `13 pass, 0 fail, 2 warn` (inactive API backend skipped).
 No new camera frame was uploaded or inspected remotely for this repair.
+
+## Prompt 13 interruption repair — October 15
+
+“Gimme 3 minutes”, “give me three minutes”, and the original relief phrases now use the same local Eyes + server Focus silence path. Silence also discards late spoken replies. Ordinary user speech cancels output and an attention heartbeat prevents native focus callouts while listening/thinking; posture nudges respect occupied voice state. Native recognition enables voice processing to reduce playback echo. Replies now favor direct answers over forced butler jokes.
+
+Validated: all seven browser regression suites and 51 Python tests pass; full live preflight: **13 pass, 0 fail, 2 warn** (inactive API backend skipped). User already confirmed calibrated tilt/head-down tracking. Physical speaker/microphone barge-in and this expanded relief phrase still require user confirmation; software tests cannot certify room acoustics.

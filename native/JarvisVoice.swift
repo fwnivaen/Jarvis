@@ -37,6 +37,8 @@ func startListening() {
     }
     let audio = AVAudioEngine()
     let input = audio.inputNode
+    // Suppress speaker playback before on-device transcription so barge-in hears the user.
+    try? input.setVoiceProcessingEnabled(true)
     let format = input.outputFormat(forBus: 0)
     guard format.sampleRate > 0, format.channelCount > 0 else {
         publish("error", "No microphone input is available. Choose an input in System Settings → Sound.")

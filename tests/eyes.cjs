@@ -38,7 +38,8 @@ const run=s=>vm.runInContext(s,ctx);
  await tick(700);assert.equal(speech.length,1);
  await tick(29999);assert.equal(speech.length,1);
  await tick(30700);assert.equal(speech.length,2);
- await ctx.window.JarvisEyes.relief('give me a minute');
+ for(const phrase of ['gimme 3 minutes','give me three minutes','Jarvis, give me a minute','please give me 3 minutes']) assert.equal(run(`isRelief(${JSON.stringify(phrase)})`),true);
+ await ctx.window.JarvisEyes.relief('gimme 3 minutes');
  for(let t=30800;t<210700;t+=100) await tick(t);
  assert.equal(speech.length,0); // Relief cancelled speech and no later nudge escaped.
  await tick(210700);assert.equal(speech.length,1);

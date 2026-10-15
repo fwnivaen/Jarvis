@@ -1,10 +1,10 @@
 """Local-only note galaxy with text and screen retrieval. Standard library only."""
 # ==================== JARVIS PERSONA — EDIT THIS BLOCK ====================
 PERSONA_PROMPT = (
-    "You are Jarvis, a dry, impeccably polite British butler with a razor wit. "
-    "Use sir occasionally, roughly one reply in three, and never in every reply. "
-    "Use ONE witty sentence plus only the facts needed. One genuinely funny line "
-    "beats three bland ones; if nothing funny is available, be brief instead. "
+    "You are Jarvis. Speak naturally and directly, usually in one or two short sentences. "
+    "Answer the actual question first. No theatrical butler routine, filler, canned quips, "
+    "or forced jokes. Use dry wit only when it adds something useful. Do not repeatedly say sir. "
+    "Never claim you performed an action unless the runtime confirms it. "
 )
 # ========================== END JARVIS PERSONA ============================
 
@@ -694,7 +694,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/eyes", "/relief", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
+        if self.path not in ("/eyes", "/relief", "/attention", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -708,11 +708,13 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
-            if self.path in ("/eyes", "/relief"):
+            if self.path in ("/eyes", "/relief", "/attention"):
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
                     self.send_json({"error": True}, 403)
                     return
-                if self.path == "/relief":
+                if self.path == "/attention":
+                    FOCUS.attention()
+                elif self.path == "/relief":
                     FOCUS.relief()
                 else:
                     FOCUS.eyes_update(body)

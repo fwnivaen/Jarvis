@@ -102,6 +102,9 @@ def parse_command(text):
     return None
 
 
+ATTENTION_S = 3
+
+
 class Speaker:
     def __init__(self):
         self.pending = queue.Queue()
@@ -187,13 +190,20 @@ class Focus:
         self.pool_positions = [0] * len(POOLS)
         self.muted = False
         self.relief_until = 0.0
+        self.attention_until = 0.0
         self.eyes = dict(present=False, head_down=False, slouched=False, eyes_active=False)
         self.eyes_seen = 0
         self.eye_counted = False
 
     def say(self, text):
-        if not self.muted:
+        if not self.muted and self.clock() >= max(self.relief_until, self.attention_until):
             self.speak(text)
+
+    def attention(self):
+        with self.lock:
+            self.attention_until = self.clock() + ATTENTION_S
+            if isinstance(self.speak, Speaker):
+                self.speak.cancel()
 
     def relief(self):
         with self.lock:
