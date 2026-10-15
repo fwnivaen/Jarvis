@@ -55,6 +55,22 @@ class FocusTests(unittest.TestCase):
         self.assertEqual(self.speech, [])
         self.assert_private()
 
+    def test_relief_and_attention_gate_every_native_announcement(self):
+        self.focus.relief()
+        self.focus.say('Do not interrupt')
+        self.clock.value += 179
+        self.focus.say('Still quiet')
+        self.assertEqual(self.speech, [])
+        self.clock.value += 1
+        self.focus.say('Allowed after relief')
+        self.assertEqual(self.speech, ['Allowed after relief'])
+        self.focus.attention()
+        self.focus.say('Do not talk over the user')
+        self.assertEqual(len(self.speech), 1)
+        self.clock.value += 3
+        self.focus.say('The user has finished')
+        self.assertEqual(len(self.speech), 2)
+
     def tick(self, seconds=1):
         self.clock.value += seconds
         self.focus.tick()
@@ -405,7 +421,7 @@ class FocusTests(unittest.TestCase):
                 self.focus.command('start', 100)
                 self.bundle, self.url = bundle, url
                 self.tick(); self.tick()
-                self.assertEqual(self.speech[-1], f'Sir, {expected} can wait.')
+                self.assertEqual(self.speech[-1], f'{expected} can wait.')
                 self.focus.command('end')
 
     def test_naming_switch_home_and_current_tick(self):
@@ -415,7 +431,7 @@ class FocusTests(unittest.TestCase):
         self.tick()
         self.url = 'https://youtube.com/'
         self.tick()
-        self.assertEqual(self.speech[-1], 'Sir, YouTube can wait.')
+        self.assertEqual(self.speech[-1], 'YouTube can wait.')
         self.url = 'http://localhost:4700/'
         self.assertEqual(self.reader.sample(naming=True)['label'], '')
         self.tick(30)

@@ -12,6 +12,7 @@ from focus_reader import Reader
 
 EYES_STALE_S = 2
 RELIEF_S = 180
+ATTENTION_S = 3
 NAME_DISTRACTIONS = True
 SPEECH_VOICE = 'Daniel'
 DEFER_TIMEOUT_S = 45
@@ -33,19 +34,13 @@ PRIVATE_MODE = 0o600
 CARD_PATH = Path(__file__).resolve().parent / '.local' / 'JarvisFocusCard'
 CARD_STOP_TIMEOUT_S = 2
 POOLS = (
-    ('A small detour, sir. Back to the task.', 'Your task is waiting. Shall we return?',
-     'Sir, the assignment awaits.', 'Back to your chosen work, sir.'),
-    ('The detour is becoming a holiday. Back to work.', 'Focus, sir. That was not the assignment.',
-     'Sir, we have wandered far enough.', 'The task has not finished itself, sir.'),
-    ('We are now professionally avoiding the task. Return to it.', 'Your future self has lodged a complaint. Back to work.',
-     'Sir, the detours are becoming the project.', 'Enough reconnaissance, sir. Back to work.'))
+    ('Back to your task.', 'Return to the task you picked.', 'Stay with this task.', 'One task at a time.'),
+    ('You are still away from your task.', 'Return to your work.', 'Keep this break intentional.', 'Back to the next step.'),
+    ('Return to the task, or pause focus.', 'Need a break? Say give me three minutes.', 'Pause focus if your plans changed.', 'Choose your next step.'))
 NAMED_POOLS = (
-    ('Sir, {label} can wait.', 'A detour into {label}, sir. Back to the task.',
-     '{label} will survive your absence, sir.', 'Sir, leave {label} and return to your work.'),
-    ('Still in {label}, sir. It is starting to look deliberate.', '{label} is becoming a holiday, sir.',
-     'Sir, {label} was not the assignment.', 'Enough time in {label}, sir. Back to work.'),
-    ('Sir, {label} is becoming the project.', 'We are now professionally browsing {label}, sir.',
-     'Your future self has lodged a complaint about {label}, sir.', 'Leave {label}, sir. The task needs you.'))
+    ('{label} can wait.', 'Back from {label} to your task.', 'Save {label} for your break.', 'Return to your work.'),
+    ('Still on {label}. Return when ready.', 'Pause focus if you need {label}.', 'Back to your task.', 'Keep this detour short.'),
+    ('Return from {label}, or pause focus.', 'Need {label}? Give yourself a break.', 'Pause focus if your plans changed.', 'Back to the next step.'))
 DRILL_POOLS = (
     ('Close the detour into {label}, sir. Execute the task.', 'Eyes off {label}, sir. Back to work.',
      'Leave {label}, sir. Move.', 'Sir, {label} is off mission. Return.'),
@@ -100,9 +95,6 @@ def parse_command(text):
         if re.fullmatch(pattern, text):
             return action, None
     return None
-
-
-ATTENTION_S = 3
 
 
 class Speaker:
@@ -309,7 +301,7 @@ class Focus:
         self.callouts += 1
         if first and self.intent:
             if label:
-                return f"Sir — {label} does not look like '{self.intent_label()}' to me."
+                return f"You switched to {label}. Back to {self.intent_label()}."
             return f'Back to {self.intent_label()}, sir.'
         tier = self.tier - 1
         pool = (DRILL_POOLS if self.drill else NAMED_POOLS)[tier] if label else POOLS[tier]

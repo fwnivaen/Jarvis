@@ -13,6 +13,7 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
   const status = document.getElementById('focus-status');
   let pending = false;
   function render(s) {
+    if(s.snooze_s>0)window.JarvisVoice?.quietFor?.(s.snooze_s*1000);
     document.getElementById('focus-debug').textContent = JSON.stringify({lock_deferred: Boolean(s.lock_deferred), app_only: Boolean(s.app_only), has_intent: Boolean(s.has_intent)}, null, FOCUS_DEBUG_INDENT);
     if (!s.active) window.JarvisVoice?.cancelAnswer?.();
     window.JarvisVoice?.setExternalSpeaking?.(Boolean(s.speaking));

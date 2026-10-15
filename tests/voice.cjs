@@ -43,9 +43,9 @@ a.current().result([['Tell me about', true], ['the quarterly goals', true]]);
 a.tick(FINISH - 1); assert.deepEqual(a.sent, []); a.tick(1);
 assert.deepEqual(a.sent, ['Tell me about the quarterly goals']);
 assert.equal(a.el('voice-status').textContent, 'Thinking…');
-const stale = a.current(); a.mic(); stale.result([['Unwanted question', true]]); a.tick(BRAIN_WAIT);
+const stale = a.current(); stale.result([['Unwanted question', true]]); a.tick(BRAIN_WAIT);
 assert.equal(a.el('voice-status').textContent, 'Thinking…'); assert.equal(a.sent.length, 1);
-a.voice.setThinking(false); a.voice.speak('A long answer');
+a.voice.stopSpeech(); a.voice.setThinking(false); a.voice.speak('A long answer');
 assert.equal(a.el('voice-status').textContent, 'Speaking…');
 const count = a.cancels(); a.current().result([['stop', false]]);
 assert.ok(a.cancels() > count); assert.equal(a.el('voice-status').textContent, 'Listening…');
@@ -162,7 +162,7 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
   assert.equal(JSON.parse(request.options.body).question, 'A typed question');
   app.tick(BRAIN_WAIT);
   assert.equal(app.el('voice-status').textContent, 'Thinking…');
-  assert.equal(app.el('mic').disabled, true);
+  assert.equal(app.el('mic').disabled, false);
   resolveReply({ok: true, json: async () => ({answer: 'A real-shaped answer', nodes: [], elapsed_s: 8})});
   await pendingReply;
   assert.equal(app.el('answer').textContent, 'A real-shaped answer');
@@ -179,3 +179,16 @@ barge.voice.speak('Unwanted posture nudge'); assert.equal(barge.speech.length,2)
 barge.current().result([['Actually listen to me',true]]); barge.tick(FINISH);
 assert.deepEqual(barge.sent,['Actually listen to me']);
 barge.voice.quietFor(180000); barge.voice.speak('Late response'); assert.equal(barge.speech.length,2);
+
+const thinkingRelief=setup('?mute=1'); let pauses=0;
+thinkingRelief.context.window.JarvisEyes={isRelief:t=>t==='gimme 3 minutes',relief:()=>{pauses++;},matches:()=>false,isCommand:()=>false};
+thinkingRelief.mic(); thinkingRelief.voice.setThinking(true);
+thinkingRelief.current().result([['gimme 3 minutes',true]]);assert.equal(pauses,1);
+assert.equal(thinkingRelief.voice.isEnabled(),true);thinkingRelief.mic();assert.equal(thinkingRelief.voice.isEnabled(),false);
+
+const continued=setup();continued.click();continued.speech[0].onend();continued.mic();
+continued.voice.setThinking(true);continued.current().result([['I have more',false]]);
+continued.voice.setThinking(false);continued.voice.speak('Do not interrupt this sentence');
+assert.equal(continued.speech.length,1);
+continued.current().result([['I have more to add',true]]);continued.tick(FINISH);
+assert.deepEqual(continued.sent,['I have more to add']);

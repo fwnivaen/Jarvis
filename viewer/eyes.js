@@ -7,7 +7,7 @@ const PREVIEW_WIDTH=320, PREVIEW_HEIGHT=240, LANDMARK_RADIUS=3, FULL_PERCENT=100
 const tracker=window.JarvisPosture.create();
 let tracking={};
 const EAR_NOTICE = 'My ears are off, sir — tap the ear button and just talk.';
-const LINES = {head_down: ['Sir, the phone has had its audience.', 'Your task is up here, sir.'], slouched: ['Sir, the chair is winning.', 'A little spine, sir. Literally.'], absent: ['Your desk has reported you missing, sir.']};
+const LINES = {head_down: ['Look back at your task.', 'Head up when you’re ready.'], slouched: ['Sit a little taller.', 'Relax your shoulders and sit upright.'], absent: ['Still there?']};
 const clean = text => text.toLowerCase().replace(/[,.!?]/g, '').trim();
 const isRelief = text => /^(?:(?:hey |no )?jarvis )?(?:(?:please )?(?:give me|gimme) (?:a|one|three|3) (?:minute|minutes|min|mins)|i need to do something important|(?:be quiet|stop talking|shut up))(?: please)?$/.test(clean(text));
 const matches = text => /^(?:(?:hey )?jarvis )?(?:look at me|what do you think of my shirt)$/.test(clean(text));

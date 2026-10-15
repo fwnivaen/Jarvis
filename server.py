@@ -22,7 +22,15 @@ EYES_CAPABILITIES = (
     "Do not deny these implemented capabilities based on an earlier mistaken answer in chat history. "
     "Runtime eyes_active false means off or unavailable, not that Eyes is unimplemented. "
 )
-SYSTEM_PROMPT = PERSONA_PROMPT + EYES_CAPABILITIES + (
+SCREEN_WATCH_CAPABILITIES = (
+    "Screen watch is implemented: 'watch my screen' starts or reuses a display share, with a click if the browser requires it. "
+    "It requires Entire Screen and honestly refuses tab/window monitoring. Tiny thumbnails are compared locally every five seconds; "
+    "after 60 seconds of stillness one screen frame goes to the brain for a useful suggestion, then a three-minute cooldown. "
+    "A desktop face indicates active watching across Spaces. Questions use the same share. Eyes and Screen are independent. "
+    "'Gimme 3 minutes' and 'give me three minutes' are local relief commands that silence all nudges. "
+    "Never claim a watch started or silence was applied merely because the user asked you in ordinary chat. "
+)
+SYSTEM_PROMPT = PERSONA_PROMPT + EYES_CAPABILITIES + SCREEN_WATCH_CAPABILITIES + (
     "To change a focus target, tell the user to go to the desired tab and say 'lock on this tab'. "
     "From Jarvis this re-arms the lock for the next tab; from another app it locks that app. "
     "The desktop countdown card also has LOCK THIS TAB. Never suggest bringing a tab forward "
@@ -68,6 +76,8 @@ import build
 import voice_bridge
 import focus
 
+import watch
+WATCH = watch.Watch()
 FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
 VIEWER_DIR = ROOT / "viewer"
@@ -164,6 +174,7 @@ PUBLIC_FILES = {"/": ("index.html", "text/html; charset=utf-8"),
                 "/posture.js": ("posture.js", "text/javascript; charset=utf-8"),
                 "/eyes.js": ("eyes.js", "text/javascript; charset=utf-8"),
                 "/focus.js": ("focus.js", "text/javascript; charset=utf-8"),
+                "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
                 "/graph-data.js": ("graph-data.js", "text/javascript; charset=utf-8")}
 PUBLIC_FILES.update({"/" + name: (name, "application/wasm" if name.endswith(".wasm") else "text/javascript" if name.endswith((".js", ".mjs")) else "application/octet-stream") for name in ('vision.mjs', 'vision_wasm_internal.js', 'vision_wasm_internal.wasm', 'vision_wasm_nosimd_internal.js', 'vision_wasm_nosimd_internal.wasm', 'face_landmarker.task', 'pose_landmarker.task')})
 CAPTURE_TITLE_WORDS = 7
@@ -665,6 +676,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/watch":
+            self.send_bytes(json.dumps(WATCH.state()).encode(), "application/json", head=head)
+            return
         if path == "/focus":
             self.send_bytes(json.dumps(FOCUS.state()).encode(), "application/json", head=head)
             return
@@ -694,7 +708,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/eyes", "/relief", "/attention", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
+        if self.path not in ("/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -708,9 +722,12 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
-            if self.path in ("/eyes", "/relief", "/attention"):
+            if self.path in ("/eyes", "/relief", "/attention", "/watch"):
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
                     self.send_json({"error": True}, 403)
+                    return
+                if self.path == "/watch":
+                    self.send_json(WATCH.update(body))
                     return
                 if self.path == "/attention":
                     FOCUS.attention()
