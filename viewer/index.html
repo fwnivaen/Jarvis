@@ -186,7 +186,7 @@ button { transition: background var(--transition), color var(--transition), bord
 <main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
 <div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
 <aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<details id="eyes-panel" hidden style="position:absolute;z-index:6;right:var(--space-5);top:var(--space-5);max-width:320px;max-height:60vh;overflow:auto;background:#071520;padding:var(--space-4);border:1px solid #315068;border-radius:var(--small-radius)"><summary>Local camera · tracking</summary><canvas id="eyes-preview" width="320" height="240" style="max-width:100%" aria-label="Local camera preview with face and shoulder tracking markers"></canvas><p id="eyes-tracking" role="status"></p><p id="eyes-nudge-status" role="status"></p><button id="eyes-recalibrate" type="button">Reset upright posture</button><label> Head-down sensitivity <select id="eyes-sensitivity"><option value="8">Sensitive</option><option value="12" selected>Balanced</option><option value="20">Less sensitive</option></select></label><small style="display:block">Preview stays on this machine. Sit upright and look ahead when resetting.</small></details><section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><details><summary>Focus details</summary><pre id="focus-debug"></pre></details><button class="control" id="eyes" type="button" aria-pressed="false">Eyes</button><span id="eyes-status" role="status"></span><button class="control" id="screen" type="button" aria-pressed="false">Screen</button><button class="control" id="watch" type="button" aria-pressed="false">Watch screen</button><span id="watch-status" role="status"></span><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<details id="eyes-panel" hidden style="position:absolute;z-index:6;right:var(--space-5);top:var(--space-5);max-width:320px;max-height:60vh;overflow:auto;background:#071520;padding:var(--space-4);border:1px solid #315068;border-radius:var(--small-radius)"><summary>Local camera · tracking</summary><canvas id="eyes-preview" width="320" height="240" style="max-width:100%" aria-label="Local camera preview with face and shoulder tracking markers"></canvas><p id="eyes-tracking" role="status"></p><p id="eyes-nudge-status" role="status"></p><button id="eyes-recalibrate" type="button">Reset upright posture</button><label> Head-down sensitivity <select id="eyes-sensitivity"><option value="8">Sensitive</option><option value="12" selected>Balanced</option><option value="20">Less sensitive</option></select></label><small style="display:block">Preview stays on this machine. Sit upright and look ahead when resetting.</small></details><section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><details><summary>Focus details</summary><pre id="focus-debug"></pre></details><button class="control" id="eyes" type="button" aria-pressed="false">Eyes</button><span id="eyes-status" role="status"></span><button class="control" id="screen" type="button" aria-pressed="false">Watch screen</button><span id="watch-status" role="status"></span><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
 <script src="graph-data.js"></script>
 <dialog id="brain-picker" aria-labelledby="brain-picker-title">
  <div class="brain-picker-heading"><h2 id="brain-picker-title">Choose a brain</h2><button id="brain-picker-close" type="button" aria-label="Close brain chooser">Close</button></div>
@@ -536,11 +536,10 @@ function showAnswerSources(data){
  ids.forEach(id=>{const b=document.createElement('button');b.className='source';b.textContent=GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('sources').append(b)});
 }
 let screenStream=null,screenVideo=null,screenMode=false,screenGeneration=0;
-let watchRequested=false;
 const watcher=window.JarvisWatch?.create({
  thumbnail(width,height){
   const track=screenStream?.getVideoTracks()[0];
-  if(track?.getSettings?.().displaySurface!=='monitor'){stopWatch();$('watch-status').textContent='The share changed. Choose Entire Screen to watch again.';throw Error('Entire screen required');}
+  if(track?.getSettings?.().displaySurface!=='monitor'){screenEnded();$('watch-status').textContent='The share changed. Choose Entire Screen to watch again.';throw Error('Entire screen required');}
   if(track.readyState!=='live' || track.muted || !screenVideo || screenVideo.readyState<VIDEO_READY_STATE)throw Error('Screen unavailable');
   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(screenVideo,0,0,width,height);
@@ -551,27 +550,22 @@ const watcher=window.JarvisWatch?.create({
  say(text){$('answer').textContent=text;window.JarvisVoice.speak(text);},
  status(text){$('watch-status').textContent=text;}
 });
-function stopWatch(){watchRequested=false;watcher?.stop();$('watch').textContent='Watch screen';$('watch').setAttribute('aria-pressed','false');}
+function stopWatch(){watcher?.stop();$('screen').textContent='Watch screen';$('screen').setAttribute('aria-pressed','false');}
 function beginWatch(){
  const surface=screenStream?.getVideoTracks()[0]?.getSettings?.().displaySurface;
  if(surface!=='monitor'){
-  stopWatch();const message=surface==='browser'?'That is a single tab. It cannot see you switch tabs. Click Watch screen and choose Entire Screen.':surface==='window'?'That is one window. Click Watch screen and choose Entire Screen.':'I cannot verify an entire-screen share. Click Watch screen and choose Entire Screen.';
+  screenEnded();const message=surface==='browser'?'That is a single tab. It cannot see you switch tabs. Click Watch screen and choose Entire Screen.':surface==='window'?'That is one window. Click Watch screen and choose Entire Screen.':'I cannot verify an entire-screen share. Click Watch screen and choose Entire Screen.';
   $('watch-status').textContent=message;window.JarvisVoice.speak(message);return;
  }
- watcher?.start();$('watch').textContent='Stop watching';$('watch').setAttribute('aria-pressed','true');
+ watcher?.start();$('screen').textContent='Stop watching';$('screen').setAttribute('aria-pressed','true');
 }
-$('watch').onclick=async()=>{
- if(watcher?.isActive()){stopWatch();return;}
- if(screenStream?.getVideoTracks()[0]?.getSettings?.().displaySurface==='monitor'){beginWatch();return;}
- if(screenStream)screenEnded();watchRequested=true;await $('screen').onclick();
-};
 window.JarvisScreen={
  commandMatches:text=>/^(?:(?:hey )?jarvis[, ]+)?(?:watch my screen|stop watching(?: my screen)?)[.!?]*$/i.test(text.trim()),
  async command(text){
-  if(/stop watching/i.test(text)){stopWatch();return;}
+  if(/stop watching/i.test(text)){screenEnded();return;}
   if(watcher?.isActive())return;
   if(navigator.userActivation && !navigator.userActivation.isActive && !screenStream){$('watch-status').textContent='Click Watch screen, then choose Entire Screen.';window.JarvisVoice.speak('Click Watch screen, then choose Entire Screen.');return;}
-  await $('watch').onclick();
+  await $('screen').onclick();
  }
 };
 window.addEventListener?.('pagehide',()=>{if(screenStream)screenEnded();});
@@ -583,11 +577,11 @@ function screenEnded(){
  if(screenVideo){screenVideo.srcObject=null;screenVideo=null;}
  $('screen-indicator').hidden=false;
  $('screen-indicator').textContent='■ SCREEN SHARE ENDED';
- $('screen').textContent='Share again';$('screen').setAttribute('aria-pressed','false');
+ $('screen').textContent='Watch screen';$('screen').setAttribute('aria-pressed','false');
 }
 $('screen-notes').onclick=()=>{
  screenEnded();screenMode=false;$('screen-indicator').hidden=true;
- $('screen-notes').hidden=true;$('screen').textContent='Screen';
+ $('screen-notes').hidden=true;$('screen').textContent='Watch screen';
 };
 $('screen').onclick=async()=>{
  if(screenStream){screenEnded();return;}
@@ -602,10 +596,10 @@ $('screen').onclick=async()=>{
   $('screen').textContent='Stop sharing';$('screen').setAttribute('aria-pressed','true');
   $('screen-notes').hidden=false;
   await video.play();
-  if(watchRequested)beginWatch();
+  beginWatch();
  }catch(error){
   if(screenStream)screenEnded();
-  const message='Screen sharing did not start, sir. Click Watch screen or Screen, then choose Entire Screen in the browser picker.';
+  const message='Screen sharing did not start, sir. Click Watch screen, then choose Entire Screen in the browser picker.';
   if(!busy){$('answer').textContent=message;window.JarvisVoice.speak(message);}
  }finally{$('screen').disabled=false;}
 };

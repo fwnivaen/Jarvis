@@ -223,10 +223,10 @@ head tilt is missed. Looking up and turning sideways are not head-down signals.
 
 ### Screen watch (prompt 14)
 
-Click **Watch screen**, or say “watch my screen” and follow the click prompt if your browser requires it. Choose **Entire Screen**. The picker is given an entire-screen preference, but browsers retain the final choice. Tab/window shares are explicitly refused for watching; they remain available for ordinary screen questions.
+Click **Watch screen**, or say “watch my screen” and follow the click prompt if your browser requires it. Choose **Entire Screen**. The picker is given an entire-screen preference, but browsers retain the final choice. Tab/window shares are refused with instructions to choose Entire Screen.
 
 The browser compares 96×54 thumbnails every five seconds. Thumbnails never leave memory. After 60 seconds without a meaningful change, it sends one current JPEG to the selected brain for a short useful suggestion, then waits three minutes before another attempt. Tiny pixel noise is ignored; this is screen stillness, not proof of inactivity. While watching, ordinary questions—including “what do you think of this?”—use that same share. Camera/Eyes remains independent.
 
-“Gimme 3 minutes” silences Eyes, Focus, screen nudges, and late spoken replies. Screen nudges also wait while you speak or ask a question. Stop watching with the button or “stop watching”; **Screen** ends the share itself. Ended, changed, or paused shares cannot produce a stale nudge.
+“Gimme 3 minutes” silences Eyes, Focus, screen nudges, and late spoken replies. Screen nudges also wait while you speak or ask a question. The single **Watch screen** button becomes **Stop watching** while active. Click it or say “stop watching” to end both watching and the share. Ended, changed, or paused shares cannot produce a stale nudge.
 
 The native desktop face is built with `sh native/build_watch.sh`. It sits above the menu bar across Spaces while a browser watch lease is alive, and disappears when watching stops or the browser disconnects. The local `/watch` heartbeat accepts only a token and a boolean, never screen pixels. All automated browser testing uses `?mute=1`.

@@ -450,3 +450,9 @@ The mic, when explicitly enabled by the user, now remains available during think
 Validation: 53 Python tests and all eight browser regression suites pass. A real headless Chrome run at `?mute=1` used a synthetic canvas display: zero image requests on startup, exactly one real vision request after the actual 60-second threshold, then a second real answer from the same single share. It verified the global “gimme 3 minutes” timer and tab-share refusal. Both vision requests returned success. Window metadata confirmed the native face at the top-right (Y=0), level 26, above the menu bar. No personal screen or camera was captured by this test. Repeat with `tools/verify_screen_watch.cjs` when Playwright is available; it makes two live vision calls. Physical audible nudges and Space switching remain user acceptance checks.
 
 Full live preflight: **13 pass, 0 fail, 2 warn** (inactive API backend skipped).
+
+## Single screen control — October 16
+
+Removed the separate Screen control. The single Watch screen button starts the entire-screen share and monitoring together, then becomes Stop watching. Stopping by button or voice closes both; screen questions reuse the same share. A tab/window selection is released immediately with guidance to select Entire Screen.
+
+Validation: all eight browser regression suites and full preflight pass (**13 pass, 0 fail, 2 warn**, both warnings are skipped inactive API checks). The live muted-browser acceptance includes an explicit assertion that only one Watch screen control exists, the real 60-second nudge, a follow-up question using the same share, relief, and stop/rejected-tab cleanup.

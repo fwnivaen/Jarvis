@@ -5,7 +5,7 @@ const src=html.match(/<script type="module">([\s\S]*?)<\/script>/)[1];
 const elements=new Map(),requests=[],spoken=[],draws=[];
 let content='first',resolveReply,thinking=false,ended;
 const el=id=>{if(!elements.has(id))elements.set(id,{textContent:'',value:'',classList:{add(){},remove(){}},setAttribute(){},replaceChildren(){},focus(){}});return elements.get(id)};
-const track={readyState:'live',muted:false,stop(){this.readyState='ended'},addEventListener(type,fn){ended=fn}};
+const track={readyState:'live',muted:false,getSettings:()=>({displaySurface:'monitor'}),stop(){this.readyState='ended'},addEventListener(type,fn){ended=fn}};
 const stream={active:true,getTracks:()=>[track],getVideoTracks:()=>[track]};
 const video={readyState:2,videoWidth:3200,videoHeight:1800,play:async()=>{}};
 const ctx={console,AbortController,JSON,Math,Error,screenStream:undefined,
