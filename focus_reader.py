@@ -53,7 +53,19 @@ class Reader:
         self._ticks = 0
         self._app_only = False
 
+    def diagnostic(self):
+        # A read-only probe: never arm, settle, or replace the real target.
+        probe = Reader(self._query)
+        probe._target = self._target
+        probe.sample()
+        return dict(probe._diag, settle_ticks=self._ticks,
+                    app_target=self._target is not None,
+                    tab_target=bool(self._target and self._target[1]))
+
     def sample(self, arm=False, settle=False, app_only=False, from_card=False, naming=False):
+        self._diag = dict(front_readable=False, is_browser=False, tab_status='not_applicable',
+                          front_is_jarvis=False, hash_present=False,
+                          app_on_target=False, tab_on_target=False)
         try:
             # A new CLI process queries System Events EVERY sample. Never NSWorkspace notifications.
             front = self._query(FRONT_SCRIPT)
@@ -61,6 +73,7 @@ class Reader:
             label = app_name if naming else ''
             if not bundle:
                 raise ValueError
+            self._diag.update(front_readable=True, is_browser=bundle in CHROME_IDS)
             background = from_card or bundle in OWN_IDS
             if background:
                 if bundle not in CHROME_IDS:
@@ -72,6 +85,7 @@ class Reader:
                     raise ValueError
             if bundle in CHROME_IDS:
                 self._browser = bundle
+            self._diag['app_on_target'] = bool(self._target and bundle == self._target[0])
             host_hash, home = None, False
             if bundle in CHROME_IDS and not (app_only or self._app_only):
                 script = f'''tell application id "{bundle}"
@@ -90,6 +104,7 @@ if focusedTitle is not browserTitle then error "Focused window unavailable"
 return surface'''
                 if background:
                     script = script.split('tell application "System Events"')[0] + 'return surface'
+                self._diag['tab_status'] = 'unavailable'
                 surface = self._query(script)
                 url, window_id, tab_id = surface.rsplit('\n', 2)
                 parsed = urlsplit(url)
@@ -99,6 +114,8 @@ return surface'''
                 home = parsed.scheme == 'http' and host in HOME_HOSTS and parsed.port == HOME_PORT and parsed.path in ('/', '/index.html')
                 label = host_label(host) if naming and parsed.scheme in ('http', 'https') and not home else ''
                 host_hash = hashlib.sha256(f'{host}\n{window_id}\n{tab_id}'.encode()).digest()
+            self._diag.update(tab_status='readable' if host_hash else 'not_applicable',
+                              front_is_jarvis=home, hash_present=host_hash is not None)
             # Never scan other windows. Discard a read if foreground changed during scripting.
             if not background and self._query(FRONT_SCRIPT).partition('\n')[0] != bundle:
                 raise ValueError
@@ -112,11 +129,16 @@ return surface'''
                     if not settle or self._ticks >= SETTLE_TICKS:
                         self._target = identity
                         self._app_only = app_only
+            self._diag.update(app_on_target=bool(self._target and bundle == self._target[0]),
+                              tab_on_target=bool(host_hash and identity == self._target))
             result = {'known': True, 'home': home, 'target': identity == self._target,
                       'locked': self._target is not None}
             if naming:
                 result['label'] = label if not home and not background and identity != self._target else ''
             return result
         except (OSError, ValueError, subprocess.TimeoutExpired):
+            self._diag['tab_on_target'] = False
+            if self._diag['tab_status'] == 'readable':
+                self._diag.update(tab_status='foreground_changed', app_on_target=False, front_is_jarvis=False)
             self._candidate, self._ticks = None, 0
             return {'known': False, 'home': False, 'target': False, 'locked': self._target is not None}

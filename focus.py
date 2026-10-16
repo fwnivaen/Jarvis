@@ -7,6 +7,7 @@ import re
 import subprocess
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from focus_reader import Reader
 
@@ -30,6 +31,10 @@ MAX_DURATION_S = 12 * 60 * 60
 CLEAN_THRESHOLD = 0.85
 SECONDS_PER_MINUTE = 60
 LEDGER_PATH = Path(__file__).resolve().parent / 'ledger-focus.json'
+RECORD_KEYS = frozenset({'timestamp', 'planned_minutes', 'active_minutes', 'on_target_minutes',
+                         'drifts', 'seconds_adrift', 'percent', 'completed'})
+TICK_STALE_S = 5
+PERCENT_SCALE = 100
 PRIVATE_MODE = 0o600
 CARD_PATH = Path(__file__).resolve().parent / '.local' / 'JarvisFocusCard'
 CARD_STOP_TIMEOUT_S = 2
@@ -152,6 +157,8 @@ class Focus:
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.card = None
+        self.tick_thread = None
+        self.tick_seen = self.clock()
         self.ledger = dict.fromkeys(LEDGER_KEYS, 0)
         self.ledger_ok = True
         try:
@@ -215,6 +222,39 @@ class Focus:
             elif self.active and not self.paused and not self.armed and not self.eye_counted:
                 self.drifts += 1
                 self.eye_counted = True
+
+    def diagnostic(self):
+        # Do not wait on the session lock: a wedged tick must remain diagnosable.
+        result = self.reader.diagnostic()
+        result.update(lock_deferred=bool(self.armed), session_on=bool(self.active),
+                      tick_thread_alive=bool(self.tick_thread and self.tick_thread.is_alive()),
+                      tick_status='fresh' if self.clock()-self.tick_seen < TICK_STALE_S else 'stalled')
+        return result
+
+    @staticmethod
+    def validate_record(values):
+        # Reject extra keys AND non-scalar values before touching disk.
+        if not isinstance(values, dict) or set(values) != RECORD_KEYS or type(values['timestamp']) is not str or type(values['completed']) is not bool:
+            raise ValueError('Invalid focus record')
+        datetime.fromisoformat(values['timestamp'])
+        if any(type(values[k]) not in (int, float) or not math.isfinite(values[k]) or values[k] < 0
+               for k in RECORD_KEYS - {'timestamp', 'completed'}):
+            raise ValueError('Invalid focus record')
+
+    def write_record(self, values):
+        self.validate_record(values)
+        path = self.path.with_name(self.path.stem + '-sessions.json')
+        records = json.loads(path.read_text()) if path.exists() else []
+        if not isinstance(records, list):
+            raise ValueError('Invalid focus history')
+        for record in records:
+            self.validate_record(record)
+        records.append({key: values[key] for key in RECORD_KEYS})
+        temporary = path.with_suffix('.tmp')
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, PRIVATE_MODE)
+        with os.fdopen(fd, 'w') as output:
+            json.dump(records, output, allow_nan=False)
+        os.replace(temporary, path)
 
     def state(self):
         with self.lock:
@@ -340,6 +380,16 @@ class Focus:
                 os.replace(temporary, self.path)
             except OSError:
                 self.ledger_ok = False
+        try:
+            self.write_record(dict(timestamp=datetime.now(timezone.utc).isoformat(),
+                planned_minutes=self.planned/SECONDS_PER_MINUTE,
+                active_minutes=self.elapsed/SECONDS_PER_MINUTE,
+                on_target_minutes=self.on_target/SECONDS_PER_MINUTE,
+                drifts=self.drifts, seconds_adrift=self.drift_time,
+                percent=PERCENT_SCALE*self.on_target/max(MIN_DURATION_S, self.planned),
+                completed=self.completed))
+        except (OSError, ValueError, TypeError):
+            self.ledger_ok = False
         self.reader.clear()
         self._clear_excursion()
         report = (f"{'Aborted' if aborted else 'Session complete'}. {self.on_target/SECONDS_PER_MINUTE:.{REPORT_DECIMALS}f} minutes on target "
@@ -347,7 +397,7 @@ class Focus:
         if self.intent:
             report += f' Focus: {self.intent_label()}.'
         if not self.ledger_ok:
-            report += ' The aggregate ledger could not be saved.'
+            report += ' The focus ledger could not be saved.'
         self.say(report)
         return report
 
@@ -445,11 +495,13 @@ class Focus:
             deadline = self.clock()
             while not self.stop_event.is_set():
                 self.tick()
+                self.tick_seen = self.clock()
                 deadline += TICK_S
                 if deadline < self.clock():
                     deadline = self.clock()
                 self.stop_event.wait(max(0, deadline-self.clock()))
-        threading.Thread(target=loop, name='focus-tick', daemon=True).start()
+        self.tick_thread = threading.Thread(target=loop, name='focus-tick', daemon=True)
+        self.tick_thread.start()
         if CARD_PATH.is_file():
             self.card = subprocess.Popen([str(CARD_PATH)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

@@ -433,6 +433,7 @@ class MacRecognition {
     isOccupied: () => thinking || speaking || externalSpeaking || pending || buffer.length>0 || Date.now()<quietUntil,
     quietFor(ms) { quietUntil=Date.now()+ms; },
     isEnabled: () => enabled,
+    intentWindowOpen: () => Boolean(answerHandler),
     stopSpeech,
     cancelAnswer() {
       if (!answerHandler) return;

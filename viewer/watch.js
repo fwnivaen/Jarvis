@@ -4,12 +4,14 @@
  const WIDTH=96, HEIGHT=54, CHANNELS=4, RGB=3, PIXEL_DELTA=20, CHANGE_FRACTION=.008;
  const REQUEST_MS=130000, HEARTBEAT_MS=4000;
  const PROMPT='The screen has been mostly unchanged for one minute. From this single current screenshot, offer one concrete next step that could help with the visible task. Do not assume I am stuck or claim to know what I did earlier. Be direct, useful, and at most two short sentences; dry wit only if useful.';
- function changed(a,b) {
-  if(!a || a.length!==b.length)return true;
+ function difference(a,b) {
+  if(!a || a.length!==b.length)return 1;
   let count=0;
   for(let i=0;i<b.length;i+=CHANNELS){let delta=0;for(let c=0;c<RGB;c++)delta+=Math.abs(a[i+c]-b[i+c]);if(delta/RGB>PIXEL_DELTA)count++;}
-  return count/(b.length/CHANNELS)>=CHANGE_FRACTION;
+  return count/(b.length/CHANNELS);
  }
+ function changed(a,b){return difference(a,b)>=CHANGE_FRACTION;}
+ let debug={last_pixel_diff:null, pixel_gate:CHANGE_FRACTION, nudge_gate:false};
  function create(io) {
   let active=false,previous=null,stillAt=0,nextAt=0,generation=0,motion=0,inFlight=false,controller=null,timer,heartbeat;
   const token=crypto.randomUUID();
@@ -35,13 +37,15 @@
    if(!active)return;
    try {
     const pixels=io.thumbnail(WIDTH,HEIGHT),now=performance.now();
+    debug.last_pixel_diff=difference(previous,pixels);
     if(changed(previous,pixels)){stillAt=now;motion++;}
     previous=pixels;
-    if(!inFlight && now-stillAt>=STILL_MS && now>=nextAt && !io.quiet())nudge(now);
+    debug.nudge_gate=!inFlight && now-stillAt>=STILL_MS && now>=nextAt && !io.quiet();
+    if(debug.nudge_gate)nudge(now);
    }catch {previous=null;stillAt=performance.now();motion++;}
    timer=setTimeout(tick,SAMPLE_MS);
   }
   return {start,stop,tick,isActive:()=>active};
  }
- window.JarvisWatch={create,changed};
+ window.JarvisWatch={create,changed,difference,debug:()=>({...debug})};
 })();

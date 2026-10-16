@@ -107,7 +107,7 @@ The report gives minutes permitted/on-target out of planned minutes, drift count
 and streak. A non-aborted session earns a streak increment when credited time is
 at least 85% of **planned** time; ending early is not a shortcut. The private,
 ignored `ledger-focus.json` stores totals only (sessions, aborts, planned seconds,
-on-target seconds, drifts, streak). It stores no session history or timestamps.
+on-target seconds, drifts, streak). This legacy aggregate file stores no session history or timestamps; session records are stored separately as described below.
 If that ledger is malformed or unwritable, the report says it could not be saved.
 
 ### macOS 27 permissions, before live testing
@@ -234,3 +234,40 @@ The native desktop face is built with `sh native/build_watch.sh`. It sits above 
 Brain introductions use `CURATED_LINES` near the top of `server.py` first, then the new brain's own introduction, then a readable-name fallback. GPT-6 Astra cycles through six lines per server session (including swaps between providers); the cycle repeats only after all six have played. Button requests, spoken commands, resets, and the chat answer control tag `[[SWITCH_MODEL: alias]]` all use `swap_model`.
 
 Local `model_aliases` configuration maps exact spoken names to `[backend, model_id]` pairs. Astra's spoken forms (`astra`, `gpt-6 astra`, `gpt 6 astra`, `gpt-6`) are pinned to `codex-cli` / `gpt-6-astra`; unsupported exact IDs are refused rather than replaced with catalogue neighbours.
+
+
+### Focus truth instruments
+
+`GET /focus/diag` reads the foreground through the reader owned by the running
+server without arming, settling or changing a target. It returns only booleans,
+a settle counter and fixed status enums: foreground readability/browser status,
+tab read status, Jarvis-home/hash presence, app/tab target presence and current
+lane matches, deferred lock, active session, tick-thread liveness and freshness.
+It does not wait for the session lock, so a stuck tick remains diagnosable.
+`tick_thread_alive` alone is insufficient: `tick_status` must also be `fresh`.
+Unknown reads are not evidence of drift. No identity, title, URL or hash is returned.
+
+Open `/?focusdebug=1` for the overlay: session flags, deferred lock, drifts,
+excused state, intent-answer window, last changed-pixel fraction, pixel threshold
+and nudge gate. A null pixel diff means no screen sample yet; no pixels are stored.
+
+Each finished or aborted session appends a strict record to the private ignored
+`ledger-focus-sessions.json`: `timestamp` (UTC), `planned_minutes`, `active_minutes`,
+`on_target_minutes`, `drifts`, `seconds_adrift`, `percent`, `completed`. Percent is
+on-target / planned × 100; active minutes exclude paused/unreadable/deferred time.
+Completed follows the existing end-session semantics (false for abort). Existing
+`ledger-focus.json` remains the legacy totals/streak store; it is not session history.
+Extra keys, nested values, nonfinite numbers and invalid history are rejected.
+
+`/?focusprobe=1` serves a separate, hermetic browser fixture using the actual focus
+controller and pixel comparison. It mocks network, speech and the timer queue;
+no camera, microphone, model, session or ledger is touched. Its title contains a
+summary and PASS/FAIL for every case. Run visibly at **1440×900**; click Run battery
+after setting the viewport if needed. Viewport and visibility are assertions, and
+controller timing uses a deterministic queue rather than hidden-tab wall time.
+This tests viewer behavior; full `python3 preflight.py` independently checks the
+running server and live model chains. Neither substitutes for reproducing a
+reported physical foreground-switch failure.
+
+Before any field fix, follow the debugging law in AGENTS.md: live diag, ledger,
+window count, assistant-tab host, then the exact user flow with instruments on.

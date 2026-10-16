@@ -474,3 +474,87 @@ class FocusTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class InstrumentTests(unittest.TestCase):
+    setUp = FocusTests.setUp
+    tick = FocusTests.tick
+    def test_record_whitelist_and_rejection(self):
+        from focus import RECORD_KEYS
+        self.focus.command('start', 60)
+        self.focus.intent = 'SECRET identity'
+        self.focus.ledger['untrusted'] = 'SECRET'
+        self.tick(10)
+        self.focus.command('end')
+        path = self.path.with_name('ledger-sessions.json')
+        before = path.read_bytes()
+        record = json.loads(before)[0]
+        self.assertEqual(set(record), RECORD_KEYS)
+        self.assertNotIn('SECRET', before.decode())
+        self.assertAlmostEqual(record['active_minutes'], 10/60)
+        self.assertTrue(record['completed'])
+        for key in ('url', 'host', 'hash', 'bundle', 'intent', 'app', 'title', 'arbitrary'):
+            with self.assertRaises(ValueError):
+                self.focus.write_record(dict(record, **{key:'SECRET'}))
+            self.assertEqual(path.read_bytes(), before)
+        for key in RECORD_KEYS - {'timestamp', 'completed'}:
+            for bad in ('SECRET', {'url':'SECRET'}, float('nan'), float('inf'), True):
+                with self.assertRaises(ValueError):
+                    self.focus.write_record(dict(record, **{key:bad}))
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_diag_live_read_does_not_lock_or_settle(self):
+        self.focus.command('start', 60, defer_lock=True)
+        before = (self.reader._target, self.reader._candidate, self.reader._ticks)
+        diag = self.focus.diagnostic()
+        self.assertEqual(before, (self.reader._target, self.reader._candidate, self.reader._ticks))
+        self.assertTrue(diag['front_readable'])
+        self.assertTrue(diag['hash_present'])
+        self.assertFalse(diag['tick_thread_alive'])
+        self.assertEqual(set(diag), {'front_readable','is_browser','tab_status','front_is_jarvis',
+            'hash_present','app_on_target','tab_on_target','settle_ticks','app_target','tab_target',
+            'lock_deferred','session_on','tick_thread_alive','tick_status'})
+        self.bundle = None
+        self.assertFalse(self.focus.diagnostic()['front_readable'])
+        self.assertNotIn('SECRET', json.dumps(diag))
+        self.clock.value += 10
+        self.assertEqual(self.focus.diagnostic()['tick_status'], 'stalled')
+
+    def test_diag_survives_locked_tick_and_tab_failure(self):
+        import threading
+        self.focus.command('start', 60)
+        original = self.reader._query
+        def broken_tab(script):
+            if script != FRONT_SCRIPT:
+                raise OSError('SECRET')
+            return original(script)
+        self.reader._query = broken_tab
+        held, release = threading.Event(), threading.Event()
+        def hold():
+            with self.focus.lock:
+                held.set()
+                release.wait(2)
+        thread = threading.Thread(target=hold)
+        thread.start()
+        held.wait(1)
+        try:
+            diag = self.focus.diagnostic()
+            self.assertTrue(thread.is_alive())
+            self.assertTrue(diag['app_on_target'])
+            self.assertEqual(diag['tab_status'], 'unavailable')
+            self.assertFalse(diag['tab_on_target'])
+        finally:
+            release.set()
+            thread.join()
+
+    def test_record_abort_and_poisoned_history(self):
+        self.focus.command('start', 60)
+        self.focus.command('abort')
+        path = self.path.with_name('ledger-sessions.json')
+        record = json.loads(path.read_text())[0]
+        self.assertFalse(record['completed'])
+        poisoned = dict(record, on_target_minutes={'url':'SECRET'})
+        path.write_text(json.dumps([poisoned]))
+        before = path.read_bytes()
+        with self.assertRaises(ValueError):
+            self.focus.write_record(record)
+        self.assertEqual(before, path.read_bytes())

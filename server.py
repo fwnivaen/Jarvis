@@ -195,6 +195,7 @@ PUBLIC_FILES = {"/": ("index.html", "text/html; charset=utf-8"),
                 "/focus.js": ("focus.js", "text/javascript; charset=utf-8"),
                 "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
                 "/graph-data.js": ("graph-data.js", "text/javascript; charset=utf-8")}
+PUBLIC_FILES["/focus-probe.js"] = ("focus-probe.js", "text/javascript")
 PUBLIC_FILES.update({"/" + name: (name, "application/wasm" if name.endswith(".wasm") else "text/javascript" if name.endswith((".js", ".mjs")) else "application/octet-stream") for name in ('vision.mjs', 'vision_wasm_internal.js', 'vision_wasm_internal.wasm', 'vision_wasm_nosimd_internal.js', 'vision_wasm_nosimd_internal.wasm', 'face_landmarker.task', 'pose_landmarker.task')})
 CAPTURE_TITLE_WORDS = 7
 CAPTURE_TITLE_CHARS = 80
@@ -736,6 +737,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlsplit(self.path).path
         if path == "/watch":
             self.send_bytes(json.dumps(WATCH.state()).encode(), "application/json", head=head)
+            return
+        if path == "/focus/diag":
+            self.send_bytes(json.dumps(FOCUS.diagnostic()).encode(), "application/json", head=head)
+            return
+        if path == "/" and urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('focusprobe') == ['1']:
+            self.send_bytes((VIEWER_DIR / 'focus-probe.html').read_bytes(), "text/html; charset=utf-8", head=head)
             return
         if path == "/focus":
             self.send_bytes(json.dumps(FOCUS.state()).encode(), "application/json", head=head)

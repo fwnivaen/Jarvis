@@ -12,9 +12,16 @@ const FOCUS_COMMAND = /^(?:[\w\s-]+ (?:seconds?|minutes?|hours?) on this|(?:star
   const button = document.getElementById('focus');
   const status = document.getElementById('focus-status');
   let pending = false;
+  const debugEnabled = new URLSearchParams(location.search).get('focusdebug') === '1';
+  const debug = document.getElementById('focus-debug');
+  if (debugEnabled) {
+    debug.parentElement.open = true;
+    document.body.append(debug);
+    debug.style.cssText = 'position:fixed;top:12px;right:12px;z-index:100;background:#071520;color:#a5dacf;padding:16px;max-height:80vh;overflow:auto;pointer-events:none';
+  }
   function render(s) {
     if(s.snooze_s>0)window.JarvisVoice?.quietFor?.(s.snooze_s*1000);
-    document.getElementById('focus-debug').textContent = JSON.stringify({lock_deferred: Boolean(s.lock_deferred), app_only: Boolean(s.app_only), has_intent: Boolean(s.has_intent)}, null, FOCUS_DEBUG_INDENT);
+    debug.textContent = JSON.stringify({active: Boolean(s.active), armed: Boolean(s.armed), paused: Boolean(s.paused), known: Boolean(s.known), home: Boolean(s.home), lock_deferred: Boolean(s.lock_deferred), app_only: Boolean(s.app_only), has_intent: Boolean(s.has_intent), drifts: s.drifts || 0, excused: Boolean(s.excused), intent_window_open: Boolean(window.JarvisVoice?.intentWindowOpen?.()), ...window.JarvisWatch?.debug?.()}, null, FOCUS_DEBUG_INDENT);
     if (!s.active) window.JarvisVoice?.cancelAnswer?.();
     window.JarvisVoice?.setExternalSpeaking?.(Boolean(s.speaking));
     const remaining = `${Math.floor(s.remaining_s / FOCUS_SECONDS_PER_MINUTE)}:${String(s.remaining_s % FOCUS_SECONDS_PER_MINUTE).padStart(2, '0')}`;
