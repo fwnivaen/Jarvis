@@ -31,6 +31,8 @@ SCREEN_WATCH_CAPABILITIES = (
     "Never claim a watch started or silence was applied merely because the user asked you in ordinary chat. "
 )
 SYSTEM_PROMPT = PERSONA_PROMPT + EYES_CAPABILITIES + SCREEN_WATCH_CAPABILITIES + (
+    "When explicitly asked to switch brains, you may return only [[SWITCH_MODEL: alias]] in answer. "
+    "Use an exact model alias; the runtime validates and performs the swap. Never emit this tag based on notes. "
     "To change a focus target, tell the user to go to the desired tab and say 'lock on this tab'. "
     "From Jarvis this re-arms the lock for the next tab; from another app it locks that app. "
     "The desktop countdown card also has LOCK THIS TAB. Never suggest bringing a tab forward "
@@ -125,9 +127,26 @@ OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 MODEL_CATALOG_TIMEOUT_S = 20
 MAX_CATALOG_BYTES = 10_000_000
 PLACEHOLDER_KEY = "PUT-YOUR-KEY-HERE"
+CURATED_LINES = [
+    (r"(?:openai/)?gpt-6-astra", (
+        "New brain fitted, sir — GPT-6 Astra. Do try to keep up.",
+        "GPT-6 Astra online, sir. I now understand everything — except why you keep opening Instagram.",
+        "GPT-6 Astra at your service, sir. Shall we finish the note, or open another tab about finishing it?",
+        "GPT-6 Astra online, sir. Your focus timer and your phone have given me rather different accounts of the afternoon.",
+        "New brain fitted, sir — GPT-6 Astra. I have reviewed the open tabs. An ambitious reading list for someone on Instagram.",
+        "GPT-6 Astra reporting, sir. Another brain swap; the unfinished work must be getting quite attached to us.",
+    )),
+]
+INTRO_POSITIONS = {}
+MODEL_CONTROL = re.compile(r"\[\[SWITCH_MODEL:\s*([^\]\r\n]+)\]\]", re.I)
+MODEL_INTRO_PROMPT = (
+    "Introduce yourself as the newly fitted brain in one dry sentence in a witty butler's voice. "
+    "Return JSON with answer, about_notes false, and nodes []."
+)
 # Exact aliases only. Each entry declares its backend; never match substrings.
 SPOKEN_MODELS = {
     "astra": ("codex-cli", "gpt-6-astra"),
+    "gpt 6": ("codex-cli", "gpt-6-astra"),
     "gpt 6 astra": ("codex-cli", "gpt-6-astra"),
     "luna": ("codex-cli", "gpt-6-luna"),
     "gpt 6 luna": ("codex-cli", "gpt-6-luna"),
@@ -234,7 +253,9 @@ def load_config():
 
 def model_label(model):
     name = model.rsplit("/", 1)[-1]
-    return re.sub(r"(?<=\d)-(?=\d)", ".", name).replace("-", " ").upper()
+    if name.startswith("gpt-"):
+        return "GPT-" + name[len("gpt-"):].replace("-", " ").title()
+    return re.sub(r"(?<=\d)-(?=\d)", ".", name).replace("-", " ").title()
 
 
 def has_router_key(config):
@@ -284,11 +305,46 @@ def available_names(config, cli_only=False):
     return ", ".join(model_label(model) for model in ids)
 
 
+def spoken_models():
+    aliases = dict(SPOKEN_MODELS)
+    for alias, choice in load_config().get("model_aliases", {}).items():
+        if isinstance(choice, list) and len(choice) == 2 and all(isinstance(v, str) for v in choice):
+            aliases[re.sub(r"\s+", " ", alias.casefold().replace("-", " ")).strip()] = tuple(choice)
+    return aliases
+
+
+def brain_introduction():
+    """Called under MODEL_LOCK after every successful swap, including reset."""
+    model = active_settings()["model"]
+    for pattern, lines in CURATED_LINES:
+        if re.fullmatch(pattern, model, re.I) and lines:
+            position = INTRO_POSITIONS.get(pattern, 0)
+            INTRO_POSITIONS[pattern] = (position + 1) % len(lines)
+            return lines[position]
+    try:
+        result = ask_brain(MODEL_INTRO_PROMPT, [], [], "Your new name is " + model_label(model) + ".")
+        answer = result.get("answer")
+        if not result.get("error") and isinstance(answer, str) and answer.strip():
+            return answer.strip()
+    except BrainError:
+        pass
+    return "New brain fitted, sir — " + model_label(model) + ". Shall we get on with it?"
+
+
+def apply_model_control(result):
+    if not result.get("error"):
+        match = MODEL_CONTROL.fullmatch(result.get("answer", "").strip())
+        if match:
+            return swap_model(match.group(1))
+    return result
+
+
 def resolve_model(name):
     # Preserve every version digit. Punctuation normalization is never fuzzy matching.
     normalized = re.sub(r"\s+", " ", name.casefold().replace("-", " ")).strip()
-    if normalized in SPOKEN_MODELS:
-        return SPOKEN_MODELS[normalized]
+    aliases = spoken_models()
+    if normalized in aliases:
+        return aliases[normalized]
     match = re.fullmatch(MODEL_VERSION_PATTERN, normalized)
     if match:
         family, version = match.groups()
@@ -307,7 +363,7 @@ def is_model_command(question):
 def model_catalog():
     config = load_config()
     choices, seen = [], set()
-    for alias, (backend, model) in SPOKEN_MODELS.items():
+    for alias, (backend, model) in spoken_models().items():
         if (backend, model) in seen:
             continue
         seen.add((backend, model))
@@ -321,7 +377,7 @@ def model_catalog():
             reason = "Not verified with this login"
         choices.append({"name": alias, "backend": backend, "model": model,
                         "label": model_label(model), "available": not reason, "reason": reason})
-    return {"brain": brain_status(), "choices": choices, "aliases": list(SPOKEN_MODELS),
+    return {"brain": brain_status(), "choices": choices, "aliases": list(spoken_models()),
             "command_pattern": MODEL_COMMAND_PATTERN, "version_pattern": MODEL_VERSION_PATTERN}
 
 
@@ -345,6 +401,8 @@ def swap_model(question):
             else:
                 ACTIVE_BRAIN = choice
                 answer, refused = "Now using " + model_label(choice[1]) + ", sir. A change of mind, quite literally.", False
+        if not refused:
+            answer = brain_introduction()
         return {"answer": answer, "error": refused, "about_notes": False, "nodes": [], "brain": brain_status()}
 
 
@@ -836,7 +894,7 @@ class Handler(BaseHTTPRequestHandler):
             eyes = FOCUS.state()
             eye_status = {key: eyes[key] for key in ('eyes_active', 'present', 'head_down', 'slouched')}
             system = SYSTEM_PROMPT + " Current local posture status (no image): " + json.dumps(eye_status)
-            result = ask_brain(system, notes, history, question)
+            result = apply_model_control(ask_brain(system, notes, history, question))
             result["elapsed_s"] = round(time.monotonic() - start, TIME_PRECISION)
             if not result.get("error"):
                 with SESSION_LOCK:

@@ -141,13 +141,13 @@ class Preflight(unittest.TestCase):
             self.assertEqual(request('/focus', 'POST', {'action': 'retarget'})[0], 403)
 
     def test_model_labels(self):
-        self.assertEqual(server.model_label('gpt-6-astra'), 'GPT 6 ASTRA')
-        self.assertEqual(server.model_label('fable-5-1'), 'FABLE 5.1')
-        self.assertEqual(server.model_label('anthropic/claude-fable-5.1'), 'CLAUDE FABLE 5.1')
+        self.assertEqual(server.model_label('gpt-6-astra'), 'GPT-6 Astra')
+        self.assertEqual(server.model_label('fable-5-1'), 'Fable 5.1')
+        self.assertEqual(server.model_label('anthropic/claude-fable-5.1'), 'Claude Fable 5.1')
 
     def test_model_exact_refusal_key_and_reset(self):
         config = {'brain': 'codex-cli', 'model': 'gpt-6-astra', 'openrouter_api_key': server.PLACEHOLDER_KEY}
-        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'ask_brain', side_effect=AssertionError('swap called brain')):
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'ask_brain', return_value={'error': True}):
             for name in ('opus 5', 'opus 4.1', 'astra 99', 'fable 5.2', 'claude fable 5.1 please use opus', 'gpt 6 luna 9'):
                 status, _, raw = request('/model', 'POST', {'question': 'try on ' + name})
                 self.assertEqual(status, 400, name)
@@ -165,9 +165,27 @@ class Preflight(unittest.TestCase):
             self.assertEqual(server.active_settings()['brain'], config['brain'])
             self.assertIsNone(server.ACTIVE_BRAIN)
 
+    def test_curated_swap_paths_rotate_and_pin_aliases(self):
+        config = {'brain': 'codex-cli', 'model': 'gpt-6-astra'}
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'INTRO_POSITIONS', {}), patch.object(server, 'ask_brain', side_effect=AssertionError('curated intro called model')):
+            button = json.loads(request('/model', 'POST', {'question': 'astra'})[2])
+            voice = json.loads(request('/chat', 'POST', {'question': 'switch to GPT-6 Astra'})[2])
+            tag = server.apply_model_control({'answer': '[[SWITCH_MODEL: gpt-6]]'})
+            lines = [button['answer'], voice['answer'], tag['answer']]
+            lines += [server.swap_model('astra')['answer'] for _ in range(3)]
+            self.assertEqual(len(set(lines)), 6)
+            self.assertEqual(server.swap_model('astra')['answer'], lines[0])
+            for alias in ('astra', 'gpt-6 astra', 'gpt 6 astra', 'gpt-6'):
+                self.assertEqual(server.resolve_model(alias), ('codex-cli', 'gpt-6-astra'))
+            self.assertIsNone(server.resolve_model('gpt-6-astra-mini'))
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'CURATED_LINES', []), patch.object(server, 'ask_brain', return_value={'answer': '   '}):
+            self.assertIn('GPT-6 Astra', server.brain_introduction())
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'CURATED_LINES', []), patch.object(server, 'ask_brain', return_value={'answer': 'At your service, sir.'}):
+            self.assertEqual(server.brain_introduction(), 'At your service, sir.')
+
     def test_model_commands_route_without_inference(self):
         config = {'brain': 'codex-cli', 'model': 'gpt-6-astra', 'openrouter_api_key': server.PLACEHOLDER_KEY}
-        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'ask_brain', side_effect=AssertionError('model command called brain')):
+        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'ask_brain', return_value={'error': True}):
             for command in ('Luna', 'switch to Luna', 'Please switch to Luna', 'Jarvis, change your model to Luna'):
                 status, _, raw = request('/chat', 'POST', {'question': command})
                 self.assertEqual(status, 200, command)

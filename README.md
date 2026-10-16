@@ -230,3 +230,7 @@ The browser compares 96×54 thumbnails every five seconds. Thumbnails never leav
 “Gimme 3 minutes” silences Eyes, Focus, screen nudges, and late spoken replies. Screen nudges also wait while you speak or ask a question. The single **Watch screen** button becomes **Stop watching** while active. Click it or say “stop watching” to end both watching and the share. Ended, changed, or paused shares cannot produce a stale nudge.
 
 The native desktop face is built with `sh native/build_watch.sh`. It sits above the menu bar across Spaces while a browser watch lease is alive, and disappears when watching stops or the browser disconnects. The local `/watch` heartbeat accepts only a token and a boolean, never screen pixels. All automated browser testing uses `?mute=1`.
+
+Brain introductions use `CURATED_LINES` near the top of `server.py` first, then the new brain's own introduction, then a readable-name fallback. GPT-6 Astra cycles through six lines per server session (including swaps between providers); the cycle repeats only after all six have played. Button requests, spoken commands, resets, and the chat answer control tag `[[SWITCH_MODEL: alias]]` all use `swap_model`.
+
+Local `model_aliases` configuration maps exact spoken names to `[backend, model_id]` pairs. Astra's spoken forms (`astra`, `gpt-6 astra`, `gpt 6 astra`, `gpt-6`) are pinned to `codex-cli` / `gpt-6-astra`; unsupported exact IDs are refused rather than replaced with catalogue neighbours.
