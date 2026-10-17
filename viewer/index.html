@@ -1,193 +1,27 @@
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Jarvis — Your knowledge, connected</title>
-<style>
-
-/* Visual tokens. Motion and layout tuning stay here. Breakpoints: 1100 / 700 px. */
-:root {
-  color-scheme: dark;
-  --bg: #030811; --surface: #071421; --glass: #06111deb;
-  --line: #76caff20; --line-bright: #70dfff55; --text: #e3f3ff;
-  --muted: #7c99b2; --dim: #46627b; --accent: #69e0ff; --mint: #91f4dc;
-  --sidebar: 224px; --header: 76px; --panel-width: 320px; --chat-width: 760px;
-  --radius: 16px; --small-radius: 8px; --hairline: 1px;
-  --font: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
-  --type-xs: 9px; --type-sm: 10px; --type-md: 11px; --type-body: 12px;
-  --type-base: 13px; --type-brand: 19px; --type-title: 30px; --type-note: 23px;
-  --type-metric: 25px; --type-icon: 20px;
-  --space-1: 4px; --space-2: 6px; --space-3: 8px; --space-4: 10px;
-  --space-5: 12px; --space-6: 16px; --space-7: 20px; --space-8: 24px;
-  --space-9: 28px; --space-10: 32px; --space-11: 36px; --space-12: 40px;
-  --logo-size: 35px; --avatar-size: 30px; --input-height: 36px;
-  --button-size: 38px; --group-dot: 5px; --chat-bottom: 22px;
-  --chat-margin: 56px; --chat-reserve: 225px; --answer-height: 132px;
-  --detail-top: 110px; --detail-reserve: 315px; --detail-slide: 14px;
-  --ring-size: 400px; --ring-gap: 22px; --ring-alpha: .3;
-  --ring-top: 43%; --ring-left: 50%; --ring-start: -50%;
-  --metric-width: 115px; --metric-top: 158px; --grid-size: 64px;
-  --tracking-small: 1.6px; --tracking-brand: 4px; --tracking-tight: -.8px;
-  --line-height: 1.75; --blur: 22px; --focus-width: 2px;
-  --transition: 220ms; --entry-duration: 800ms; --panel-duration: 350ms;
-  --orbit-duration: 100s; --reverse-duration: 140s; --sweep-duration: 16s;
-  --pulse-duration: 2400ms; --think-duration: 1200ms; --rise-distance: 12px;
-  --glow-small: 12px; --glow-large: 40px; --shadow: 0 16px 64px #0007;
-  --disabled-alpha: .4; --focus-alpha: .8;
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
-body { background: var(--bg); color: var(--text); font: var(--type-base) var(--font); }
-button, input { font: inherit; }
-button { cursor: pointer; color: inherit; border: 0; }
-button, input { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, input:focus-visible { outline: var(--focus-width) solid var(--accent); outline-offset: var(--space-1); }
-button { transition: background var(--transition), color var(--transition), border-color var(--transition), transform var(--transition); }
-[hidden] { display: none !important; }
-.app-header {
-  height: var(--header); position: absolute; z-index: 4; inset: 0 0 auto;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 var(--space-9); border-bottom: var(--hairline) solid var(--line);
-  background: linear-gradient(90deg, #081728ed, #050d17f5);
-}
-.brand { display: flex; align-items: center; gap: var(--space-5); font-size: var(--type-brand); letter-spacing: var(--tracking-brand); font-weight: 600; }
-.brand-icon { width: var(--logo-size); height: var(--logo-size); display: grid; place-items: center; position: relative; color: var(--accent); border: var(--hairline) solid var(--line-bright); border-radius: 50%; font-size: var(--type-icon); letter-spacing: 0; box-shadow: 0 0 var(--glow-small) #53cfff1a, inset 0 0 var(--glow-small) #53cfff20; }
-.brand-icon::after { content: ''; position: absolute; inset: calc(-1 * var(--space-1)); border: var(--hairline) dashed #66d5ff45; border-radius: 50%; animation: orbit-ring var(--orbit-duration) linear infinite; }
-.brand small { margin-left: var(--space-8); padding-left: var(--space-8); border-left: var(--hairline) solid var(--line); font: var(--type-xs) var(--mono); letter-spacing: var(--tracking-small); color: var(--muted); }
-.header-right { display: flex; align-items: center; gap: var(--space-8); color: var(--muted); font: var(--type-xs) var(--mono); letter-spacing: var(--tracking-small); }
-.status-dot { display: inline-block; width: var(--group-dot); height: var(--group-dot); border-radius: 50%; background: var(--mint); box-shadow: 0 0 var(--glow-small) var(--mint); margin-right: var(--space-3); animation: status-pulse var(--pulse-duration) ease-in-out infinite; }
-.avatar { width: var(--avatar-size); height: var(--avatar-size); border-radius: var(--small-radius); border: var(--hairline) solid var(--line); display: grid; place-items: center; background: #b7dcff08; color: #c2d8e8; font-size: var(--type-sm); letter-spacing: 0; }
-.sidebar { position: absolute; z-index: 3; left: 0; top: var(--header); bottom: 0; width: var(--sidebar); padding: var(--space-8) var(--space-6); display: flex; flex-direction: column; border-right: var(--hairline) solid var(--line); background: linear-gradient(160deg,#081624f2,#040c16f5); animation: rise-in var(--entry-duration) ease both; }
-.eyebrow { font: var(--type-xs) var(--mono); color: var(--muted); letter-spacing: var(--tracking-small); text-transform: uppercase; }
-.workspace { margin: var(--space-5) 0 var(--space-7); display: flex; align-items: center; gap: var(--space-4); font-size: var(--type-body); font-weight: 550; }
-.workspace-icon { width: var(--avatar-size); height: var(--avatar-size); border-radius: var(--small-radius); display: grid; place-items: center; color: var(--accent); background: #54cfff0c; border: var(--hairline) solid #54cfff20; }
-.search { flex-shrink: 0; width: 100%; height: var(--input-height); background: #00000030; border: var(--hairline) solid var(--line); border-radius: var(--small-radius); padding: 0 var(--space-5); color: var(--text); font-size: var(--type-md); transition: border-color var(--transition); }
-.search::placeholder { color: var(--dim); }
-.search:focus { border-color: var(--line-bright); }
-.section-label { margin: var(--space-8) 0 var(--space-4); display: flex; justify-content: space-between; }
-.group-list { display: grid; gap: var(--space-1); }
-.group { background: transparent; padding: var(--space-4); border-radius: var(--small-radius); text-align: left; color: #849eb4; display: flex; gap: var(--space-4); align-items: center; font-size: var(--type-md); border: var(--hairline) solid transparent; }
-.group:hover { background: #73c8ff09; color: var(--text); transform: translateX(var(--space-1)); }
-.group.active { background: linear-gradient(90deg,#55cdff14,#55cdff03); color: var(--accent); border-color: #55cdff24; box-shadow: inset var(--focus-width) 0 var(--accent); }
-.dot { width: var(--group-dot); height: var(--group-dot); border-radius: 50%; background: var(--group-color); box-shadow: 0 0 var(--glow-small) var(--group-color); }
-.count { margin-left: auto; font: var(--type-xs) var(--mono); color: var(--dim); }
-.group.active .count { color: var(--accent); }
-.note-list { overflow: auto; min-height: var(--space-12); flex: 1; scrollbar-width: thin; scrollbar-color: #65cfff20 transparent; }
-.note-button { display: block; width: 100%; text-align: left; padding: var(--space-3) var(--space-4); background: transparent; color: #8da5b9; font-size: var(--type-md); border-radius: var(--small-radius); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.note-button:hover, .note-button.active { color: var(--text); background: #65cfff0a; }
-.note-button::before { content: '◇'; margin-right: var(--space-3); color: var(--dim); }
-.note-button.active::before { color: var(--accent); }
-.no-results { color: var(--muted); font-size: var(--type-md); }
-.sidebar-bottom { border-top: var(--hairline) solid var(--line); padding-top: var(--space-6); margin-top: var(--space-6); color: var(--dim); font-size: var(--type-xs); line-height: var(--line-height); }
-.sidebar-bottom strong { color: var(--muted); font-weight: 400; }
-.stage { position: absolute; left: var(--sidebar); right: 0; top: var(--header); bottom: 0; isolation: isolate; }
-.stage::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 43%,transparent 20%,#03081150 75%); z-index: 1; }
-.scene-heading { position: absolute; z-index: 2; top: var(--space-9); left: var(--space-10); pointer-events: none; animation: rise-in var(--entry-duration) ease both; }
-.scene-heading .eyebrow { color: #64c9eeb0; }
-.scene-heading h1 { font-size: var(--type-title); font-weight: 450; letter-spacing: var(--tracking-tight); margin: var(--space-4) 0; }
-.scene-heading p { font-size: var(--type-md); color: var(--muted); margin: 0; }
-.scene-controls { position: absolute; z-index: 3; right: var(--space-8); top: var(--space-9); display: flex; gap: var(--space-3); }
-.control { background: #061320e0; border: var(--hairline) solid var(--line); padding: var(--space-4) var(--space-5); border-radius: var(--small-radius); font: var(--type-xs) var(--mono); color: var(--muted); }
-.control:hover { color: var(--text); border-color: var(--line-bright); box-shadow: 0 0 var(--glow-small) #69e0ff10; }
-.control.active { color: var(--accent); background: #69e0ff0b; border-color: #69e0ff35; }
-#graph { position: absolute; inset: 0; z-index: 0; }
-#graph canvas { display: block; }
-#graph::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 43%,#147abf0b,transparent 60%); }
-#load-state { position: absolute; inset: var(--ring-top) 20% auto; text-align: center; color: var(--muted); z-index: 2; font: var(--type-md) var(--mono); }
-.orbital-hud { position: absolute; z-index: 1; pointer-events: none; width: min(var(--ring-size),65%); aspect-ratio: 1; left: var(--ring-left); top: var(--ring-top); transform: translate(var(--ring-start),var(--ring-start)); opacity: var(--ring-alpha); }
-.orbit-ring { position: absolute; inset: 0; border: var(--hairline) solid #47b5ed48; border-radius: 50%; animation: orbit-ring var(--orbit-duration) linear infinite; }
-.orbit-ring::before, .orbit-ring::after { content: ''; position: absolute; border-radius: 50%; }
-.orbit-ring::before { inset: var(--space-2); border: var(--focus-width) solid transparent; border-top-color: #62dfff; border-bottom-color: #62dfff; transform: rotate(30deg); }
-.orbit-ring::after { inset: calc(-1 * var(--space-3)); border: var(--hairline) dashed #64ceff65; }
-.orbit-ring.inner { inset: var(--ring-gap); border-style: dashed; animation-direction: reverse; animation-duration: var(--reverse-duration); }
-.orbit-ring.inner::before { inset: var(--space-4); border-width: var(--hairline); border-top-color: #60dfff45; border-bottom-color: transparent; }
-.orbit-ring.inner::after { display: none; }
-.hud-cross { position: absolute; inset: 50% calc(-1 * var(--space-5)) auto; border-top: var(--hairline) solid #4c9fc725; }
-.hud-cross::after { content: ''; position: absolute; width: var(--hairline); height: var(--ring-size); left: 50%; top: calc(var(--ring-size) / -2); background: #4c9fc725; }
-.network-metrics { position: absolute; z-index: 2; top: var(--metric-top); right: var(--space-8); width: var(--metric-width); display: grid; gap: var(--space-7); pointer-events: none; animation: rise-in var(--entry-duration) ease both; }
-.metric { border-left: var(--hairline) solid var(--line-bright); padding-left: var(--space-5); }
-.metric strong { display: block; color: #b9eaff; font: 300 var(--type-metric) var(--font); letter-spacing: var(--tracking-tight); }
-.metric span { display: block; margin-top: var(--space-1); font: var(--type-xs) var(--mono); color: var(--dim); letter-spacing: var(--tracking-small); text-transform: uppercase; }
-.stage:has(.detail:not([hidden])) .network-metrics { opacity: 0; }
-.scene-foot { position: absolute; z-index: 2; bottom: var(--chat-reserve); left: var(--space-10); right: var(--space-8); display: flex; justify-content: space-between; font: var(--type-xs) var(--mono); letter-spacing: var(--tracking-small); color: var(--dim); pointer-events: none; }
-.detail { position: absolute; z-index: 5; top: var(--detail-top); right: var(--space-8); width: var(--panel-width); max-height: calc(100% - var(--detail-reserve)); background: linear-gradient(140deg,#0b2134f5,#07111ef5); border: var(--hairline) solid #69d0ff30; border-radius: var(--radius); padding: var(--space-8); box-shadow: var(--shadow); overflow: auto; backdrop-filter: blur(var(--blur)); animation: panel-in var(--panel-duration) ease both; scrollbar-width: thin; scrollbar-color: #69d0ff30 transparent; }
-.detail::before { content: ''; position: absolute; top: 0; left: var(--space-8); right: var(--space-8); height: var(--hairline); background: linear-gradient(90deg,transparent,var(--accent),transparent); }
-.close { position: absolute; right: var(--space-5); top: var(--space-4); background: transparent; color: var(--muted); font-size: var(--type-icon); }
-.close:hover { color: var(--accent); }
-.detail h2 { font-weight: 450; line-height: 1.3; font-size: var(--type-note); letter-spacing: var(--tracking-tight); margin: var(--space-6) 0; }
-.excerpt { white-space: pre-wrap; color: #a4b9ca; font-size: var(--type-body); line-height: var(--line-height); border-top: var(--hairline) solid var(--line); padding-top: var(--space-6); }
-.related { margin-top: var(--space-7); padding-top: var(--space-6); border-top: var(--hairline) solid var(--line); }
-.related button { display: block; background: transparent; color: #9cdced; padding: var(--space-3) 0; font-size: var(--type-md); text-align: left; }
-.related button:hover { color: var(--text); transform: translateX(var(--space-1)); }
-.chat { position: absolute; z-index: 5; bottom: var(--chat-bottom); left: 50%; transform: translateX(-50%); width: min(var(--chat-width),calc(100% - var(--chat-margin))); background: linear-gradient(120deg,#0a1a2bea,#05101cf5); border: var(--hairline) solid #74cbff30; border-radius: var(--radius); box-shadow: var(--shadow),0 0 var(--glow-large) #0d87c509; backdrop-filter: blur(var(--blur)); }
-.chat::before { content: ''; position: absolute; left: 10%; right: 10%; top: calc(-1 * var(--hairline)); height: var(--hairline); background: linear-gradient(90deg,transparent,#8ae7ffb0,transparent); }
-.chat-top { padding: var(--space-7) var(--space-7) var(--space-5); display: flex; gap: var(--space-5); }
-.brain-icon { width: var(--avatar-size); height: var(--avatar-size); flex-shrink: 0; border-radius: 50%; border: var(--hairline) solid #69e0ff45; background: #69e0ff09; color: var(--accent); display: grid; place-items: center; font-size: var(--type-icon); box-shadow: inset 0 0 var(--glow-small) #69e0ff15; }
-.answer-area { flex: 1; min-width: 0; }
-.answer-label { font: var(--type-xs) var(--mono); letter-spacing: var(--tracking-small); color: var(--accent); margin: var(--space-1) 0 var(--space-3); }
-.answer { font-size: var(--type-body); color: #b3c9da; line-height: var(--line-height); margin: 0; max-height: var(--answer-height); overflow: auto; white-space: pre-wrap; scrollbar-width: thin; }
-.answer-meta { font: var(--type-xs) var(--mono); color: var(--muted); margin-top: var(--space-3); }
-.sources { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); }
-.sources:empty { display: none; }
-.source { background: #69e0ff08; border: var(--hairline) solid #69e0ff25; border-radius: var(--small-radius); color: #a3dced; font-size: var(--type-xs); padding: var(--space-1) var(--space-3); }
-.source:hover { background: #69e0ff16; border-color: var(--accent); }
-.chat-form { display: flex; gap: var(--space-5); align-items: center; padding: var(--space-5) var(--space-5) var(--space-5) var(--space-7); border-top: var(--hairline) solid var(--line); background: #00000015; border-radius: 0 0 var(--radius) var(--radius); }
-.chat-form input { flex: 1; min-width: 0; color: var(--text); background: transparent; border: 0; font-size: var(--type-body); }
-.chat-form input::placeholder { color: #688ba6; }
-.send { height: var(--button-size); min-width: var(--button-size); background: linear-gradient(135deg,#a0eeff,#55bdff); color: #04253a; border-radius: var(--small-radius); font-size: var(--type-icon); box-shadow: 0 0 var(--glow-small) #69e0ff20; }
-.send:hover { transform: translateY(calc(-1 * var(--hairline))); box-shadow: 0 0 var(--glow-small) #69e0ff55; }
-.send:disabled { opacity: var(--disabled-alpha); cursor: wait; transform: none; }
-.shortcut { color: var(--dim); font: var(--type-xs) var(--mono); }
-.thinking::after { content: ' · · ·'; animation: status-pulse var(--think-duration) infinite; }
-.chat:has(.thinking) .brain-icon { animation: brain-pulse var(--think-duration) ease-in-out infinite; }
-.chat:has(.thinking)::before { animation: status-pulse var(--think-duration) infinite; }
-.welcome-questions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-5); }
-.welcome-questions button { font-size: var(--type-xs); color: #88adc5; background: #69e0ff05; border: var(--hairline) solid #69e0ff18; padding: var(--space-2) var(--space-3); border-radius: var(--small-radius); }
-.welcome-questions button:hover { color: var(--accent); background: #69e0ff0e; border-color: #69e0ff40; }
-@keyframes orbit-ring { to { transform: rotate(360deg); } }
-@keyframes status-pulse { 50% { opacity: var(--disabled-alpha); } }
-@keyframes brain-pulse { 50% { box-shadow: 0 0 var(--glow-small) #69e0ff70; border-color: var(--accent); } }
-@keyframes rise-in { from { opacity: 0; translate: 0 var(--rise-distance); } to { opacity: 1; translate: 0 0; } }
-@keyframes panel-in { from { opacity: 0; translate: var(--detail-slide) 0; } to { opacity: 1; translate: 0 0; } }
-@media (max-width: 1100px) {
-  :root { --sidebar: 208px; --type-title: 26px; --panel-width: 290px; --ring-size: 340px; --metric-width: 82px; --type-metric: 22px; }
-  .brand small { display: none; }
-  .scene-controls { top: auto; bottom: var(--chat-reserve); }
-  .scene-foot span:last-child { display: none; }
-}
-@media (max-width: 700px) {
-  :root { --sidebar: 0px; --header: 64px; --type-title: 25px; --ring-size: 280px; --chat-margin: 24px; --chat-bottom: 12px; --answer-height: 110px; --panel-width: calc(100% - 24px); --detail-top: 110px; --detail-reserve: 335px; --space-10: 22px; }
-  .sidebar, .local-label, .network-metrics, .scene-foot, .shortcut { display: none; }
-  .app-header { padding: 0 var(--space-7); }
-  .scene-heading { left: var(--space-7); top: var(--space-8); }
-  .scene-controls { right: var(--space-5); }
-  .detail { right: var(--space-5); }
-  .chat-top { padding: var(--space-6); }
-  .welcome-questions button:last-child { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-}
-
-.brain-chip { display:inline-block; padding:var(--space-2) var(--space-3); margin-bottom:var(--space-2); border:var(--hairline) solid #69e0ff40; border-radius:var(--small-radius); color:var(--accent); font-size:var(--type-xs); }
-#brain-picker { color:var(--accent); background:#071b29; border:var(--hairline) solid #69e0ff60; border-radius:var(--small-radius); padding:var(--space-5); max-width:calc(100vw - var(--space-5)); }
-#brain-picker::backdrop { background:#000a; }
-.brain-picker-heading { display:flex; align-items:center; justify-content:space-between; gap:var(--space-4); }
-#brain-picker h2 { font-size:var(--type-icon); }
-#brain-picker p { color:#88adc5; font-size:var(--type-xs); }
-#brain-picker-close { color:var(--accent); padding:var(--space-2); }
-.brain-choice { display:block; width:100%; text-align:left; color:var(--accent); padding:var(--space-3); margin-top:var(--space-2); border:var(--hairline) solid #69e0ff40; border-radius:var(--small-radius); }
-.brain-choice:hover, .brain-choice:focus-visible { background:#163c50; }
-.brain-choice[aria-disabled="true"] { color:#88adc5; }
-.brain-choice small { display:block; margin-top:var(--space-2); }
-</style></head>
+<script src="/theme.js"></script>
+<link rel="stylesheet" href="/tokens.css"><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/focus-v2.css"><link rel="stylesheet" href="/orb.css"></head>
 <body>
-<header class="app-header"><div class="brand"><span class="brand-icon">✧</span>JARVIS<small>PERSONAL INTELLIGENCE / V.01</small></div><div class="header-right"><span class="local-label"><i class="status-dot"></i>LOCAL WORKSPACE</span><span id="screen-indicator" role="status" hidden style="color:#ffb4b4;border:var(--focus-width) solid #ff6060;padding:var(--space-3)">● SCREEN SHARING LIVE</span><span class="avatar">JK</span></div></header>
-<aside class="sidebar"><div class="eyebrow">Your workspace</div><div class="workspace"><span class="workspace-icon">⌘</span>Juniper Kitchen</div><input id="search" class="search" placeholder="⌕  Find a note…" aria-label="Find a note"><div class="section-label eyebrow"><span>Constellations</span><span id="group-count"></span></div><nav id="groups" class="group-list" aria-label="Filter by note group"></nav><div class="section-label eyebrow"><span id="notes-label">All notes</span><span id="note-count"></span></div><nav id="note-list" class="note-list" aria-label="Notes"></nav><div class="sidebar-bottom"><strong>PRIVATE WORKSPACE · LOCAL FILES</strong><br>Fictional café · Sample collection<br><span id="index-summary">Reading your notes…</span></div></aside>
-<main class="stage" id="stage"><div class="scene-heading"><div class="eyebrow">NEURAL ATLAS / JUNIPER KITCHEN</div><h1>A universe of ideas.</h1><p>Every note, connected. Every answer, grounded.</p></div><div class="scene-controls"><button id="orbit" class="control active" aria-pressed="true">◌ &nbsp; Auto orbit</button><button id="reset" class="control">↗ &nbsp; Recenter</button></div><div id="graph" aria-label="Interactive 3D graph of your notes"></div><div class="orbital-hud" aria-hidden="true"><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="hud-cross"></div></div>
-<div class="network-metrics" aria-label="Knowledge overview"><div class="metric"><strong id="metric-notes"></strong><span>Notes</span></div><div class="metric"><strong id="metric-links"></strong><span>Connections</span></div><div class="metric"><strong id="metric-groups"></strong><span>Groups</span></div></div><div id="load-state" role="status">Connecting your constellation…</div><div class="scene-foot"><span>DRAG TO EXPLORE &nbsp; / &nbsp; SCROLL TO TRAVEL</span><span id="graph-stats"></span></div>
-<aside class="detail" id="detail" hidden aria-label="Selected note"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div></aside>
-<details id="eyes-panel" hidden style="position:absolute;z-index:6;right:var(--space-5);top:var(--space-5);max-width:320px;max-height:60vh;overflow:auto;background:#071520;padding:var(--space-4);border:1px solid #315068;border-radius:var(--small-radius)"><summary>Local camera · tracking</summary><canvas id="eyes-preview" width="320" height="240" style="max-width:100%" aria-label="Local camera preview with face and shoulder tracking markers"></canvas><p id="eyes-tracking" role="status"></p><p id="eyes-nudge-status" role="status"></p><button id="eyes-recalibrate" type="button">Reset upright posture</button><label> Head-down sensitivity <select id="eyes-sensitivity"><option value="8">Sensitive</option><option value="12" selected>Balanced</option><option value="20">Less sensitive</option></select></label><small style="display:block">Preview stays on this machine. Sit upright and look ahead when resetting.</small></details><section class="chat" aria-label="Ask your notes"><div class="chat-top"><div class="brain-icon">✧</div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker" title="Choose a brain">BRAIN · CONNECTING ▾</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are. What would you like to explore?</p><div class="welcome-questions" id="suggestions"><button data-question="What are our Quarterly Goals?">What are our quarterly goals?</button><button data-question="What does Menu Pricing say about the bowls?">How are the bowls priced?</button><button data-question="How will the Staffing Plan reduce pickup waits?">How can we speed up lunch?</button></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready · click to enable voice</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div></div></div><form class="chat-form" id="chat-form"><input id="question" placeholder="Ask anything about your notes…" aria-label="Question about your notes" required autocomplete="off"><button class="control" id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><details><summary>Focus details</summary><pre id="focus-debug"></pre></details><button class="control" id="eyes" type="button" aria-pressed="false">Eyes</button><span id="eyes-status" role="status"></span><button class="control" id="screen" type="button" aria-pressed="false">Watch screen</button><span id="watch-status" role="status"></span><button class="control" id="screen-notes" type="button" hidden>Use notes</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="control" id="stop-speech" type="button">Stop</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form></section></main>
+<header class="app-header"><div class="header-inner"><div class="brand"><span class="brand-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v5m0 12v5M1 12h5m12 0h5M4 4l4 4m8 8l4 4M4 20l4-4M16 8l4-4"/></svg></span>JARVIS<small id="build-version">LOCAL</small><span class="breadcrumb" id="breadcrumb">/ Knowledge Galaxy</span></div><nav class="segments" role="tablist" aria-label="Workspace"><button role="tab" id="tab-galaxy" data-workspace="galaxy" aria-selected="true">Galaxy</button><button role="tab" id="tab-notes" data-workspace="notes" aria-selected="false">Notes</button><button role="tab" id="tab-work" data-workspace="work" aria-selected="false">Work</button></nav><div class="header-right"><span class="local-label"><i class="status-dot" id="system-dot"></i><span id="system-status">CONNECTING</span></span><span id="screen-indicator" role="status" hidden></span><button class="search-launch" id="command-launch" aria-label="Search notes and commands"><svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></svg><span>Search anything</span><kbd>⌘ K</kbd></button></div></div></header>
+<main class="stage" id="stage">
+<aside class="sidebar" aria-label="Constellations"><div class="eyebrow">Your universe</div><div class="workspace" id="workspace-name">Knowledge Galaxy</div><div class="sidebar-count" id="index-summary">Reading your notes…</div><input id="search" class="search" placeholder="Find a note" aria-label="Find a note"><span id="group-count" hidden></span><nav id="groups" class="group-list" aria-label="Filter by note group"></nav><span id="notes-label" hidden>All notes</span><span id="note-count" hidden></span><nav id="note-list" class="note-list" aria-label="Notes"></nav></aside>
+<div id="graph" aria-label="Interactive 3D graph of your notes"></div><div id="galaxy-labels" aria-hidden="true"></div><svg id="card-leaders" aria-hidden="true"></svg><div id="load-state" role="status">Opening your universe…</div>
+<div class="scene-controls" aria-label="Galaxy zoom"><button id="orbit" class="control" aria-pressed="false">Auto orbit</button><button id="reset" class="control">Recenter</button><button id="zoom-out" class="zoom-control" aria-label="Zoom out">−</button><output id="zoom-value" aria-live="off">100%</output><button id="zoom-in" class="zoom-control" aria-label="Zoom in">+</button><button id="fit" class="zoom-control">Fit</button></div><div class="scene-foot"><span>Drag to orbit · Scroll to zoom</span><span id="graph-stats"></span></div><div class="network-metrics" hidden><span id="metric-notes"></span><span id="metric-links"></span><span id="metric-groups"></span></div>
+<div id="jarvis-orb-host"></div>
+<aside class="detail" id="detail" hidden aria-label="Selected note" tabindex="-1"><button class="close" id="close-detail" aria-label="Close note">×</button><div class="eyebrow" id="detail-group"></div><h2 id="detail-title"></h2><div class="note-metadata" id="detail-meta"></div><div class="excerpt" id="detail-excerpt"></div><div class="related"><div class="eyebrow">Connected notes</div><div id="related-list"></div></div><div class="card-actions"><button id="detail-edit">Edit</button><button id="detail-ask">Ask JARVIS</button><button id="detail-open">Open in Notes ↗</button></div></aside>
+<aside id="preview" class="preview" hidden aria-label="Note preview"><button id="preview-pin" class="pin" aria-label="Pin note" aria-pressed="false">Pin</button><div class="eyebrow" id="preview-group"></div><h2 id="preview-title"></h2><p id="preview-excerpt"></p><div class="answer-meta" id="preview-meta"></div><div class="card-actions"><button id="preview-open">Open note ↗</button><button id="preview-ask">Ask JARVIS</button><button id="preview-close" aria-label="Close preview">Esc</button></div></aside>
+<details id="eyes-panel" hidden><summary>Local camera · tracking</summary><canvas id="eyes-preview" width="320" height="240" aria-label="Local camera preview with face and shoulder tracking markers"></canvas><p id="eyes-tracking" role="status"></p><p id="eyes-nudge-status" role="status"></p><button id="eyes-recalibrate" type="button">Reset upright posture</button><label>Head-down sensitivity <select id="eyes-sensitivity"><option value="8">Sensitive</option><option value="12" selected>Balanced</option><option value="20">Less sensitive</option></select></label><small>Preview stays on this machine. Sit upright and look ahead when resetting.</small></details>
+<section class="chat" id="chat" aria-label="Ask your notes"><div class="chat-top" id="answer-card" data-idle="true"><button class="answer-close" id="answer-close" aria-label="Close answer">×</button><div class="brain-icon" aria-hidden="true"></div><div class="answer-area"><button class="brain-chip" id="brain-chip" type="button" aria-haspopup="dialog" aria-controls="brain-picker">Choose brain</button><div class="answer-label" id="answer-label">JARVIS / ASK YOUR KNOWLEDGE</div><p id="answer-question" class="answer-question" hidden></p><p class="answer" id="answer" role="status" aria-live="polite">Ready when you are, sir.</p><div class="welcome-questions" id="suggestions"></div><div class="answer-meta" id="voice-status" role="status" aria-live="polite">Ready</div><div class="sources" id="sources"></div><div class="answer-meta" id="answer-meta" hidden></div><div class="answer-actions"><button id="answer-read">Read full answer</button><button id="answer-galaxy">Show on galaxy</button></div></div></div>
+<form class="chat-form" id="chat-form"><input id="question" placeholder="Ask your galaxy anything…" aria-label="Question about your notes" required autocomplete="off"><button id="command-model" class="command-model" type="button" aria-haspopup="dialog">Model</button><button class="control" id="computer-control" type="button" aria-label="Computer control connection status" aria-pressed="false">⌘</button><button class="control" id="mic" type="button" aria-label="Toggle microphone" aria-pressed="false">Mic</button><button class="send" id="send" type="submit" aria-label="Send question">↑</button></form><div class="command-hint">Grounded in your notes · ↵ ask<span class="desktop-hint"> · Space hold to talk</span></div>
+<div class="utility-controls"><button id="focus" type="button">FOCUS</button><span id="focus-status" role="status"></span><details><summary>Focus details</summary><pre id="focus-debug"></pre></details><button id="eyes" type="button" aria-pressed="false">Eyes</button><span id="eyes-status" role="status"></span><button id="screen" type="button" aria-pressed="false">Watch screen</button><span id="watch-status" role="status"></span><button id="screen-notes" type="button" hidden>Use notes</button><button id="stop-speech" type="button">Stop</button></div></section>
+<div id="workspace-view" class="workspace-view" hidden></div><div id="insight" class="insight-pill" role="status" hidden></div><div id="galaxy-tree" class="sr-only" role="tree" aria-label="Knowledge Galaxy: constellations, notes and links"></div><div id="live-region" class="sr-only" role="status" aria-live="polite"></div>
+</main>
+<dialog id="command-palette" aria-label="Search notes and commands"><div class="dialog-heading"><span class="eyebrow">Your universe, within reach</span><button id="palette-close" aria-label="Close commands">Esc</button></div><input id="palette-input" class="palette-input" placeholder="Search notes, workspaces, and actions…" aria-label="Search commands" role="combobox" aria-expanded="true" aria-controls="palette-results" autocomplete="off"><div id="palette-results" class="palette-results" role="listbox"></div></dialog>
+<dialog id="full-answer" aria-labelledby="full-answer-title"><div class="dialog-heading"><h2 id="full-answer-title">JARVIS answer</h2><button id="full-answer-close" aria-label="Close full answer">Close</button></div><p id="full-answer-text" class="note-content"></p></dialog>
 <script src="graph-data.js"></script>
+<script src="/ui.js" defer></script>
 <dialog id="brain-picker" aria-labelledby="brain-picker-title">
  <div class="brain-picker-heading"><h2 id="brain-picker-title">Choose a brain</h2><button id="brain-picker-close" type="button" aria-label="Close brain chooser">Close</button></div>
  <p>Click a model or say “switch to Luna”. Changes last until restart.</p>
@@ -219,6 +53,8 @@ const FINISH_MS = 900;
 const NATIVE_POLL_MS = 150;
 const ATTENTION_HEARTBEAT_MS = 1000;
 const ECHO_TAIL_MS = 1200;
+const WAKE_WINDOW_MS = 8000;
+const WAKE_PHRASE = /(?:^|[\s,.!?])(?:(?:hey|okay|ok)\s+)?jarvis\b[\s,.:;!?-]*/ig;
 class MacRecognition {
   constructor() { this.closed=false; this.token=null; this.sequence=0; this.lastText=''; }
   async call(action, data={}) {
@@ -228,7 +64,7 @@ class MacRecognition {
   }
   async start() {
     try {
-      const state=await this.call('start');
+      const state=await this.call('start',{device_id:window.JarvisVoice?.inputDevice?.()??window.JarvisOrb?.microphoneDevice?.()??''});
       if(state.status==='error')throw new Error(state.text);
       this.token=state.token;
       if(this.closed){await this.call('stop',{token:this.token});return;}
@@ -239,6 +75,7 @@ class MacRecognition {
     if(this.closed)return;
     try {
       const state=await this.call('poll',{token:this.token});
+      window.JarvisOrb?.nativeAudio(state.audio);
       if(this.closed)return;
       if(state.status==='error')throw new Error(state.text);
       this.onstatus?.(state.status==='permission'?state.text:state.status==='starting'?'Starting Mac microphone…':'');
@@ -264,28 +101,43 @@ class MacRecognition {
   let Recognition = window.SpeechRecognition || window.webkitSpeechRecognition || MacRecognition;
   let activated = false, thinking = false, speaking = false, externalSpeaking = false, enabled = false;
   let recognition = null, timer = null, buffer = [], pending = false, generation = 0;
-  let notice = '', submit = null, answerHandler = null, outputText = '', quietUntil = 0, echoUntil = 0;
+  let notice = '', submit = null, answerHandler = null, outputText = '', quietUntil = 0, echoUntil = 0, latestInput = '', inputDevice = '';
+  let wakeRequired=false,wakeOpen=false,wakeTimer=null,holdActive=false;
   const normalizeSpeech = text => text.toLowerCase().replace(/[^a-z0-9 ]/g,'').trim();
   function attention() {
     if(typeof fetch==='function')fetch('/attention',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});
   }
   function attentionLoop() { if(enabled && (pending || buffer.length || thinking || speaking))attention(); setTimeout(attentionLoop,ATTENTION_HEARTBEAT_MS); }
   attentionLoop();
-  function bargeIn() { if(speaking)echoUntil=Date.now()+ECHO_TAIL_MS; generation++; speaking=false; externalSpeaking=false; synth?.cancel(); attention(); status(); }
+  function bargeIn() { if(speaking)echoUntil=Date.now()+ECHO_TAIL_MS; generation++; speaking=false; externalSpeaking=false; synth?.cancel(); window.JarvisOrb?.stopSpeech?.(); attention(); status(); }
   function status() {
     el('voice-status').textContent = thinking ? 'Thinking…' : (speaking || externalSpeaking) ? 'Speaking…' :
-      enabled ? notice || 'Listening…' : notice || 'Ready';
+      enabled ? notice || (wakeRequired&&!wakeOpen&&!answerHandler&&!holdActive?'Awaiting “Jarvis”…':'Listening…') : notice || 'Ready';
     el('mic').disabled = !Recognition;
     el('mic').setAttribute('aria-pressed', String(enabled));
     el('mic').textContent = enabled ? 'Mic on' : 'Mic';
+    window.JarvisOrb?.updateVoice({enabled,thinking,speaking:speaking||externalSpeaking,externalSpeaking,pending:pending||buffer.length>0,notice,activated,wakeListening:enabled&&wakeRequired&&!wakeOpen&&!answerHandler&&!holdActive,backend:Recognition===MacRecognition?'native':'browser'});
   }
   function clearBuffer() {
-    clearTimeout(timer); timer = null; buffer = []; pending = false;
+    clearTimeout(timer); timer = null; buffer = []; pending = false;latestInput='';
+  }
+  function resetWake() { clearTimeout(wakeTimer);wakeTimer=null;wakeOpen=false; }
+  function openWake() {
+    clearTimeout(wakeTimer);wakeOpen=true;
+    wakeTimer=setTimeout(()=>{resetWake();clearBuffer();latestInput='';if(enabled){haltRecognition();listen();}status();},WAKE_WINDOW_MS);
+  }
+  function wakePayload(text) {
+    WAKE_PHRASE.lastIndex=0;let match,last=null;
+    while((match=WAKE_PHRASE.exec(text))!==null)last=match;
+    if(last){openWake();return text.slice(last.index+last[0].length).trim();}
+    if(!wakeOpen)return null;
+    openWake();return text.trim();
   }
   function stopSpeech() {
     const wasSpeaking = speaking;
     generation++; speaking = false;
     if (synth) synth.cancel();
+    window.JarvisOrb?.stopSpeech?.();
     clearBuffer();
     if (wasSpeaking && Recognition === MacRecognition && enabled && !thinking) { haltRecognition(); listen(); }
     status();
@@ -330,6 +182,8 @@ class MacRecognition {
       if (Recognition === MacRecognition && enabled && !thinking) { haltRecognition(); clearBuffer(); listen(); }
       listen(); status();
     } };
+    if (window.JarvisOrb?.playSpeech && await window.JarvisOrb.playSpeech(text,{isCurrent:()=>token===generation,onEnd:finish})) return;
+    if (token !== generation) return;
     utterance.onend = finish;
     utterance.onerror = () => {
       if (token === generation) { notice = 'Voice unavailable · answer shown above'; finish(); }
@@ -345,7 +199,7 @@ class MacRecognition {
     if (!buffer.length || pending || thinking || externalSpeaking) return;
     timer = setTimeout(() => {
       const question = buffer.join(' ').trim();
-      clearBuffer();
+      clearBuffer();latestInput='';resetWake();
       if (!thinking && !externalSpeaking && enabled && question && submit) {
         el('question').value = question;
         if (window.JarvisEyes?.isRelief(question) || window.JarvisEyes?.matches(question) || window.JarvisEyes?.isCommand(question) || window.JarvisFocus?.matches(question)) { submit(question); }
@@ -369,6 +223,18 @@ class MacRecognition {
       if (window.JarvisEyes?.isRelief(interruptText)) { clearBuffer(); window.JarvisEyes.relief(interruptText); return; }
       const heard=normalizeSpeech(interruptText);
       if((speaking || Date.now()<echoUntil) && heard && outputText.includes(heard))return;
+      if(/^(stop|wait)[.!?,]*$/i.test(interruptText)){latestInput='';stopSpeech();resetWake();status();return;}
+      if(wakeRequired&&!answerHandler&&!holdActive){
+        const text=wakePayload(interruptText);
+        if(text===null){clearBuffer();latestInput='';status();return;}
+        if(window.JarvisEyes?.isRelief(text)){clearBuffer();resetWake();window.JarvisEyes.relief(text);status();return;}
+        if(speaking||externalSpeaking)bargeIn();
+        attention();clearTimeout(timer);latestInput=text;buffer=text?[text]:[];
+        pending=!event.native&&Array.from(event.results).some(result=>!result.isFinal);
+        if(/^(stop|wait)[.!?,]*$/i.test(text)){latestInput='';stopSpeech();resetWake();status();return;}
+        schedule();status();return;
+      }
+      latestInput=interruptText;
       if(speaking || externalSpeaking)bargeIn();
       attention();
       if(event.native){
@@ -423,13 +289,29 @@ class MacRecognition {
   }, {capture: true});
   el('mic').onclick = () => {
     if (!Recognition) return;
-    enabled = !enabled; notice = ''; clearBuffer();
+    enabled = !enabled; notice = ''; latestInput=''; clearBuffer(); resetWake();
     if (enabled) listen(); else haltRecognition();
     status();
   };
   el('stop-speech').onclick = stopSpeech;
   window.JarvisVoice = {
     speak,
+    activate() { activated=true; status(); },
+    setWakeWord(value) { const next=value===true;if(next===wakeRequired)return;wakeRequired=next;resetWake();clearBuffer();latestInput='';if(enabled){haltRecognition();listen();}status(); },
+    wakeWordEnabled: () => wakeRequired,
+    beginHold() { holdActive=true;resetWake();status(); },
+    endHold() { holdActive=false;status(); },
+    inputDevice: () => inputDevice,
+    setInputDevice(deviceId) { inputDevice=typeof deviceId==='string'?deviceId:''; haltRecognition(); clearBuffer(); latestInput=''; Recognition=MacRecognition; if(enabled)listen(); status(); },
+    finishHold() {
+      const question=buffer.join(' ').trim()||latestInput.trim();
+      clearBuffer(); latestInput=''; enabled=false;holdActive=false;resetWake();haltRecognition();status();
+      if(!question||!submit)return;
+      el('question').value=question;
+      if(window.JarvisEyes?.isRelief(question)||window.JarvisEyes?.matches(question)||window.JarvisEyes?.isCommand(question)||window.JarvisFocus?.matches(question))submit(question);
+      else if(answerHandler){const handler=answerHandler;answerHandler=null;handler(question);}
+      else submit(question);
+    },
     isOccupied: () => thinking || speaking || externalSpeaking || pending || buffer.length>0 || Date.now()<quietUntil,
     quietFor(ms) { quietUntil=Date.now()+ms; },
     isEnabled: () => enabled,
@@ -467,58 +349,65 @@ class MacRecognition {
   status();
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/3d-force-graph@1.79.0/dist/3d-force-graph.min.js"></script>
+<script src="/orb.js"></script>
+<script src="/3d-force-graph.min.js"></script>
 <script type="module">
 const SEE_MAX_PX = 1600;
 const SCREEN_JPEG_QUALITY = 0.82;
 const SEE_REQUEST_TIMEOUT_MS = 130000;
 const VIDEO_READY_STATE = 2;
 const QUESTION_MAX_CHARS = 2000;
-const SETTINGS=Object.freeze({capturePulseMs:550,capturePulseScale:2.8,captureTimeoutMs:10000,sourceClusterThreshold:4,initialDistance:620,initialHeight:80,cameraMs:1300,focusDistance:120,starCount:1700,starRadius:1200,starSize:1.4,starOpacity:.85,nodeRadius:3.1,nodeSegments:16,nodeRings:12,glowSize:34,selectedScale:1.65,inactiveOpacity:.16,nodeOpacity:.92,glowOpacity:.65,linkOpacity:.56,linkWidth:.35,activeLinkWidth:1.35,orbitSpeed:.22,linkDistance:69,repulsion:-165,cooldownTicks:140,warmupTicks:70,clusterRadius:110,clusterSpread:60,clusterForce:.015,pixelRatioLimit:2,spritePixels:128,chatTimeoutMs:100000,fullCircle:Math.PI*2,half:.5,goldenAngle:2.399963,clusterMembers:6,timePrecision:2,dimensions:3,glowStops:[[0,1],[.15,.7],[.45,.12],[1,0]],groups:{Finance:'#f2c67e',Marketing:'#b397ed',Operations:'#71bce6',People:'#f294ac',Strategy:'#86d7bd'}});
-const $=id=>document.getElementById(id),reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SETTINGS=Object.freeze({capturePulseMs:550,capturePulseScale:2.8,captureTimeoutMs:10000,sourceClusterThreshold:4,initialDistance:620,initialHeight:0,opticalHeight:24,cameraMs:1100,cameraArc:18,focusDistance:285,cardOffset:42,selectedScale:1.65,inactiveOpacity:.35,nodeOpacity:.92,glowOpacity:.65,linkOpacity:.085,linkWidth:0,activeLinkWidth:0,orbitSpeed:.12,pixelRatioLimit:2,chatTimeoutMs:100000,timePrecision:2,groups:{Finance:'#A08BEA',Marketing:'#6F93EE',Operations:'#E9A75C',People:'#4FC7A6',Team:'#4FC7A6',Sales:'#E2738F',Strategy:'#B8C46A',captures:'#B9BEC4'}});
+const $=id=>document.getElementById(id);
+let reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement?.dataset.motion==='reduced';
 let cameraFrame=null;
-let graph,THREE,activeGroup=null,selected=null,orbit=!reducedMotion,busy=false,highlighted=new Set(),activeLinks=new Set();
+let graph,THREE,activeGroup=null,selected=null,orbit=false,busy=false,highlighted=new Set(),activeLinks=new Set();
+function syncMotion(){reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches||document.documentElement?.dataset.motion==='reduced';if(reducedMotion)holdCamera();window.JarvisGalaxy?.setReducedMotion(reducedMotion);}
+if(typeof MutationObserver!=='undefined'&&document.documentElement)new MutationObserver(syncMotion).observe(document.documentElement,{attributes:true,attributeFilter:['data-motion']});
+matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change',syncMotion);
 const groups=[...new Set(GRAPH.nodes.map(n=>n.group))].sort(),neighbors=GRAPH.nodes.map(()=>new Set());GRAPH.links.forEach(l=>{neighbors[l.source].add(l.target);neighbors[l.target].add(l.source)});
-const endpoint=v=>typeof v==='object'?v.id:v,color=n=>SETTINGS.groups[n.group]||'#b1c4d6',linkKey=l=>`${Math.min(endpoint(l.source),endpoint(l.target))}:${Math.max(endpoint(l.source),endpoint(l.target))}`,groupMatches=n=>!activeGroup||n.group===activeGroup;
+const endpoint=v=>typeof v==='object'?v.id:v,color=n=>window.JarvisGalaxy?.categoryColor(n.group)||SETTINGS.groups[n.group]||'#B9BEC4',linkKey=l=>`${Math.min(endpoint(l.source),endpoint(l.target))}:${Math.max(endpoint(l.source),endpoint(l.target))}`,groupMatches=n=>!activeGroup||n.group===activeGroup;
 function drawSidebar(){
- $('groups').replaceChildren();[null,...groups].forEach(group=>{const b=document.createElement('button');b.className='group'+(activeGroup===group?' active':'');b.setAttribute('aria-pressed',String(activeGroup===group));const dot=document.createElement('span');dot.className='dot';dot.style.setProperty('--group-color',group?SETTINGS.groups[group]||'#b1c4d6':'#93f0da');const name=document.createElement('span');name.textContent=group||'Entire galaxy';const count=document.createElement('span');count.className='count';count.textContent=group?GRAPH.nodes.filter(n=>n.group===group).length:GRAPH.nodes.length;b.append(dot,name,count);b.onclick=()=>{activeGroup=group;drawSidebar();refreshHighlights()};$('groups').append(b)});
+ $('groups').replaceChildren();[null,...groups].forEach(group=>{const b=document.createElement('button');b.className='group'+(activeGroup===group?' active':'');b.setAttribute('aria-pressed',String(activeGroup===group));b.setAttribute('aria-label',(group||'Entire galaxy')+' · '+(group?GRAPH.nodes.filter(n=>n.group===group).length:GRAPH.nodes.length)+' notes');b.title=group||'Entire galaxy';const dot=document.createElement('span');dot.className='dot';dot.style.setProperty('--group-color',group?color({group}):'#55DBC9');const name=document.createElement('span');name.textContent=group||'Entire galaxy';const count=document.createElement('span');count.className='count';count.textContent=group?GRAPH.nodes.filter(n=>n.group===group).length:GRAPH.nodes.length;b.append(dot,name,count);b.onclick=()=>{activeGroup=group;drawSidebar();refreshHighlights()};b.onmouseenter=()=>window.JarvisGalaxy?.previewGroup(group);b.onmouseleave=()=>window.JarvisGalaxy?.previewGroup(null);b.onfocus=()=>window.JarvisGalaxy?.previewGroup(group);b.onblur=()=>window.JarvisGalaxy?.previewGroup(null);$('groups').append(b)});
  const query=$('search').value.trim().toLowerCase(),visible=GRAPH.nodes.filter(n=>groupMatches(n)&&n.label.toLowerCase().includes(query));$('note-list').replaceChildren();$('notes-label').textContent=activeGroup||'All notes';$('note-count').textContent=visible.length;visible.forEach(n=>{const b=document.createElement('button');b.className='note-button'+(selected===n.id?' active':'');b.textContent=n.label;b.title=n.label;b.onclick=()=>focusNode(n);$('note-list').append(b)});if(!visible.length){const p=document.createElement('p');p.className='no-results';p.textContent='No matching notes.';$('note-list').append(p)}
 }
-function refreshHighlights(){if(!graph)return;GRAPH.nodes.forEach(n=>{const object=n.__threeObj;if(!object)return;const lit=(!highlighted.size||highlighted.has(n.id))&&groupMatches(n);object.scale.setScalar(n.id===selected?SETTINGS.selectedScale:1);object.traverse(child=>{if(child.material)child.material.opacity=lit?(child.isSprite?SETTINGS.glowOpacity:SETTINGS.nodeOpacity):SETTINGS.inactiveOpacity})});graph.linkColor(l=>activeLinks.has(linkKey(l))?'#9aecff':'#365f81').linkWidth(l=>activeLinks.has(linkKey(l))?SETTINGS.activeLinkWidth:SETTINGS.linkWidth)}
-function setOrbit(value){orbit=busy?false:value;$('orbit').classList.toggle('active',orbit);$('orbit').setAttribute('aria-pressed',String(orbit));if(graph)graph.controls().autoRotate=orbit}
+function refreshHighlights(){if(!graph)return;GRAPH.nodes.forEach(n=>{const object=n.__threeObj;if(!object)return;const lit=(!highlighted.size||highlighted.has(n.id))&&groupMatches(n);object.scale.setScalar(n.id===selected?SETTINGS.selectedScale:1);object.traverse(child=>{if(child.material)child.material.opacity=lit?(child.isSprite?SETTINGS.glowOpacity:SETTINGS.nodeOpacity):SETTINGS.inactiveOpacity})});if(window.JarvisGalaxy){window.JarvisGalaxy.refresh();window.JarvisGalaxy.highlight({selected,highlighted,activeLinks,activeGroup});}else graph.linkColor(l=>activeLinks.has(linkKey(l))?'#55DBC9':'#365f81').linkWidth(l=>activeLinks.has(linkKey(l))?SETTINGS.activeLinkWidth:SETTINGS.linkWidth)}
+function setOrbit(value){orbit=busy||reducedMotion?false:value;$('orbit').classList.toggle('active',orbit);$('orbit').setAttribute('aria-pressed',String(orbit));if(graph)graph.controls().autoRotate=orbit;window.JarvisGalaxy?.wake()}
 function holdCamera(){
  setOrbit(false);
  if(cameraFrame!==null){cancelAnimationFrame(cameraFrame);cameraFrame=null;}
  if(graph)graph.controls().enableDamping=false;
 }
-function flyCamera(position,target){
+function flyCamera(position,target,duration=SETTINGS.cameraMs){
  holdCamera();if(!graph)return;
+ window.JarvisGalaxy?.wake(duration);
  if(reducedMotion){graph.cameraPosition(position,target);return;}
  const start=graph.camera().position.clone(),look=graph.controls().target.clone(),started=performance.now();
  function frame(now){
-   const progress=Math.min(1,(now-started)/SETTINGS.cameraMs),point={},aim={};
-   for(const axis of ['x','y','z']){point[axis]=start[axis]+(position[axis]-start[axis])*progress;aim[axis]=look[axis]+(target[axis]-look[axis])*progress;}
+   const progress=Math.min(1,(now-started)/duration),eased=progress<.5?4*progress*progress*progress:1-Math.pow(-2*progress+2,3)/2,point={},aim={};
+   for(const axis of ['x','y','z']){point[axis]=start[axis]+(position[axis]-start[axis])*eased;aim[axis]=look[axis]+(target[axis]-look[axis])*eased;}
+   point.y+=Math.sin(progress*Math.PI)*SETTINGS.cameraArc;
    graph.cameraPosition(point,aim);
    cameraFrame=progress<1?requestAnimationFrame(frame):null;
  }
  cameraFrame=requestAnimationFrame(frame);
 }
-function focusNode(node){if(!graph||busy)return;selected=node.id;highlighted=new Set([node.id,...neighbors[node.id]]);activeLinks=new Set(GRAPH.links.filter(l=>endpoint(l.source)===node.id||endpoint(l.target)===node.id).map(linkKey));setOrbit(false);refreshHighlights();drawSidebar();const camera=graph.camera(),dx=camera.position.x-node.x,dy=camera.position.y-node.y,dz=camera.position.z-node.z,length=Math.hypot(dx,dy,dz)||1;flyCamera({x:node.x+dx/length*SETTINGS.focusDistance,y:node.y+dy/length*SETTINGS.focusDistance,z:node.z+dz/length*SETTINGS.focusDistance},node);$('detail-group').textContent=node.group+' / NOTE '+node.id;$('detail-group').style.color=color(node);$('detail-title').textContent=node.label;$('detail-excerpt').textContent=node.excerpt;$('related-list').replaceChildren();neighbors[node.id].forEach(id=>{const b=document.createElement('button');b.textContent='↗  '+GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('related-list').append(b)});$('detail').hidden=false}
+function focusNode(node){if(!graph||busy)return;selected=node.id;highlighted=new Set([node.id,...neighbors[node.id]]);activeLinks=new Set(GRAPH.links.filter(l=>endpoint(l.source)===node.id||endpoint(l.target)===node.id).map(linkKey));setOrbit(false);refreshHighlights();drawSidebar();const camera=graph.camera(),dx=camera.position.x-node.x,dy=camera.position.y-node.y,dz=camera.position.z-node.z,length=Math.hypot(dx,dy,dz)||1,target={x:node.x+SETTINGS.cardOffset,y:node.y,z:node.z};flyCamera({x:target.x+dx/length*SETTINGS.focusDistance,y:target.y+dy/length*SETTINGS.focusDistance,z:target.z+dz/length*SETTINGS.focusDistance},target);$('detail-group').textContent=node.group+' / NOTE '+node.id;$('detail-group').style.color=color(node);$('detail-title').textContent=node.label;$('detail-excerpt').textContent=node.excerpt;$('related-list').replaceChildren();neighbors[node.id].forEach(id=>{const b=document.createElement('button');b.textContent='↗  '+GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('related-list').append(b)});$('detail').hidden=false}
 function clearSelection(){selected=null;highlighted.clear();activeLinks.clear();$('detail').hidden=true;refreshHighlights();drawSidebar()}
-function recenter(){if(busy)return;clearSelection();activeGroup=null;$('search').value='';drawSidebar();refreshHighlights();if(graph)flyCamera({x:0,y:SETTINGS.initialHeight,z:SETTINGS.initialDistance},{x:0,y:0,z:0});setOrbit(!reducedMotion)}
-$('search').addEventListener('input',drawSidebar);$('orbit').onclick=()=>setOrbit(!orbit);$('reset').onclick=recenter;$('close-detail').onclick=clearSelection;$('metric-notes').textContent=GRAPH.nodes.length;$('metric-links').textContent=GRAPH.links.length;$('metric-groups').textContent=groups.length;$('group-count').textContent=groups.length;$('index-summary').textContent=`${GRAPH.nodes.length} notes · ${GRAPH.links.length} connections`;$('graph-stats').textContent=`${GRAPH.nodes.length} NOTES / ${GRAPH.links.length} CONNECTIONS`;drawSidebar();
+function recenter(){if(busy)return;clearSelection();activeGroup=null;$('search').value='';drawSidebar();refreshHighlights();if(graph)flyCamera({x:0,y:SETTINGS.initialHeight,z:SETTINGS.initialDistance},{x:0,y:SETTINGS.opticalHeight,z:0});setOrbit(false)}
+$('search').addEventListener('input',drawSidebar);$('orbit').onclick=()=>setOrbit(!orbit);$('reset').onclick=recenter;$('close-detail').onclick=clearSelection;$('metric-notes').textContent=GRAPH.nodes.length;$('metric-links').textContent=GRAPH.links.length;$('metric-groups').textContent=groups.length;$('group-count').textContent=groups.length;$('index-summary').textContent=`${GRAPH.nodes.length} notes · ${GRAPH.links.length} links`;$('graph-stats').textContent=`${GRAPH.nodes.length} NOTES / ${GRAPH.links.length} CONNECTIONS`;drawSidebar();
 $('question').maxLength=QUESTION_MAX_CHARS;
 window.JarvisVoice.setSubmit(ask);
 $('chat-form').addEventListener('submit',event=>{event.preventDefault();ask($('question').value)});document.querySelectorAll('[data-question]').forEach(button=>button.onclick=()=>{$('question').value=button.dataset.question;ask(button.dataset.question)});
 try{
- THREE=await import('https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js');if(typeof ForceGraph3D!=='function')throw new Error('CDN unavailable');
- const sprite=document.createElement('canvas');sprite.width=SETTINGS.spritePixels;sprite.height=SETTINGS.spritePixels;const ctx=sprite.getContext('2d'),center=SETTINGS.spritePixels*SETTINGS.half,gradient=ctx.createRadialGradient(center,center,0,center,center,center);SETTINGS.glowStops.forEach(([stop,opacity])=>gradient.addColorStop(stop,`rgba(255,255,255,${opacity})`));ctx.fillStyle=gradient;ctx.fillRect(0,0,sprite.width,sprite.height);const glowTexture=new THREE.CanvasTexture(sprite);
- GRAPH.nodes.forEach((n,i)=>{const angle=groups.indexOf(n.group)/groups.length*SETTINGS.fullCircle,offset=i*SETTINGS.goldenAngle,spread=SETTINGS.clusterSpread*Math.sqrt((i%SETTINGS.clusterMembers+1)/SETTINGS.clusterMembers);n.x=Math.cos(angle)*SETTINGS.clusterRadius+Math.cos(offset)*spread;n.y=Math.sin(offset)*SETTINGS.clusterSpread;n.z=Math.sin(angle)*SETTINGS.clusterRadius+Math.sin(offset)*spread});
- graph=ForceGraph3D({controlType:'orbit'})($('graph')).backgroundColor('#030811').showNavInfo(false).width($('stage').clientWidth).height($('stage').clientHeight).graphData(GRAPH).nodeLabel(n=>{const label=document.createElement('span');label.textContent=n.label;return label}).nodeThreeObject(n=>{const object=new THREE.Group(),mesh=new THREE.Mesh(new THREE.SphereGeometry(SETTINGS.nodeRadius,SETTINGS.nodeSegments,SETTINGS.nodeRings),new THREE.MeshBasicMaterial({color:color(n),transparent:true,opacity:SETTINGS.nodeOpacity})),glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTexture,color:color(n),transparent:true,opacity:SETTINGS.glowOpacity,depthWrite:false,blending:THREE.AdditiveBlending}));glow.scale.set(SETTINGS.glowSize,SETTINGS.glowSize,1);object.add(glow,mesh);return object}).linkOpacity(SETTINGS.linkOpacity).linkColor('#365f81').linkWidth(SETTINGS.linkWidth).onNodeClick(focusNode).onBackgroundClick(clearSelection).warmupTicks(SETTINGS.warmupTicks).cooldownTicks(SETTINGS.cooldownTicks);
- graph.cameraPosition({x:0,y:SETTINGS.initialHeight,z:SETTINGS.initialDistance});graph.renderer().setPixelRatio(Math.min(devicePixelRatio,SETTINGS.pixelRatioLimit));graph.d3Force('charge').strength(SETTINGS.repulsion);graph.d3Force('link').distance(SETTINGS.linkDistance);graph.d3Force('cluster',()=>GRAPH.nodes.forEach(n=>{const angle=groups.indexOf(n.group)/groups.length*SETTINGS.fullCircle;n.vx+=(Math.cos(angle)*SETTINGS.clusterRadius-n.x)*SETTINGS.clusterForce;n.vz+=(Math.sin(angle)*SETTINGS.clusterRadius-n.z)*SETTINGS.clusterForce}));
- const dimensions=SETTINGS.dimensions,points=new Float32Array(SETTINGS.starCount*dimensions);for(let i=0;i<points.length;i++)points[i]=(Math.random()-SETTINGS.half)*SETTINGS.starRadius;const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(points,dimensions));graph.scene().add(new THREE.Points(geometry,new THREE.PointsMaterial({color:'#9aabbf',size:SETTINGS.starSize,transparent:true,opacity:SETTINGS.starOpacity,depthWrite:false})));graph.controls().autoRotateSpeed=SETTINGS.orbitSpeed;setOrbit(orbit);graph.controls().addEventListener('start',()=>setOrbit(false));$('load-state').hidden=true;new ResizeObserver(()=>graph.width($('stage').clientWidth).height($('stage').clientHeight)).observe($('stage'));
- window.jarvisView={get nodeCount(){return GRAPH.nodes.length},get linkCount(){return GRAPH.links.length},get canvasReady(){return Boolean(graph.renderer().domElement.width)},get selectedId(){return selected}};
-}catch(error){$('load-state').textContent='The galaxy couldn’t load. Check your internet connection for the 3D library, then refresh.';console.error('Galaxy rendering failed:',error.message)}
+ THREE=await import('/three.module.js');if(typeof ForceGraph3D!=='function')throw new Error('Local 3D library unavailable');
+ const {seedPositions,createGalaxy}=await import('/galaxy.js');seedPositions(GRAPH.nodes);
+ graph=ForceGraph3D({controlType:'orbit'})($('graph')).backgroundColor(getComputedStyle(document.documentElement).getPropertyValue('--bg-void').trim()||'#040506').showNavInfo(false).width($('stage').clientWidth).height($('stage').clientHeight).graphData(GRAPH).nodeThreeObject(()=>new THREE.Group()).nodeLabel('').linkVisibility(false).enableNodeDrag(false).enablePointerInteraction(false).warmupTicks(0).cooldownTicks(0);
+ graph.cameraPosition({x:0,y:SETTINGS.initialHeight,z:SETTINGS.initialDistance},{x:0,y:SETTINGS.opticalHeight,z:0});graph.renderer().setPixelRatio(Math.min(devicePixelRatio,SETTINGS.pixelRatioLimit));graph.d3Force('charge',null);graph.d3Force('link',null);graph.d3Force('center',null);
+ window.JarvisGalaxy=createGalaxy({graph,THREE,getData:()=>GRAPH,stage:$('stage'),labels:$('galaxy-labels'),onSelect:focusNode,onClear:clearSelection,onGroup:group=>{activeGroup=group;drawSidebar();refreshHighlights()},flyCamera,reducedMotion,initialDistance:SETTINGS.initialDistance});
+ graph.controls().autoRotateSpeed=SETTINGS.orbitSpeed;setOrbit(orbit);graph.controls().addEventListener('start',()=>{holdCamera()});$('load-state').hidden=true;new ResizeObserver(()=>{graph.width($('stage').clientWidth).height($('stage').clientHeight);window.JarvisGalaxy?.wake()}).observe($('stage'));
+ window.jarvisView={get nodeCount(){return GRAPH.nodes.length},get linkCount(){return GRAPH.links.length},get canvasReady(){return Boolean(graph.renderer().domElement.width)},get selectedId(){return selected},get performance(){return window.JarvisGalaxy?.performance},focusNode,recenter,clearSelection,filterGroup(group){activeGroup=group;drawSidebar();refreshHighlights()},get groups(){return [...groups]},get selectedNode(){return GRAPH.nodes[selected]||null},get notes(){return GRAPH.nodes.map(({id,label,group})=>({id,label,group}))}};
+}catch(error){$('load-state').textContent='The galaxy couldn’t load its local renderer. Refresh to try again.';console.error('Galaxy rendering failed:',error.message)}
 // Intent is decided by the same brain response, before any source-driven camera action.
 function showAnswerSources(data){
  if(data.about_notes!==true||data.error)return;
@@ -534,7 +423,7 @@ function showAnswerSources(data){
  }
  activeLinks=new Set(GRAPH.links.filter(l=>highlighted.has(endpoint(l.source))&&highlighted.has(endpoint(l.target))).map(linkKey));
  refreshHighlights();drawSidebar();
- ids.forEach(id=>{const b=document.createElement('button');b.className='source';b.textContent=GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('sources').append(b)});
+ ids.forEach((id,index)=>{const b=document.createElement('button');b.className='source';b.style.setProperty('--source-index',index);b.style.setProperty('--source-color',color(GRAPH.nodes[id]));b.textContent=GRAPH.nodes[id].label;b.onclick=()=>focusNode(GRAPH.nodes[id]);$('sources').append(b)});
 }
 let screenStream=null,screenVideo=null,screenMode=false,screenGeneration=0;
 const watcher=window.JarvisWatch?.create({
@@ -669,9 +558,10 @@ async function birthCapture(data){
  activeGroup=null;$('search').value='';
  $('metric-notes').textContent=GRAPH.nodes.length;$('metric-links').textContent=GRAPH.links.length;
  $('metric-groups').textContent=groups.length;$('group-count').textContent=groups.length;
- $('index-summary').textContent=`${GRAPH.nodes.length} notes · ${GRAPH.links.length} connections`;
+ $('index-summary').textContent=`${GRAPH.nodes.length} notes · ${GRAPH.links.length} links`;
  $('graph-stats').textContent=`${GRAPH.nodes.length} NOTES / ${GRAPH.links.length} CONNECTIONS`;
  drawSidebar();
+ window.JarvisUI?.onGraph();
  if(!graph)throw new Error('Galaxy unavailable');
  const node=GRAPH.nodes[data.captured];
  // Pin the birth position through the pulse and flight; preserve existing node objects.
@@ -688,7 +578,14 @@ async function birthCapture(data){
  const wasBusy=busy;busy=false;focusNode(node);busy=wasBusy;
  setTimeout(()=>{delete node.fx;delete node.fy;delete node.fz;graph.d3ReheatSimulation()},reducedMotion?0:SETTINGS.cameraMs);
 }
-async function ask(question){if(window.JarvisScreen?.commandMatches(question)){await window.JarvisScreen.command(question);return;}if(window.JarvisEyes?.isRelief(question)){await window.JarvisEyes.relief(question);return;}if(window.JarvisVoice.interrupt(question))return;if(window.JarvisEyes?.isCommand(question)){await window.JarvisEyes.command(question);return;}if(window.JarvisEyes?.matches(question)){await window.JarvisEyes.look(question);return;}if(window.JarvisFocus?.matches(question)){await window.JarvisFocus.command({question});return;}if(busy||!question.trim())return;const swapping=isModelCommand(question),capture=!swapping&&CAPTURE_TRIGGER.test(question.trim()),seeing=screenMode&&!capture&&!swapping,shareVersion=screenGeneration;let saved=false;busy=true;holdCamera();window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent=swapping?'CHANGING BRAIN':capture?'FILING YOUR NOTE':seeing?'LOOKING AT YOUR SCREEN':'CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent=swapping?'Checking that exact brain…':capture?'Saving and indexing…':seeing?'Inspecting this frame and thinking…':'Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),capture?SETTINGS.captureTimeoutMs:seeing?SEE_REQUEST_TIMEOUT_MS:SETTINGS.chatTimeoutMs);try{let frame={};if(seeing){try{frame=screenFrame()}catch(error){error.screenError=true;throw error}}const response=await fetch(swapping?'/model':capture?'/remember':seeing?'/see':'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,...frame}),signal:controller.signal}),data=await response.json();if(data.brain){brainRevision++;showBrain(data)}if(seeing&&(shareVersion!==screenGeneration||!screenStream?.active)){const error=new Error('The screen share ended or changed while I was thinking, sir. Please share again and ask for a fresh look.');error.screenError=true;throw error}if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;$('answer-label').textContent=response.ok?(data.about_notes===true?'FROM YOUR NOTES':'JARVIS'):'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){if(capture){saved=true;await birthCapture(data)}else showAnswerSources(data);$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.screenError?error.message:capture?(saved?'Saved and indexed, sir, but the star could not be displayed. Your note is available for questions.':'I could not confirm that capture, sir. Check your notes before retrying; the connection may have failed after saving.'):error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
+async function ask(question){if(window.JarvisScreen?.commandMatches(question)){await window.JarvisScreen.command(question);return;}if(window.JarvisEyes?.isRelief(question)){await window.JarvisEyes.relief(question);return;}if(window.JarvisVoice.interrupt(question))return;if(window.JarvisEyes?.isCommand(question)){await window.JarvisEyes.command(question);return;}if(window.JarvisEyes?.matches(question)){await window.JarvisEyes.look(question);return;}if(window.JarvisFocus?.matches(question)){await window.JarvisFocus.command({question});return;}if(busy||!question.trim())return;window.JarvisUI?.onQuestion(question);const swapping=isModelCommand(question),capture=!swapping&&CAPTURE_TRIGGER.test(question.trim()),seeing=screenMode&&!capture&&!swapping,shareVersion=screenGeneration;let saved=false;busy=true;holdCamera();window.JarvisVoice.setThinking(true);$('send').disabled=true;$('question').disabled=true;$('suggestions').hidden=true;$('sources').replaceChildren();$('answer-meta').hidden=true;$('answer-label').textContent=swapping?'CHANGING BRAIN':capture?'FILING YOUR NOTE':seeing?'LOOKING AT YOUR SCREEN':'CONNECTING THE DOTS';$('answer-label').classList.add('thinking');$('answer').textContent=swapping?'Checking that exact brain…':capture?'Saving and indexing…':seeing?'Inspecting this frame and thinking…':'Reading your notes and thinking…';const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),capture?SETTINGS.captureTimeoutMs:seeing?SEE_REQUEST_TIMEOUT_MS:SETTINGS.chatTimeoutMs);try{let frame={};if(seeing){try{frame=screenFrame()}catch(error){error.screenError=true;throw error}}const response=await fetch(swapping?'/model':capture?'/remember':seeing?'/see':'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question,...frame}),signal:controller.signal}),data=await response.json();if(data.brain){brainRevision++;showBrain(data)}if(seeing&&(shareVersion!==screenGeneration||!screenStream?.active)){const error=new Error('The screen share ended or changed while I was thinking, sir. Please share again and ask for a fresh look.');error.screenError=true;throw error}if(typeof data.answer!=='string'||!Array.isArray(data.nodes))throw new Error('Invalid reply');$('answer').textContent=data.answer;window.JarvisUI?.onAnswer(data);$('answer-label').textContent=response.ok?(data.about_notes===true?'FROM YOUR NOTES':'JARVIS'):'BRAIN UNAVAILABLE';$('answer-meta').textContent=typeof data.elapsed_s==='number'?`${data.elapsed_s.toFixed(SETTINGS.timePrecision)}s · ${data.nodes.length} source notes`:'';$('answer-meta').hidden=false;if(response.ok){if(capture){saved=true;await birthCapture(data)}else showAnswerSources(data);$('question').value=''}}catch(error){$('answer-label').textContent='CONNECTION INTERRUPTED';$('answer').textContent=error.screenError?error.message:capture?(saved?'Saved and indexed, sir, but the star could not be displayed. Your note is available for questions.':'I could not confirm that capture, sir. Check your notes before retrying; the connection may have failed after saving.'):error.name==='AbortError'?'The brain took too long. Please try again.':'I can’t reach the local server. Start it with python3 server.py, then try again.'}finally{clearTimeout(timeout);busy=false;window.JarvisVoice.setThinking(false);window.JarvisVoice.speak($('answer').textContent);$('answer-label').classList.remove('thinking');$('send').disabled=false;$('question').disabled=false;$('question').focus()}}
+
+window.JarvisUI?.connect({graph:GRAPH,select:focusNode,clear:clearSelection,ask,fit:()=>window.JarvisGalaxy?window.JarvisGalaxy.fit():recenter(),filter(group){activeGroup=group;drawSidebar();refreshHighlights();},selected:()=>GRAPH.nodes[selected]||null,replaceGraph(data){
+ const old=new Map(GRAPH.nodes.map(n=>[n.id,n]));GRAPH.nodes=data.nodes.map(n=>Object.assign(old.get(n.id)||{},n));GRAPH.links=data.links;
+ groups.splice(0,groups.length,...[...new Set(GRAPH.nodes.map(n=>n.group))].sort());neighbors.splice(0,neighbors.length,...GRAPH.nodes.map(()=>new Set()));
+ GRAPH.links.forEach(l=>{neighbors[endpoint(l.source)].add(endpoint(l.target));neighbors[endpoint(l.target)].add(endpoint(l.source));});
+ if(graph)graph.graphData(GRAPH);drawSidebar();refreshHighlights();window.JarvisUI?.onGraph();
+}});
 
 </script><script src="/watch.js"></script><script src="/focus.js"></script><script src="/posture.js"></script><script type="module" src="/eyes.js"></script>
 </body></html>

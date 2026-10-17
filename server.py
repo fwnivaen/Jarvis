@@ -79,6 +79,7 @@ import voice_bridge
 import focus
 
 import watch
+import note_store
 WATCH = watch.Watch()
 FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
@@ -106,6 +107,7 @@ SEE_PROMPT = PERSONA_PROMPT + (
 CLI_CHECK_TIMEOUT_S = 10
 SOCKET_TIMEOUT_S = 10
 MAX_REQUEST_BYTES = 16_384
+MAX_VOICE_REQUEST_BYTES = voice_bridge.AUDIO_TEXT_CHARS * 12 + 4096
 MAX_QUESTION_CHARS = 2_000
 MAX_ANSWER_CHARS = 8_000
 MAX_BRAIN_BYTES = 1_000_000
@@ -121,6 +123,18 @@ MAX_PARALLEL_BRAINS = 1
 TIME_PRECISION = 2
 MIN_WORD_CHARS = 2
 PRIVATE_FILE_MODE = 0o600
+UI_VERSION = "2.0"
+LAUNCH_ID = secrets.token_hex(8)
+UI_ASSETS = {
+    "theme.js": "text/javascript", "ui.js": "text/javascript",
+    "tokens.css": "text/css", "app.css": "text/css",
+    "galaxy.js": "text/javascript", "layout-worker.js": "text/javascript",
+    "galaxy-benchmark.html": "text/html; charset=utf-8", "galaxy-benchmark.js": "text/javascript",
+    "orb.js": "text/javascript", "orb.css": "text/css", "focus-v2.css": "text/css",
+    "Geist.woff2": "font/woff2", "GeistMono.woff2": "font/woff2",
+    "three.module.js": "text/javascript", "three.core.js": "text/javascript",
+    "3d-force-graph.min.js": "text/javascript",
+}
 OPENAI_URL = "https://api.openai.com/v1/responses"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
@@ -196,6 +210,7 @@ PUBLIC_FILES = {"/": ("index.html", "text/html; charset=utf-8"),
                 "/watch.js": ("watch.js", "text/javascript; charset=utf-8"),
                 "/graph-data.js": ("graph-data.js", "text/javascript; charset=utf-8")}
 PUBLIC_FILES["/focus-probe.js"] = ("focus-probe.js", "text/javascript")
+PUBLIC_FILES.update({"/" + name: (name, mime) for name, mime in UI_ASSETS.items()})
 PUBLIC_FILES.update({"/" + name: (name, "application/wasm" if name.endswith(".wasm") else "text/javascript" if name.endswith((".js", ".mjs")) else "application/octet-stream") for name in ('vision.mjs', 'vision_wasm_internal.js', 'vision_wasm_internal.wasm', 'vision_wasm_nosimd_internal.js', 'vision_wasm_nosimd_internal.wasm', 'face_landmarker.task', 'pose_landmarker.task')})
 CAPTURE_TITLE_WORDS = 7
 CAPTURE_TITLE_CHARS = 80
@@ -481,6 +496,9 @@ def remember(question, preflight_token=None):
                 handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
+            note["_path"] = path.relative_to(root).as_posix()
+            note["edited_at"] = path.stat().st_mtime
+            graph = build.make_graph(updated)
             build.write_graph(graph)
         except OSError:
             if created:
@@ -735,6 +753,32 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/system":
+            self.send_bytes(json.dumps({"version": UI_VERSION, "launch": LAUNCH_ID,
+                "notes": len(NOTES), "local": True, "sync": False,
+                "capabilities": {"notes": True, "focus": True, "eyes": True,
+                    "screen": True, "models": True, "computer_control": False,
+                    "agents": False, "trading": False, "automations": False}}).encode(), "application/json", head=head)
+            return
+        if path == "/voice/devices":
+            self.send_bytes(json.dumps(voice_bridge.audio_devices()).encode(), "application/json", head=head)
+            return
+        if path == "/voice/audio":
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            audio = voice_bridge.read_audio(query.get("token", [""])[0])
+            self.send_bytes(audio or b"Audio expired", "audio/wav" if audio else "text/plain", 200 if audio else 404, head=head)
+            return
+        if path == "/note":
+            try:
+                query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                identifier = int(query.get("id", ["-1"])[0])
+                with INDEX_LOCK:
+                    note = next(n for n in NOTES if n["id"] == identifier)
+                    result = note_store.read(note, build.NOTES_DIR)
+                self.send_bytes(json.dumps(result).encode(), "application/json", head=head)
+            except (ValueError, StopIteration, OSError):
+                self.send_json({"error": True, "answer": "This note file is unavailable."}, 404)
+            return
         if path == "/watch":
             self.send_bytes(json.dumps(WATCH.state()).encode(), "application/json", head=head)
             return
@@ -773,7 +817,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop"):
+        if self.path not in ("/note", "/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop", "/voice/render", "/voice/release"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -784,9 +828,27 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else MAX_REQUEST_BYTES):
+            if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else note_store.MAX_NOTE_REQUEST_BYTES if self.path == "/note" else MAX_VOICE_REQUEST_BYTES if self.path == "/voice/render" else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
+            if self.path == "/note":
+                if self.headers.get("Origin") != "http://" + self.headers.get("Host", "") or body.get("approved") is not True:
+                    self.send_json({"error": True, "answer": "Approve this edit in the local viewer first."}, 403)
+                    return
+                identifier = body.get("id")
+                if type(identifier) is not int:
+                    raise ValueError
+                try:
+                    with INDEX_LOCK:
+                        note = next(n for n in NOTES if n["id"] == identifier)
+                        result = note_store.save(note, build.NOTES_DIR, body.get("text"), body.get("revision"))
+                        note.update(label=result["title"], text=result["text"], excerpt=result["text"][:build.EXCERPT_CHARS], edited_at=result["edited_at"])
+                        graph = build.make_graph(NOTES)
+                        build.write_graph(graph)
+                    self.send_json({"verified": True, "note": result, "graph": graph})
+                except (note_store.NoteError, StopIteration, OSError) as error:
+                    self.send_json({"error": True, "answer": str(error) if isinstance(error, note_store.NoteError) else "The edit could not be confirmed. Reopen the note before retrying."}, 409)
+                return
             if self.path in ("/eyes", "/relief", "/attention", "/watch"):
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
                     self.send_json({"error": True}, 403)
@@ -824,7 +886,15 @@ class Handler(BaseHTTPRequestHandler):
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
                     self.send_json({"status": "error", "text": "Local viewer requests only."}, 403)
                     return
-                self.send_json(voice_bridge.handle(self.path.rsplit("/", 1)[-1], body.get("token")))
+                action = self.path.rsplit("/", 1)[-1]
+                if action == "render":
+                    result = voice_bridge.render_audio(body.get("text"))
+                elif action == "release":
+                    result = voice_bridge.release_audio(body.get("token"))
+                else:
+                    result = (voice_bridge.handle(action, body.get("token"), body.get("device_id"))
+                              if "device_id" in body else voice_bridge.handle(action, body.get("token")))
+                self.send_json(result)
                 return
             if self.path == "/preflight/cleanup":
                 token = body.get("token")

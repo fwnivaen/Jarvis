@@ -40,7 +40,8 @@ def read_notes(directory=NOTES_DIR):
         label = path.stem
         if path.parent.name == "captures" and text.startswith("# "):
             label = text.splitlines()[0][2:].strip() or label
-        notes.append({"id": len(notes), "label": label,
+        notes.append({"id": len(notes), "label": label, "_path": path.relative_to(directory).as_posix(),
+                      "edited_at": path.stat().st_mtime,
                       "group": path.parent.name, "excerpt": text[:EXCERPT_CHARS],
                       "text": text})
     if (any(f"[[{CAPTURE_HUB_TITLE}]]" in n["text"] for n in notes)
@@ -52,6 +53,8 @@ def read_notes(directory=NOTES_DIR):
 def make_graph(notes):
     nodes = [{key: note[key] for key in ("id", "label", "group", "excerpt")} for note in notes]
     for node, note in zip(nodes, notes):
+        if isinstance(note.get("edited_at"), (float, int)):
+            node["edited_at"] = note["edited_at"]
         if note.get("capture_hub"):
             node["capture_hub"] = True
     bodies = [" " + normalize(n["text"]) + " " for n in notes]

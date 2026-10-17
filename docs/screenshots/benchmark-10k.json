@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-10-17T18:41:39.815Z",
+  "elapsedSeconds": 109.84719999997616,
+  "synthetic": true,
+  "nodes": 10000,
+  "links": 30000,
+  "viewport": {
+    "width": 1290,
+    "height": 940,
+    "pixelRatio": 0.8999999761581421
+  },
+  "mode": {
+    "continuous": true,
+    "rotate": true,
+    "reducedMotion": false,
+    "pickingSweep": true
+  },
+  "renderSubmissionsPerSecond": 59.99803285138209,
+  "meanFrameIntervalMs": 16.66611111111116,
+  "p95FrameIntervalMs": 17.39999999999418,
+  "drawCalls": 3,
+  "triangles": 380000,
+  "bufferCpuMs": 7,
+  "projectionCpuMs": 4.700000047683716,
+  "renderSubmitCpuMs": 0.30000001192092896,
+  "pickingMs": 0,
+  "maxPickingMs": 53.60000002384186,
+  "firstObservedDrawMs": 131.79999997615812,
+  "jsHeapBytes": 84225393,
+  "heapChangeBytes": 15021863,
+  "layoutWorker": true,
+  "layoutPersisted": true,
+  "idle": false,
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+}

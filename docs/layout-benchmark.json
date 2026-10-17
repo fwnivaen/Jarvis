@@ -1,0 +1,46 @@
+{
+  "synthetic": true,
+  "environment": {
+    "node": "v26.11.0",
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "runs": [
+    {
+      "nodes": 2000,
+      "cpuScope": "worker-thread",
+      "freshWallMs": 76.13,
+      "freshCpuMs": 68,
+      "freshHeapChangeMiB": 3.51,
+      "repeatWallMs": 61.3,
+      "cachedPlusOneWallMs": 3.29,
+      "cachedPlusOneCpuMs": 3.17,
+      "deterministic": true,
+      "existingPositionsPreserved": true
+    },
+    {
+      "nodes": 10000,
+      "cpuScope": "worker-thread",
+      "freshWallMs": 622.12,
+      "freshCpuMs": 604.18,
+      "freshHeapChangeMiB": 7.72,
+      "repeatWallMs": 595.21,
+      "cachedPlusOneWallMs": 11.87,
+      "cachedPlusOneCpuMs": 9.84,
+      "deterministic": true,
+      "existingPositionsPreserved": true
+    },
+    {
+      "nodes": 30000,
+      "cpuScope": "worker-thread",
+      "freshWallMs": 4213.65,
+      "freshCpuMs": 4105.91,
+      "freshHeapChangeMiB": 29.73,
+      "repeatWallMs": 4141.92,
+      "cachedPlusOneWallMs": 30.34,
+      "cachedPlusOneCpuMs": 29.67,
+      "deterministic": true,
+      "existingPositionsPreserved": true
+    }
+  ]
+}

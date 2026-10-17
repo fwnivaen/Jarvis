@@ -14,7 +14,9 @@ def host_label(host):
     return host.removeprefix('www.')
 
 
-QUERY_TIMEOUT_S = 0.6
+# Cold System Events reads can exceed 600ms while WebGL is busy. Keep a
+# bounded deadline without converting an unavailable read into target credit.
+QUERY_TIMEOUT_S = 1.2
 SETTLE_TICKS = 2
 HOME_PORT = 4700
 HOME_HOSTS = frozenset({'localhost', '127.0.0.1'})

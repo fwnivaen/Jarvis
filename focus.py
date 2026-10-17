@@ -38,6 +38,11 @@ PERCENT_SCALE = 100
 PRIVATE_MODE = 0o600
 CARD_PATH = Path(__file__).resolve().parent / '.local' / 'JarvisFocusCard'
 CARD_STOP_TIMEOUT_S = 2
+SNAPSHOT_VERSION = 1
+SNAPSHOT_MAX_COUNTER = 1_000_000_000
+SNAPSHOT_BOOL_KEYS = frozenset({'active', 'paused', 'drill', 'muted'})
+SNAPSHOT_NUMBER_KEYS = frozenset({'planned_s', 'elapsed_s', 'on_target_s', 'drift_s', 'drifts', 'nag_s', 'snooze_s', 'relief_s'})
+SNAPSHOT_KEYS = SNAPSHOT_BOOL_KEYS | SNAPSHOT_NUMBER_KEYS | {'version'}
 POOLS = (
     ('Back to your task.', 'Return to the task you picked.', 'Stay with this task.', 'One task at a time.'),
     ('You are still away from your task.', 'Return to your work.', 'Keep this break intentional.', 'Back to the next step.'),
@@ -154,6 +159,8 @@ class Focus:
         self.reader, self.clock = reader or Reader(), clock
         self.speak = speak if speak is not None else Speaker()
         self.path = Path(ledger)
+        self.snapshot_path = self.path.with_name(self.path.stem + '-active.json')
+        self.snapshot_ok = True
         self.lock = threading.RLock()
         self.stop_event = threading.Event()
         self.card = None
@@ -193,6 +200,71 @@ class Focus:
         self.eyes = dict(present=False, head_down=False, slouched=False, eyes_active=False)
         self.eyes_seen = 0
         self.eye_counted = False
+        self._restore_snapshot()
+
+    @staticmethod
+    def validate_snapshot(values):
+        # The restart file is deliberately incapable of storing activity identity or text.
+        if not isinstance(values, dict) or set(values) != SNAPSHOT_KEYS:
+            raise ValueError('Invalid active focus snapshot')
+        if type(values['version']) is not int or values['version'] != SNAPSHOT_VERSION:
+            raise ValueError('Unsupported active focus snapshot')
+        if any(type(values[key]) is not bool for key in SNAPSHOT_BOOL_KEYS):
+            raise ValueError('Invalid active focus flags')
+        if any(type(values[key]) not in (int, float) or not math.isfinite(values[key]) or
+               not 0 <= values[key] <= SNAPSHOT_MAX_COUNTER for key in SNAPSHOT_NUMBER_KEYS):
+            raise ValueError('Invalid active focus counters')
+        if type(values['drifts']) is not int or values['nag_s'] < MIN_INTERVAL_S:
+            raise ValueError('Invalid active focus counters')
+        planned = values['planned_s']
+        if (values['active'] and not MIN_DURATION_S <= planned <= MAX_DURATION_S) or planned > MAX_DURATION_S:
+            raise ValueError('Invalid active focus duration')
+        if values['elapsed_s'] > planned or values['on_target_s'] > values['elapsed_s'] or values['drift_s'] > values['elapsed_s']:
+            raise ValueError('Invalid active focus accounting')
+        if values['snooze_s'] > MAX_DURATION_S or values['relief_s'] > RELIEF_S:
+            raise ValueError('Invalid active focus relief')
+
+    def _restore_snapshot(self):
+        try:
+            values = json.loads(self.snapshot_path.read_text())
+            self.validate_snapshot(values)
+            if not values['active']:
+                return
+            self.active = self.armed = True
+            self.paused, self.drill, self.muted = (values[key] for key in ('paused', 'drill', 'muted'))
+            self.planned, self.elapsed, self.on_target, self.drift_time = (values[key] for key in ('planned_s', 'elapsed_s', 'on_target_s', 'drift_s'))
+            self.drifts, self.nag = values['drifts'], values['nag_s']
+            self.last = self.defer_since = self.clock()
+            self.snooze_until = self.last + values['snooze_s']
+            self.relief_until = self.last + values['relief_s']
+            # Offline time is never charged. No old app/tab identity is restored:
+            # the next stable foreground target must be read and armed afresh.
+            self.reader.clear()
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError, TypeError):
+            self.snapshot_ok = False
+
+    def _save_snapshot(self):
+        now = self.clock()
+        values = dict(version=SNAPSHOT_VERSION, active=self.active, paused=self.paused,
+                      drill=self.drill, muted=self.muted, planned_s=self.planned,
+                      elapsed_s=self.elapsed, on_target_s=self.on_target, drift_s=self.drift_time,
+                      drifts=self.drifts, nag_s=self.nag,
+                      snooze_s=max(0, self.snooze_until-now), relief_s=max(0, self.relief_until-now))
+        temporary = self.snapshot_path.with_suffix('.tmp')
+        try:
+            self.validate_snapshot(values)
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, PRIVATE_MODE)
+            with os.fdopen(fd, 'w') as output:
+                os.fchmod(output.fileno(), PRIVATE_MODE)
+                json.dump(values, output, allow_nan=False)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, self.snapshot_path)
+            self.snapshot_ok = True
+        except (OSError, ValueError, TypeError):
+            self.snapshot_ok = False
 
     def say(self, text):
         if not self.muted and self.clock() >= max(self.relief_until, self.attention_until):
@@ -207,6 +279,8 @@ class Focus:
     def relief(self):
         with self.lock:
             self.relief_until = self.clock() + RELIEF_S
+            if self.active:
+                self._save_snapshot()
             if isinstance(self.speak, Speaker):
                 self.speak.cancel()
 
@@ -222,6 +296,7 @@ class Focus:
             elif self.active and not self.paused and not self.armed and not self.eye_counted:
                 self.drifts += 1
                 self.eye_counted = True
+                self._save_snapshot()
 
     def diagnostic(self):
         # Do not wait on the session lock: a wedged tick must remain diagnosable.
@@ -269,7 +344,7 @@ class Focus:
                 planned_s=self.planned, elapsed_s=self.elapsed, on_target_s=self.on_target,
                 drift_s=self.drift_time, drifts=self.drifts, tier=self.tier, nag_s=self.nag,
                 snooze_s=math.ceil(max(0, max(self.snooze_until, self.relief_until)-self.clock())), streak=self.ledger['streak'],
-                completed=self.completed, aborted=self.aborted, ledger_ok=self.ledger_ok,
+                completed=self.completed, aborted=self.aborted, ledger_ok=self.ledger_ok and self.snapshot_ok,
                 speaking=isinstance(self.speak, Speaker) and self.speak.busy())
 
     def _clear_excursion(self):
@@ -279,6 +354,15 @@ class Focus:
         self.tier = 0
 
     def tick(self):
+        with self.lock:
+            was_active = self.active
+            try:
+                self._tick()
+            finally:
+                if was_active or self.active:
+                    self._save_snapshot()
+
+    def _tick(self):
         with self.lock:
             now = self.clock()
             dt = max(0, now - self.last)
@@ -364,6 +448,8 @@ class Focus:
     def _finish(self, aborted):
         self.active = self.armed = self.paused = False
         self.completed, self.aborted = not aborted, aborted
+        # Tombstone first so a restart cannot replay an already-finished session.
+        self._save_snapshot()
         clean = not aborted and self.on_target / max(MIN_DURATION_S, self.planned) >= CLEAN_THRESHOLD
         self.ledger['sessions'] += 1
         self.ledger['aborted'] += int(aborted)
@@ -396,7 +482,7 @@ class Focus:
                   f"out of {self.planned/SECONDS_PER_MINUTE:.{REPORT_DECIMALS}f} planned. {self.drifts} drifts. Streak: {self.ledger['streak']}.")
         if self.intent:
             report += f' Focus: {self.intent_label()}.'
-        if not self.ledger_ok:
+        if not (self.ledger_ok and self.snapshot_ok):
             report += ' The focus ledger could not be saved.'
         self.say(report)
         return report
@@ -488,6 +574,7 @@ class Focus:
                     message = 'Excursion refunded. Quiet until you return to your target.'
                 else:
                     message = 'There is no current excursion to excuse.'
+            self._save_snapshot()
             return message
 
     def start_loop(self):
@@ -507,6 +594,9 @@ class Focus:
 
     def close(self):
         self.stop_event.set()
+        with self.lock:
+            if self.active:
+                self._save_snapshot()
         if self.card and self.card.poll() is None:
             self.card.terminate()
             self.card.wait(timeout=CARD_STOP_TIMEOUT_S)

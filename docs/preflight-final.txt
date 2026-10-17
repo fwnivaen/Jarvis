@@ -1,0 +1,34 @@
+Jarvis preflight — FULL LIVE RUN
+… Offline regressions
+✓ PASS Offline regressions (0.58s): offline regression tests passed without network or real brain calls
+… Server and viewer
+✓ PASS Server and viewer (0.01s): running server serves the viewer
+… Focus instruments (running server)
+✓ PASS Focus instruments (running server) (0.53s): running server diagnostic whitelist and live tick verified
+… Graph data
+✓ PASS Graph data (0.00s): 30 nodes loaded
+… /model exact swaps and reset
+✓ PASS /model exact swaps and reset (6.02s): fake version/key refusals, real Codex swap and answer, reset to config passed
+… /chat live answer
+✓ PASS /chat live answer (5.35s): real note question returned a valid answer and source nodes
+… Codex PATH and login
+✓ PASS Codex PATH and login (0.03s): installed Codex CLI found and login status succeeded
+… Codex configured model / ask_brain()
+✓ PASS Codex configured model / ask_brain() (3.91s): real ask_brain() returned valid JSON using the configured model
+… OpenAI API key
+⚠ WARN OpenAI API key (0.00s): skipped: codex-cli brain active
+… OpenAI configured model
+⚠ WARN OpenAI configured model (0.00s): skipped: codex-cli brain active
+… /remember → file → immediate /chat → cleanup
+✓ PASS /remember → file → immediate /chat → cleanup (6.36s): real file saved, immediately recalled with source, then removed from disk and live index
+… /see real JPEG
+✓ PASS /see real JPEG (3.90s): real image/jpeg answered correctly (dominant color identified)
+… Served files match disk
+✓ PASS Served files match disk (0.14s): 31 served routes match disk byte-for-byte; live note index matches disk
+… SECURITY: config.json not browser-accessible
+✓ PASS SECURITY: config.json not browser-accessible (0.01s): config.json and encoded/traversal aliases blocked for GET and HEAD
+… Git ignores local configuration
+✓ PASS Git ignores local configuration (0.04s): config.json and generated graph are ignored and untracked
+… Viewer FINISH_MS constant
+✓ PASS Viewer FINISH_MS constant (0.00s): numeric FINISH_MS is 900 ms and drives the finish timer
+14 pass, 0 fail, 2 warn

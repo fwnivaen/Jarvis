@@ -6,7 +6,7 @@ On this Mac, open Terminal and run this one command:
 /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis/start.sh
 ```
 
-Open http://localhost:4700 in Chrome and click once to enable speech. Keep Terminal open; Control+C stops Jarvis. The launcher rebuilds the galaxy before starting the server. Restart and reload after editing notes. Jarvis listens only on this Mac at 127.0.0.1.
+Open http://localhost:4700 in Chrome and click once to enable speech. Keep Terminal open; Control+C stops Jarvis. The launcher rebuilds the galaxy before starting the server. Approved edits in Notes update the running index immediately; restart and reload after external file edits. Jarvis listens only on this Mac at 127.0.0.1.
 
 ## Checks
 
@@ -22,9 +22,9 @@ The default backend is `codex-cli`, using your existing Codex sign-in. To use th
 
 Markdown lives in `notes/`; captures live in `notes/captures/`. Unrelated captures link to one Captures hub. The hub is derived from saved links and survives rebuilds without requiring an extra note file. If the notes folder is missing at startup, the server can show and speak a clear error; the daily launcher stops before starting it. Restore the folder and restart.
 
-The browser handles voice and screen permissions. Internet access is needed for the graph libraries and cloud brain. The old copy in Documents and the old persona stash are retained untouched.
+The browser handles voice and screen permissions. The graph libraries and fonts are bundled locally. Internet access is needed for the cloud brain. The old copy in Documents and the old persona stash are retained untouched.
 
-See RUNNING.md for detailed browser checks and historical verification notes.
+See RUNNING.md for historical checks, docs/DESIGN.md for V2 decisions, and docs/V2-HANDOFF.md for current verification and service connections.
 
 ## Microphone inside Codex
 
@@ -34,7 +34,7 @@ Mac speech troubleshooting: `kLSRErrorDomain 201` means Dictation is disabled. E
 
 ## Runtime brain switching (Prompt 08)
 
-Click the small brain chip above the answer to open the model chooser. Click any listed model to switch; unavailable choices explain why they cannot be used. The chooser also has a return-to-normal button. Speak through the usual mic buffer, or type the same command. Exact standalone names such as “Luna” also switch, while questions such as “What does Luna mean?” remain normal questions. Switching calls no model and never writes your selection to configuration. Unknown names and versions are refused exactly; there is no nearest-match fallback.
+Click the model name beneath the orb or inside the command bar to open the model chooser. Click any listed model to switch; unavailable choices explain why they cannot be used. The chooser also has a return-to-normal button. Speak through the usual mic buffer, or type the same command. Exact standalone names such as “Luna” also switch, while questions such as “What does Luna mean?” remain normal questions. Switching calls no model and never writes your selection to configuration. Unknown names and versions are refused exactly; there is no nearest-match fallback.
 
 | Spoken name after “switch to” or “try on” | Backend | Exact model |
 | --- | --- | --- |
@@ -67,8 +67,7 @@ of the main display across Spaces and tints brown during drift. It never takes
 keyboard focus. The viewer also shows the countdown.
 
 The target is the frontmost app's bundle ID; for Chrome-family browsers it also
-includes a SHA-256 hash of the lowercase URL hostname (not path, query, fragment,
-or port). Different paths on the same site remain focused. Browser internal pages
+includes SHA-256 hashes of the lowercase URL hostname, browser window ID and tab ID (not path, query, fragment, or port). Different paths in the same tab remain focused; another tab or window counts as a different target. Browser internal pages
 are compared by their host too. The local Jarvis root/index tab on port 4700 is
 home base, including its query parameters. Home time counts as permitted time;
 it never triggers a callout. Returning home preserves an excursion so you can
@@ -100,8 +99,7 @@ Commands (speech and typed input use the same handler):
 
 One persistent excursion counts once and escalates across three canned speech
 pools with each nag. The macOS `say` process speaks autonomous callouts and the
-report even if the viewer reloads or closes. Starting or controlling focus from `?mute=1` also mutes server-owned accountability speech for that session. The session lives in server memory; restarting
-the server ends it. Reloading the viewer only fetches its current state.
+report even if the viewer reloads or closes. Starting or controlling focus from `?mute=1` also mutes server-owned accountability speech for that session. An active session also saves a private numeric/boolean recovery snapshot. Restarting restores its remaining time and counters without counting server downtime, discards private target identity, and requires a fresh target lock. Reloading the viewer only fetches its current state.
 
 The report gives minutes permitted/on-target out of planned minutes, drift count,
 and streak. A non-aborted session earns a streak increment when credited time is
@@ -271,3 +269,9 @@ reported physical foreground-switch failure.
 
 Before any field fix, follow the debugging law in AGENTS.md: live diag, ledger,
 window count, assistant-tab host, then the exact user flow with instruments on.
+
+## V2 controls
+
+Use Command-K (Control-K) to find notes, Focus, Eyes, screen watch, model integrations, settings, and other workspaces. Notes offers full Markdown reading and revision-checked edits; saving requires an explicit approval and verifies the written content. Dark/paper appearance, reduced motion, and quiet interface sounds are saved on this device. Voice settings offers an optional “Jarvis” transcript gate, off by default. It only operates after you turn Mic on; it does not enable background recording. Hold Space bypasses the phrase gate.
+
+The seven-state orb uses measured native microphone FFT or an explicitly enabled browser audio stream, and measured local Daniel WAV output. Native Focus speech cannot supply output spectrum and says so. Missing business services are marked Connection required with typed contracts in viewer/services.d.ts.

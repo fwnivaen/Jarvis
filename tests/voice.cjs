@@ -113,6 +113,12 @@ console.log('VOICE PASS: activation, British voice, 900ms buffering, interim spe
   native.tick(FINISH);
   assert.deepEqual(native.sent,['A native sentence']);
   assert.ok(calls.includes('/voice/stop'));
+  const selectedInput=setup('?mute=1'),inputRequests=[];
+  selectedInput.context.fetch=async(path,options)=>{inputRequests.push({path,body:JSON.parse(options.body)});return {ok:true,json:async()=>path.endsWith('/start')?{token:'selected',status:'starting'}:path.endsWith('/stop')?{status:'stopped'}:{status:'listening',sequence:1,text:''}};};
+  selectedInput.voice.setInputDevice('native-input-uid');assert.equal(selectedInput.voice.isEnabled(),false);
+  selectedInput.mic();for(let i=0;i<12;i++)await Promise.resolve();
+  assert.equal(inputRequests.find(request=>request.path==='/voice/start').body.device_id,'native-input-uid');
+  assert.equal(selectedInput.voice.inputDevice(),'native-input-uid');selectedInput.mic();
   const echo = setup();
   let heard='',seq=0;
   echo.context.fetch=async(path)=>({ok:true,json:async()=>path.endsWith('/start')?{token:'echo',status:'starting'}:path.endsWith('/stop')?{status:'stopped'}:{status:'listening',sequence:++seq,text:heard}});
@@ -192,3 +198,47 @@ continued.voice.setThinking(false);continued.voice.speak('Do not interrupt this 
 assert.equal(continued.speech.length,1);
 continued.current().result([['I have more to add',true]]);continued.tick(FINISH);
 assert.deepEqual(continued.sent,['I have more to add']);
+
+const wake=setup('?mute=1');
+assert.equal(wake.voice.wakeWordEnabled(),false);
+wake.voice.setWakeWord(true);assert.equal(wake.current(),undefined); // A preference never opens a microphone.
+wake.mic();assert.match(wake.el('voice-status').textContent,/Awaiting/);
+wake.current().result([['An unrelated conversation',true]]);wake.tick(FINISH);assert.deepEqual(wake.sent,[]);
+wake.current().result([['Jarvison is a different word',true]]);wake.tick(FINISH);assert.deepEqual(wake.sent,[]);
+wake.current().result([['Hey Jarvis, what are the quarterly goals',true]]);wake.tick(FINISH);
+assert.deepEqual(wake.sent,['what are the quarterly goals']);
+
+const wakeFragments=setup('?mute=1');wakeFragments.voice.setWakeWord(true);wakeFragments.mic();
+wakeFragments.current().result([['Jarvis',true]]);wakeFragments.tick(MID_PAUSE);assert.deepEqual(wakeFragments.sent,[]);
+wakeFragments.current().result([['Jarvis',true],['remember that the',false]]);wakeFragments.tick(FINISH);assert.deepEqual(wakeFragments.sent,[]);
+wakeFragments.current().result([['Jarvis',true],['remember that the budget is approved',true]]);wakeFragments.tick(FINISH);
+assert.deepEqual(wakeFragments.sent,['remember that the budget is approved']);
+
+const nativeWake=setup('?mute=1');nativeWake.voice.setWakeWord(true);nativeWake.mic();
+nativeWake.current().onresult({native:true,text:'Unrelated prior words. Jarvis show my captures'});nativeWake.tick(FINISH);
+assert.deepEqual(nativeWake.sent,['show my captures']);
+
+const wakeIntent=setup('?mute=1'),wakeAnswers=[];wakeIntent.voice.setWakeWord(true);
+wakeIntent.voice.answerOnce(text=>wakeAnswers.push(text));wakeIntent.mic();
+wakeIntent.current().result([['Finish the budget',true]]);wakeIntent.voice.finishHold();
+assert.deepEqual(wakeAnswers,['Finish the budget']);assert.deepEqual(wakeIntent.sent,[]);
+
+const wakeHold=setup('?mute=1');wakeHold.voice.setWakeWord(true);wakeHold.voice.beginHold();wakeHold.mic();
+wakeHold.current().result([['Tell me about sales',false]]);wakeHold.voice.finishHold();
+assert.deepEqual(wakeHold.sent,['Tell me about sales']);assert.equal(wakeHold.voice.isEnabled(),false);
+
+const wakeTimeout=setup('?mute=1');wakeTimeout.voice.setWakeWord(true);wakeTimeout.mic();
+wakeTimeout.current().result([['Jarvis',true]]);wakeTimeout.tick(8001);
+wakeTimeout.current().result([['Still unrelated',true]]);wakeTimeout.tick(FINISH);assert.deepEqual(wakeTimeout.sent,[]);
+assert.match(wakeTimeout.el('voice-status').textContent,/Awaiting/);
+
+const wakeRelief=setup('?mute=1');let wakeReliefs=0;
+wakeRelief.context.window.JarvisEyes={isRelief:text=>text==='gimme 3 minutes',relief:()=>{wakeReliefs++;}};
+wakeRelief.voice.setWakeWord(true);wakeRelief.mic();
+wakeRelief.current().onresult({native:true,text:'Earlier ambient words Jarvis gimme 3 minutes'});
+assert.equal(wakeReliefs,1);assert.deepEqual(wakeRelief.sent,[]);
+
+const wakeStop=setup();wakeStop.click();wakeStop.speech[0].onend();wakeStop.voice.setWakeWord(true);wakeStop.mic();
+wakeStop.voice.speak('A spoken response');const wakeCancels=wakeStop.cancels();
+wakeStop.current().result([['stop',false]]);assert.ok(wakeStop.cancels()>wakeCancels);wakeStop.tick(FINISH);assert.deepEqual(wakeStop.sent,[]);
+console.log('WAKE PASS: explicit-mic-only preference, ambient rejection, exact phrase, stripped/cumulative/interim commands, timeout, stop, hold-Space, Focus intent.');

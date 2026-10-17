@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>JARVIS · Synthetic galaxy benchmark</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <style>
+    :root { --bench-header: 60px; --bench-panel: 310px; --bench-gap: 16px; --bench-radius: 14px; --bench-font: 13px; --bench-meta: 11px; }
+    * { box-sizing: border-box; } [hidden] { display: none !important; }
+    html,body { margin:0; height:100%; overflow:hidden; background:var(--bg-void,#040506); color:var(--text-primary,#ECEEF0); font:var(--bench-font) system-ui,sans-serif; }
+    header { height:var(--bench-header); display:flex; gap:var(--bench-gap); align-items:center; padding:0 20px; border-bottom:1px solid var(--stroke-default,#ffffff17); }
+    header strong { letter-spacing:.14em; font-weight:500; } a { color:var(--accent,#55DBC9); } header span { color:var(--text-secondary,#9AA2AB); }
+    #stage { position:absolute; top:var(--bench-header); left:0; right:var(--bench-panel); bottom:0; isolation:isolate; }
+    #graph,#galaxy-labels { position:absolute; inset:0; } #galaxy-labels { pointer-events:none; z-index:2; }
+    .constellation-label { position:absolute; font:10.5px ui-monospace,monospace; letter-spacing:.18em; color:var(--category-color); opacity:.7; white-space:nowrap; }
+    .constellation-label.active { opacity:1; }
+    .galaxy-tooltip { position:absolute; z-index:4; pointer-events:none; padding:12px 16px; border:1px solid var(--stroke-default,#ffffff17); border-radius:var(--bench-radius); background:#0f1316ed; color:#ECEEF0; }
+    .eyebrow { font:10.5px ui-monospace,monospace; letter-spacing:.14em; margin-bottom:6px; }
+    .galaxy-tooltip strong { font-weight:500; }
+    aside { position:absolute; top:var(--bench-header); right:0; bottom:0; width:var(--bench-panel); overflow:auto; padding:var(--bench-gap); border-left:1px solid var(--stroke-default,#ffffff17); background:var(--surface-1,#0B0E11); }
+    h1 { font-size:18px; font-weight:500; margin:0 0 12px; } h2 { font-size:13px; font-weight:500; margin:20px 0 10px; }
+    p { color:var(--text-secondary,#9AA2AB); line-height:1.6; margin:8px 0 16px; }
+    button { font:inherit; color:var(--text-primary,#ECEEF0); background:var(--surface-3,#141A1E); border:1px solid var(--stroke-strong,#ffffff24); border-radius:10px; padding:9px 11px; cursor:pointer; }
+    button:hover,button:focus-visible { border-color:var(--accent,#55DBC9); } button:focus-visible,input:focus-visible { outline:2px solid var(--accent,#55DBC9); outline-offset:3px; }
+    button[aria-pressed="true"] { color:var(--accent,#55DBC9); border-color:var(--accent,#55DBC9); }
+    button:disabled { opacity:.5; cursor:wait; } .row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+    label { display:flex; align-items:center; gap:9px; margin:12px 0; color:var(--text-secondary,#9AA2AB); }
+    input { accent-color:var(--accent,#55DBC9); } dl { margin:0; } dl div { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding:9px 0; border-bottom:1px solid var(--stroke-subtle,#ffffff0f); }
+    dt { color:var(--text-secondary,#9AA2AB); font-size:var(--bench-meta); } dd { font:12px ui-monospace,monospace; font-variant-numeric:tabular-nums; margin:0; text-align:right; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; border:1px solid var(--stroke-default,#ffffff17); border-radius:10px; font:10px/1.6 ui-monospace,monospace; color:var(--text-secondary,#9AA2AB); }
+    #bench-status { color:var(--accent,#55DBC9); } #perf-readout { font:10px/1.6 ui-monospace,monospace; } #zoom-value { font-variant-numeric:tabular-nums; }
+    @media(max-width:760px) { :root { --bench-panel:260px; } header span { display:none; } }
+  </style>
+</head>
+<body>
+  <header><strong>JARVIS / RENDERER LAB</strong><span>Synthetic data · the production galaxy renderer</span><a href="/">Return to JARVIS</a></header>
+  <main id="stage" aria-label="Synthetic galaxy"><div id="graph"></div><div id="galaxy-labels" aria-hidden="true"></div></main>
+  <aside aria-label="Benchmark controls and measurements">
+    <h1>Synthetic benchmark</h1>
+    <p>This page generates fictional nodes in memory. It does not load your notes or call a model. Measurements describe this browser and this machine.</p>
+    <div class="row" aria-label="Synthetic node count"><button data-count="2000" aria-pressed="true">2k</button><button data-count="10000" aria-pressed="false">10k</button><button data-count="30000" aria-pressed="false">30k</button></div>
+    <label><input id="continuous" type="checkbox" checked>Continuous draw</label>
+    <label><input id="rotate" type="checkbox">Rotate within shallow orbit limits</label>
+    <label><input id="reduced" type="checkbox">Reduced motion</label>
+    <label><input id="sweep" type="checkbox">Sweep synthetic pointer for picking</label>
+    <div class="row"><button id="reset">Reset dataset and measurements</button><button id="sample">Save measurement</button></div>
+    <div class="row"><button id="zoom-out" aria-label="Zoom out">−</button><span id="zoom-value">100%</span><button id="zoom-in" aria-label="Zoom in">+</button><button id="fit">Fit</button></div>
+    <p id="bench-status" role="status" aria-live="polite">Loading production renderer…</p>
+    <h2>Live measurements</h2>
+    <dl aria-label="Measured benchmark results">
+      <div><dt>Notes / links</dt><dd id="count">—</dd></div>
+      <div><dt>Render submissions / second</dt><dd id="fps">—</dd></div>
+      <div><dt>Frame interval · p95</dt><dd id="frame">—</dd></div>
+      <div><dt>CPU buffers / projection / render</dt><dd id="cpu">—</dd></div>
+      <div><dt>Draw calls / triangles</dt><dd id="draw">—</dd></div>
+      <div><dt>Picking · max</dt><dd id="picking">No samples</dd></div>
+      <div><dt>First observed draw</dt><dd id="first">—</dd></div>
+      <div><dt>JS heap · change</dt><dd id="heap">API unavailable</dd></div>
+      <div><dt>Layout worker / persistence</dt><dd id="layout">—</dd></div>
+      <div><dt>Renderer state</dt><dd id="render-state">—</dd></div>
+    </dl>
+    <p id="perf-readout"></p>
+    <p>Submission rate counts completed WebGL render calls, not GPU presentation. Heap is shown only when the browser exposes it. Leave this visible for a sustained run; background tabs are paused. The page does not certify 60/120 fps or a 30-minute memory budget.</p>
+    <h2>Saved measurements</h2><pre id="results" aria-live="polite">No measurements saved.</pre>
+  </aside>
+  <script src="/3d-force-graph.min.js"></script>
+  <script type="module" src="/galaxy-benchmark.js"></script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 """Deterministic privacy and accounting checks, without macOS access or speech."""
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -34,6 +35,22 @@ class FocusTests(unittest.TestCase):
         self.speech = []
         self.path = Path(self.temp.name) / 'ledger.json'
         self.focus = Focus(self.reader, self.clock, self.speech.append, self.path)
+
+    def test_reader_timeout_cannot_arm_or_reuse_a_settling_sample(self):
+        self.reader.sample(arm=True, settle=True)
+        original_query = self.reader._query
+        def timeout(script):
+            raise subprocess.TimeoutExpired('private query omitted', 1.2)
+        self.reader._query = timeout
+        result = self.reader.sample(arm=True, settle=True)
+        self.assertFalse(result['known'])
+        self.assertFalse(result['target'])
+        self.assertIsNone(self.reader._target)
+        self.assertEqual(self.reader._ticks, 0)
+        self.reader._query = original_query
+        self.assertFalse(self.reader.sample(arm=True, settle=True)['locked'])
+        self.assertTrue(self.reader.sample(arm=True, settle=True)['locked'])
+        self.assert_private()
 
     def test_eyes_privacy_counting_and_relief(self):
         self.focus.command('start', 600)
@@ -558,3 +575,93 @@ class InstrumentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.focus.write_record(record)
         self.assertEqual(before, path.read_bytes())
+
+    def test_restart_restores_frozen_counters_and_rearms_without_identity(self):
+        from focus import SNAPSHOT_KEYS
+        self.focus.command('start', 600)
+        self.focus.set_intent('SECRET private intention')
+        self.focus.command('drill')
+        self.tick(12)
+        self.url = 'https://elsewhere.example/SECRET'
+        self.tick()
+        self.tick()
+        before = self.focus.state()
+        snapshot = self.path.with_name('ledger-active.json')
+        raw = snapshot.read_text()
+        values = json.loads(raw)
+        self.assertEqual(set(values), SNAPSHOT_KEYS)
+        self.assertTrue(all(type(v) in (bool, int, float) for v in values.values()))
+        for forbidden in ('SECRET', 'elsewhere', 'private-work', 'com.google', 'intent', 'hash', 'url', 'host', 'title'):
+            self.assertNotIn(forbidden, raw)
+        self.assertEqual(snapshot.stat().st_mode & 0o777, 0o600)
+        self.clock.value += 7200  # Offline time must not advance the saved timer.
+        restored_reader = Reader(self.reader._query)
+        restored = Focus(restored_reader, self.clock, self.speech.append, self.path)
+        self.assertTrue(restored.active)
+        self.assertTrue(restored.armed)
+        self.assertTrue(restored.drill)
+        self.assertFalse(restored.known)
+        self.assertEqual(restored.intent, '')
+        self.assertIsNone(restored_reader._target)
+        for field in ('planned_s', 'elapsed_s', 'on_target_s', 'drift_s', 'drifts', 'remaining_s'):
+            self.assertEqual(restored.state()[field], before[field])
+        self.clock.value += 1
+        restored.tick()
+        self.assertTrue(restored.armed)
+        self.clock.value += 1
+        restored.tick()
+        self.assertFalse(restored.armed)
+        self.assertEqual(restored.elapsed, before['elapsed_s'])
+        self.clock.value += 1
+        restored.tick()
+        self.assertEqual(restored.elapsed, before['elapsed_s'] + 1)
+        self.assertEqual(set(restored.state()), PUBLIC_KEYS)
+
+    def test_restart_preserves_pause_relief_and_finishing_tombstones(self):
+        self.focus.command('start', 600)
+        self.tick(10)
+        self.focus.command('nag', 12)
+        self.focus.command('snooze', 30)
+        self.focus.relief()
+        self.focus.command('pause')
+        self.focus.muted = True
+        self.focus.close()
+        self.clock.value += 1000
+        restored = Focus(Reader(self.reader._query), self.clock, self.speech.append, self.path)
+        self.assertTrue(restored.paused)
+        self.assertTrue(restored.muted)
+        self.assertEqual(restored.nag, 12)
+        self.assertEqual(restored.state()['snooze_s'], 180)
+        self.clock.value += 20
+        restored.tick()
+        self.assertEqual(restored.elapsed, 10)
+        restored.command('resume')
+        restored.command('end')
+        finished = json.loads(restored.snapshot_path.read_text())
+        self.assertFalse(finished['active'])
+        again = Focus(Reader(self.reader._query), self.clock, self.speech.append, self.path)
+        self.assertFalse(again.active)
+        self.assertEqual(again.ledger['sessions'], 1)
+        self.assertEqual(len(json.loads(self.path.with_name('ledger-sessions.json').read_text())), 1)
+
+    def test_restart_snapshot_rejects_poisoning_and_nonfinite_state(self):
+        from focus import SNAPSHOT_NUMBER_KEYS
+        self.focus.command('start', 600)
+        snapshot = self.focus.snapshot_path
+        valid = json.loads(snapshot.read_text())
+        bad_values = [dict(valid, url='SECRET'), dict(valid, active=1), dict(valid, version=2),
+                      dict(valid, drifts=1.5), dict(valid, elapsed_s=601),
+                      dict(valid, on_target_s=1), dict(valid, relief_s=181)]
+        for field in SNAPSHOT_NUMBER_KEYS:
+            for value in ('SECRET', {'url': 'SECRET'}, float('nan'), float('inf'), True, -1):
+                bad_values.append(dict(valid, **{field: value}))
+        for values in bad_values:
+            with self.subTest(values=values):
+                snapshot.write_text(json.dumps(values))
+                before = snapshot.read_bytes()
+                restored = Focus(Reader(self.reader._query), self.clock, self.speech.append, self.path)
+                self.assertFalse(restored.active)
+                self.assertFalse(restored.state()['ledger_ok'])
+                self.assertIsNone(restored.reader._target)
+                self.assertEqual(set(restored.state()), PUBLIC_KEYS)
+                self.assertEqual(snapshot.read_bytes(), before)
