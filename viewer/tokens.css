@@ -3,12 +3,12 @@
 @font-face{font-family:'Geist Mono';src:url('/GeistMono.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
 :root {
   color-scheme: dark;
-  --bg-void:#040506; --bg-deep:#07090B;
-  --surface-1:#0B0E11; --surface-2:#0F1316; --surface-3:#141A1E;
-  --stroke-subtle:rgba(255,255,255,.06); --stroke-default:rgba(255,255,255,.09); --stroke-strong:rgba(255,255,255,.14);
+  --bg-void:#04060a; --bg-deep:#080d14;
+  --surface-1:rgba(255,255,255,.03); --surface-2:#0c121b; --surface-3:#111c28;
+  --stroke-subtle:rgba(255,255,255,.04); --stroke-default:rgba(255,255,255,.08); --stroke-strong:rgba(255,255,255,.14);
   --highlight-inner:rgba(255,255,255,.05);
-  --text-primary:#ECEEF0; --text-secondary:#9AA2AB; --text-tertiary:#89939D; --text-disabled:#4A525B;
-  --accent:#55DBC9; --accent-bright:#8FF0E2; --accent-dim:rgba(85,219,201,.18); --accent-glow:rgba(85,219,201,.35);
+  --text-primary:#e6edf3; --text-secondary:#7d8590; --text-tertiary:#7d8590; --text-disabled:#4A525B;
+  --accent:#4fd8ff; --accent-bright:#b5eeff; --accent-dim:rgba(79,216,255,.08); --accent-glow:rgba(79,216,255,.24);
   --warn:#E8B04A; --danger:#E5636B; --success:#5FD49A;
   --finance:#A08BEA; --marketing:#6F93EE; --operations:#E9A75C; --sales:#E2738F; --strategy:#B8C46A; --team:#4FC7A6; --captures:#B9BEC4;
   --font:'Geist','Inter Display',-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;
@@ -17,21 +17,25 @@
   --type-brand:15px; --type-title:24px; --type-note:24px; --type-metric:18px; --type-icon:18px; --type-timer:44px;
   --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:20px; --space-6:24px; --space-7:32px; --space-8:40px; --space-9:56px;
   --radius-chip:6px; --radius-button:10px; --radius-card:14px; --radius-inspector:18px; --radius-pill:999px;
-  --glass:color-mix(in oklab,var(--surface-2) 78%,transparent); --glass-blur:24px; --glass-saturation:140%;
+  --glass:color-mix(in oklab,var(--surface-2) 78%,transparent); --glass-blur:16px; --glass-saturation:140%;
   --material-shadow:inset 0 1px 0 var(--highlight-inner),0 24px 60px -20px rgba(0,0,0,.8);
-  --instant:90ms; --fast:160ms; --base:240ms; --slow:420ms; --cinema:1200ms;
-  --ease-out:cubic-bezier(.22,1,.36,1); --ease-camera:cubic-bezier(.65,0,.35,1);
-  --header:56px; --sidebar:0px; --safe-width:2048px; --legend-width:176px; --legend-left:40px; --legend-top:40px;
-  --control-height:36px; --touch-target:44px; --command-width:540px; --command-height:52px; --command-bottom:36px; --command-focus-scale:1.08;
-  --orb-size:176px; --orb-bottom:142px; --inspector-width:380px; --preview-width:304px; --answer-width:440px;
+  --instant:150ms; --fast:150ms; --base:300ms; --slow:300ms; --cinema:600ms;
+  --ease-out:cubic-bezier(.22,1,.36,1); --ease-camera:var(--ease-out);
+  --header:72px; --sidebar:0px; --safe-width:2048px; --legend-width:196px; --legend-left:40px; --legend-top:48px;
+  --control-height:36px; --touch-target:44px; --command-width:640px; --command-height:60px; --command-bottom:40px; --command-focus-scale:1;
+  --orb-size:208px; --orb-bottom:142px; --inspector-width:380px; --preview-width:304px; --answer-width:440px;
   --panel-margin:16px; --content-measure:680px; --card-enter-y:8px; --card-exit:168ms;
   --tracking-small:.18em; --tracking-brand:.3em; --line-height:1.65; --focus-width:2px;
   --hairline:1px; --radius:var(--radius-card); --small-radius:var(--radius-button);
   --bg:var(--bg-void); --surface:var(--surface-1); --line:var(--stroke-default); --line-bright:var(--stroke-strong);
   --text:var(--text-primary); --muted:var(--text-secondary); --dim:var(--text-tertiary); --mint:var(--accent);
   --transition:var(--base); --disabled-alpha:.42; --hint-alpha:.9; --hover-scale:1.15;
-  --boot-duration:1400ms; --ripple-size:60px; --ripple-duration:600ms; --source-stagger:40ms;
-  --backdrop:rgba(0,0,0,.5); --vignette-opacity:.7; --surface-opacity:.78; --nebula-alpha:.035;
+  --boot-duration:2400ms; --boot-resolve:600ms; --boot-ignite:800ms; --boot-bloom:1000ms; --boot-chrome:1800ms; --cluster-stagger:60ms; --hint-duration:2000ms; --navigation-hint-duration:3000ms; --ripple-size:60px; --ripple-duration:600ms; --source-stagger:40ms;
+  --backdrop:rgba(0,0,0,.5); --vignette-opacity:.28; --surface-opacity:.78; --nebula-alpha:.035;
+  --hud-alpha:.2; --hud-inset:20px; --hud-corner:20px;
+  --label-opacity:.4; --label-active-opacity:.9; --orb-center:49%; --orb-breath:6000ms;
+  --orb-label-size:11px; --orb-chip-size:9px; --orb-settings-size:24px; --orb-ring-turn:48000ms;
+  --orbit-guide:rgba(79,216,255,.045); --input-shadow:0 12px 48px rgba(0,0,0,.3);
   --layout-gap:24px; --workspace-padding:56px; --line-length:70ch;
 }
 :root[data-theme="light"] {
@@ -42,9 +46,9 @@
   --warn:#895C08; --danger:#AF2835; --success:#247C50;
   --material-shadow:inset 0 1px 0 var(--highlight-inner),0 24px 60px -20px rgba(30,45,40,.18); --backdrop:rgba(30,40,35,.2);
 }
-@media (max-width:1920px){:root{--orb-size:152px;--legend-left:32px;--legend-top:32px;--workspace-padding:40px}}
-@media (max-width:1280px){:root{--command-width:480px;--legend-width:132px;--legend-left:24px;--inspector-width:340px;--preview-width:288px}}
-@media (max-width:700px){:root{--command-width:calc(100vw - 32px);--command-bottom:24px;--orb-size:40px;--orb-bottom:0px;--legend-left:16px;--legend-top:16px;--workspace-padding:24px;--inspector-width:calc(100vw - 32px);--preview-width:calc(100vw - 32px);--answer-width:calc(100vw - 32px)}}
+@media (max-width:1920px){:root{--orb-size:208px;--legend-left:32px;--legend-top:32px;--workspace-padding:40px}}
+@media (max-width:1280px){:root{--command-width:560px;--legend-width:172px;--legend-left:24px;--inspector-width:340px;--preview-width:288px}}
+@media (max-width:700px){:root{--command-width:calc(100vw - 32px);--command-bottom:24px;--orb-size:168px;--orb-bottom:0px;--legend-left:16px;--legend-top:16px;--workspace-padding:24px;--inspector-width:calc(100vw - 32px);--preview-width:calc(100vw - 32px);--answer-width:calc(100vw - 32px)}}
 @media (prefers-contrast:more){:root{--stroke-default:var(--stroke-strong);--text-tertiary:var(--text-secondary)}}
-@media (prefers-reduced-motion:reduce){:root{--cinema:160ms;--boot-duration:300ms;--base:160ms;--slow:160ms}}
-:root[data-motion="reduced"]{--cinema:160ms;--boot-duration:300ms;--base:160ms;--slow:160ms}
+@media (prefers-reduced-motion:reduce){:root{--cinema:0ms;--boot-duration:0ms;--base:150ms;--slow:150ms}}
+:root[data-motion="reduced"]{--cinema:0ms;--boot-duration:0ms;--base:150ms;--slow:150ms}

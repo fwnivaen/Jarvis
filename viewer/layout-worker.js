@@ -1,9 +1,8 @@
 /* Stable, local layout. Existing placements never move when a note is added. */
-const LAYOUT = Object.freeze({version: 2, radius: 190, spreadX: 65, spreadY: 42,
+const LAYOUT = Object.freeze({version: 3, radius: 190, spreadX: 75, spreadY: 48,
   depth: 18, minGap: 15, grid: 18, passes: 18, push: .48, golden: 2.3999632297,
-  anchors: {finance: [-156, 96], strategy: [0, 122], marketing: [156, 88],
-    operations: [0, -6], people: [-150, -82], team: [-150, -82],
-    sales: [156, -76], captures: [66, -126]}});
+  anchors: {finance: [-225, 90], strategy: [25, 165], marketing: [245, 85],
+    operations: [175, -125], people: [-195, -145], team: [-195, -145], sales: [260, -135], captures: [25, -190]}});
 function hash(text) {
   let value = 2166136261;
   for (let i = 0; i < text.length; i++) value = Math.imul(value ^ text.charCodeAt(i), 16777619);

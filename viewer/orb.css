@@ -1,62 +1,46 @@
-.jarvis-orb {
-  --orb-size: 176px;
-  --orb-level: 0;
-  width: max-content;
-  max-width: 100%;
-  color: var(--text-secondary);
-  text-align: center;
-  isolation: isolate;
-  pointer-events: auto;
-}
-.orb-instrument { position: relative; width: var(--orb-size); height: var(--orb-size); margin-inline: auto; }
-.orb-telemetry { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-.orb-halo { position: absolute; inset: 13%; border-radius: 50%; opacity: calc(.08 + var(--orb-level) * .45); background: radial-gradient(ellipse, var(--accent-glow), transparent 68%); transform: scale(calc(1 + var(--orb-level) * .12)); transition: opacity 90ms linear, transform 90ms linear; }
-.orb-core {
-  position: absolute; z-index: 1; inset: 22%; display: grid; place-items: center;
-  border: 1px solid var(--stroke-strong); border-radius: 50%; overflow: hidden;
-  background: radial-gradient(ellipse at 36% 24%,var(--surface-3),var(--bg-void) 70%);
-  color: var(--text-secondary); padding: 0; cursor: pointer;
-  box-shadow: inset 0 1px 1px var(--highlight-inner), inset 0 -8px 20px var(--bg-void);
-  transition: border-color 160ms ease-out, color 160ms ease-out;
-}
-.orb-core:hover { border-color: var(--accent); color: var(--text-primary); }
-.orb-core:focus-visible,.orb-model:focus-visible,.orb-input-settings summary:focus-visible,.orb-device:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
-.orb-caustic { position: absolute; inset: -15%; border-radius: 50%; background: radial-gradient(ellipse at 32% 20%,var(--highlight-inner),transparent 46%); transform: rotate(-24deg); pointer-events: none; }
-.orb-name { position: absolute; top: 38%; font: 500 7px/1.2 var(--font-mono,monospace); letter-spacing: .17em; }
-.orb-dot { position: absolute; top: 60%; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
-.orb-instrument[data-state="IDLE"] .orb-dot { animation: orb-idle-breath 5s ease-in-out infinite; }
-.orb-instrument[data-state="LISTENING"] .orb-core,.orb-instrument[data-state="SPEAKING"] .orb-core { border-color: var(--accent-dim); }
-.orb-instrument[data-state="AWAITING APPROVAL"] .orb-dot { background: var(--warn); box-shadow: none; }
-.orb-instrument[data-state="ERROR"] .orb-dot { background: var(--danger); box-shadow: none; }
-.orb-instrument[data-state="ERROR"] { animation: orb-error-ack 240ms linear 1; }
-.orb-state { margin-top: -4px; color: var(--text-secondary); font: 500 10.5px/1.4 var(--font-mono,monospace); letter-spacing: .18em; }
-.orb-model { display: inline-block; padding: 4px 12px; margin-top: 4px; border: 0; background: transparent; color: var(--text-primary); font: 400 12px/1.4 var(--font-ui,sans-serif); cursor: pointer; }
-.orb-model:hover { color: var(--accent-bright); }
-.orb-detail { color: var(--text-secondary); max-width: 260px; min-height: 16px; font: 400 10.5px/1.5 var(--font-ui,sans-serif); margin-inline:auto; }
-.orb-input-settings { position:relative; margin-top:4px; font:400 10.5px/1.4 var(--font-ui,sans-serif); }
-.orb-input-settings summary { list-style:none; color:var(--text-secondary); cursor:pointer; padding:4px 8px; width:max-content; margin:auto; }
-.orb-input-settings summary::-webkit-details-marker { display:none; }
-.orb-input-settings[open] { z-index:20; border:1px solid var(--stroke-default); border-radius:14px; padding:12px; background:var(--surface-2); width:256px; text-align:left; }
-.orb-input-settings[open] summary { margin-bottom:8px; color:var(--text-primary); }
-.orb-input-settings label { display:grid; gap:8px; }
-.orb-device { padding:8px; max-width:100%; width:100%; border:1px solid var(--stroke-strong); border-radius:6px; color:var(--text-primary); background:var(--surface-1); font:inherit; }
-.orb-device-note,.orb-signal-detail { color:var(--text-secondary); margin:8px 0 0; }
-.orb-approval-line { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; visibility:hidden; }
-.orb-approval-line path { stroke:var(--warn); stroke-width:1; opacity:.5; fill:none; }
-.orb-instrument[data-state="AWAITING APPROVAL"] .orb-approval-line { visibility:visible; }
-@keyframes orb-idle-breath { 0%,100% { opacity:.4; } 50% { opacity:1; } }
-@keyframes orb-error-ack { 0%,40%,80% { opacity:.55; } 20%,60%,100% { opacity:1; } }
-@media (max-width:1920px) { .jarvis-orb { --orb-size:152px; } }
-@media (max-width:600px) {
-  .jarvis-orb { --orb-size:40px; }
-  .orb-core { inset:0; }
-  .orb-name { font-size:5px; top:33%; letter-spacing:.03em; }
-  .orb-dot { top:63%; width:3px; height:3px; }
-  .orb-telemetry,.orb-halo,.orb-state,.orb-model,.orb-detail,.orb-input-settings { display:none; }
-  .orb-instrument { width:44px; height:44px; }
-}
-@media (prefers-reduced-motion:reduce) {
-  .jarvis-orb * { animation:none !important; transition:none !important; }
-  .orb-halo { transform:none; opacity:calc(.08 + var(--orb-level) * .45); }
-}
-@media (prefers-contrast:more) { .orb-core { border-color:var(--text-secondary); }.orb-state,.orb-detail,.orb-input-settings summary { color:var(--text-primary); } }
+/* Reticles and particles share the existing assistant state and audio meters. */
+.jarvis-orb{--orb-level:0;color:var(--accent);text-align:center;isolation:isolate}
+.orb-instrument{position:relative;width:var(--orb-size);height:var(--orb-size);margin-inline:auto}
+.orb-particles,.orb-telemetry{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.orb-particles{z-index:1}
+.orb-telemetry{z-index:2}
+.orb-halo{position:absolute;inset:8%;border-radius:50%;background:radial-gradient(circle,var(--accent-glow),transparent 68%);opacity:calc(.3 + var(--orb-level)*.5);transform:scale(calc(1 + var(--orb-level)*.1));transition:opacity var(--fast) var(--ease-out),transform var(--fast) var(--ease-out)}
+.orb-core{position:absolute;inset:20%;z-index:3;display:grid;place-items:center;padding:0;border:var(--hairline) solid transparent;border-radius:50%;background:radial-gradient(circle,transparent 40%,var(--accent-dim));color:var(--accent-bright);cursor:pointer;transition:border-color var(--fast) var(--ease-out),box-shadow var(--fast) var(--ease-out)}
+.orb-core:hover{border-color:var(--accent-glow);box-shadow:0 0 var(--space-6) var(--accent-dim)}
+.orb-core:focus-visible,.orb-model:focus-visible,.orb-input-settings summary:focus-visible,.orb-device:focus-visible{outline:var(--focus-width) solid var(--accent);outline-offset:var(--space-1)}
+.orb-name{font:500 var(--orb-label-size)/1 var(--mono);letter-spacing:.19em;text-shadow:0 0 var(--space-3) var(--accent-glow);padding-left:.19em}
+.orb-caustic{position:absolute;inset:0;border-radius:50%;background:radial-gradient(ellipse at 50% 50%,var(--bg-void),transparent 68%);opacity:.55;z-index:-1}
+.orb-dot{display:none}
+.orb-instrument[data-state="IDLE"] .orb-halo{animation:orb-idle-breath var(--orb-breath) var(--ease-out) infinite}
+.orb-status-chip{position:absolute;top:calc(100% + var(--space-3));left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:var(--space-2);width:max-content;max-width:calc(100vw - var(--space-9));padding:var(--space-2) var(--space-3);border:var(--hairline) solid var(--accent-dim);border-radius:var(--radius-pill);background:var(--surface-1);backdrop-filter:blur(var(--glass-blur));white-space:nowrap}
+.orb-state,.orb-model,.orb-status-divider{font:400 var(--orb-chip-size)/1.4 var(--mono);letter-spacing:.12em}
+.orb-state{color:var(--accent)}
+.orb-state::before{content:"";display:inline-block;width:var(--space-1);height:var(--space-1);border-radius:50%;background:currentColor;vertical-align:middle;margin-right:var(--space-2);box-shadow:0 0 var(--space-2) var(--accent-glow)}
+.orb-model{color:var(--text-secondary);padding:0;border:0;background:transparent;overflow:hidden;text-overflow:ellipsis;max-width:var(--legend-width);cursor:pointer}
+.orb-model:hover{color:var(--accent-bright)}
+.orb-status-divider{color:var(--text-secondary)}
+.orb-voice-hint{position:absolute;top:calc(100% + var(--space-9));left:50%;transform:translateX(-50%);width:max-content;font:400 var(--type-eyebrow) var(--mono);color:var(--text-secondary);opacity:0;pointer-events:none}
+.show-voice-hint .orb-voice-hint{animation:orb-hint var(--hint-duration) var(--ease-out) both}
+.orb-input-settings{position:absolute;top:calc(100% + var(--space-3));right:calc(-1 * var(--space-8));z-index:20;font:400 var(--type-xs)/1.5 var(--font)}
+.orb-input-settings summary{list-style:none;display:grid;place-items:center;width:var(--orb-settings-size);height:var(--orb-settings-size);color:var(--text-secondary);cursor:pointer;opacity:var(--label-opacity)}
+.orb-input-settings summary:hover,.orb-input-settings[open] summary{opacity:1;color:var(--accent)}
+.orb-input-settings summary::-webkit-details-marker{display:none}
+.orb-input-settings summary svg{width:var(--space-3);height:var(--space-3);stroke:currentColor;stroke-width:var(--hairline);fill:none}
+.orb-input-settings[open]{width:var(--preview-width);max-width:calc(100vw - var(--space-7));padding:var(--space-4);border:var(--hairline) solid var(--stroke-default);border-radius:var(--radius-card);background:var(--surface-2);text-align:left}
+.orb-input-settings[open] summary{margin-left:auto;margin-bottom:var(--space-2)}
+.orb-input-settings label{display:grid;gap:var(--space-2);color:var(--text-primary)}
+.orb-device{width:100%;padding:var(--space-2);border:var(--hairline) solid var(--stroke-strong);border-radius:var(--radius-chip);background:var(--surface-1);font:inherit}
+.orb-device-note,.orb-signal-detail,.orb-detail{color:var(--text-secondary);margin-top:var(--space-3);font-size:var(--type-eyebrow)}
+.orb-approval-line{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;visibility:hidden}
+.orb-approval-line path{stroke:var(--warn);stroke-width:var(--hairline);opacity:.5;fill:none}
+.orb-instrument[data-state="AWAITING APPROVAL"] .orb-approval-line{visibility:visible}
+.jarvis-orb[data-state="ERROR"] .orb-state{color:var(--danger)}
+.jarvis-orb[data-state="AWAITING APPROVAL"] .orb-state{color:var(--warn)}
+.jarvis-orb[data-state="ERROR"] .orb-halo{background:radial-gradient(circle,var(--danger),transparent 68%);opacity:.12}
+.orb-particle-fallback .orb-core{border-color:var(--accent-glow);background:radial-gradient(circle,var(--accent-dim),transparent)}
+@keyframes orb-idle-breath{0%,100%{opacity:.22;transform:scale(.95)}50%{opacity:.4;transform:scale(1.04)}}
+@keyframes orb-hint{0%,75%{opacity:.7}100%{opacity:0}}
+@media(max-width:700px){.orb-name{font-size:var(--orb-chip-size)}.orb-input-settings{right:calc(-1 * var(--space-7))}.orb-input-settings[open]{right:calc(-1 * var(--space-8))}}
+@media(prefers-reduced-motion:reduce){.jarvis-orb *{animation:none!important}.orb-halo{transform:none}}
+:root[data-motion="reduced"] .jarvis-orb *{animation:none!important}
+@media(prefers-contrast:more){.orb-status-chip{border-color:var(--text-secondary)}.orb-model,.orb-device-note,.orb-signal-detail,.orb-detail{color:var(--text-primary)}}

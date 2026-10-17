@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const SETTINGS=Object.freeze({preferenceKey:'jarvis.preferences.v2',pinKey:'jarvis.pins.v2',historyKey:'jarvis.notifications.v2',
-    insightMs:8000,hoverMs:240,statusMs:5000,bootMs:1400,bootReducedMs:300,placementGap:16,placementStep:24,
+    insightMs:8000,hoverMs:240,statusMs:5000,bootMs:2400,bootReducedMs:0,placementGap:16,placementStep:24,
     paletteLimit:60,historyLimit:40,soundMs:90,soundGain:.018,soundHz:620,monoPlaces:0,sheetDismissPx:80});
   const $=id=>document.getElementById(id),create=(tag,className,text)=>{const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e;};
   const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}};
@@ -222,15 +222,13 @@
   function renderHistory(){const body=workspaceFrame('Notification history','Insights from this browser, saved locally.');if(!history.length)body.append(create('p','note-content','No archived insights yet.'));history.forEach(item=>row(body,item.text,new Date(item.time).toLocaleString()));}
   function renderHelp(){const body=workspaceFrame('Keyboard shortcuts','Operate JARVIS without leaving the keyboard.');[['⌘ K / Ctrl K','Search notes, workspaces and actions'],['F','Fit the galaxy'],['Esc','Close the current surface or selection'],['Arrow keys','Walk a selected note’s links'],['Tab','Cycle constellations when the galaxy has focus'],['Space, held','Push to talk outside text fields'],['Shift + drag / right drag','Pan the galaxy'],['Scroll / pinch','Zoom toward the pointer']].forEach(([key,text])=>row(body,key,text));}
   function boot(launch){
-    const key='jarvis.boot.'+launch;try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');}catch{}
-    const reduced=preferences.motion==='reduced'||matchMedia('(prefers-reduced-motion: reduce)').matches,duration=reduced?SETTINGS.bootReducedMs:SETTINGS.bootMs;
-    const layer=create('div','boot-layer');layer.setAttribute('aria-hidden','true');layer.append(create('div','boot-point'));$('stage').append(layer);document.body.classList.add('is-booting');
-    const home=matchMedia('(max-width:700px)').matches?'':'translateX(-50%) ';
-    const orb=$('jarvis-orb-host'),stage=$('stage').getBoundingClientRect(),box=orb.getBoundingClientRect();
-    const animation=!reduced&&orb.animate?orb.animate([{transform:home+'translateY('+(stage.top+stage.height/2-box.top-box.width/2)+'px) scale(.04)',opacity:0,offset:0},{transform:home+'translateY('+(stage.top+stage.height/2-box.top-box.width/2)+'px) scale(1)',opacity:1,offset:.4},{transform:home+'translateY(0) scale(1)',opacity:1,offset:1}],{duration,easing:'cubic-bezier(.65,0,.35,1)'}):null;
+    const key='jarvis.boot.hud';try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');}catch{}
+    const reduced=preferences.motion==='reduced'||matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced)return;
+    const duration=SETTINGS.bootMs,layer=create('div','boot-layer');layer.setAttribute('aria-hidden','true');
+    layer.append(create('span',null,'INITIATING J.A.R.V.I.S.'),create('span','boot-progress'));$('stage').append(layer);document.body.classList.add('is-booting');
     window.JarvisGalaxy?.boot?.(duration);
-    const done=()=>{layer.remove();animation?.cancel();document.body.classList.remove('is-booting');window.JarvisGalaxy?.boot?.(0);document.removeEventListener('keydown',done);};document.addEventListener('keydown',done,{once:true});
-    setTimeout(done,duration);
+    const done=()=>{clearTimeout(timer);layer.remove();document.body.classList.remove('is-booting');window.JarvisGalaxy?.boot?.(0);document.removeEventListener('keydown',done);document.removeEventListener('pointerdown',done);};
+    document.addEventListener('keydown',done,{once:true});document.addEventListener('pointerdown',done,{once:true});const timer=setTimeout(done,duration);
   }
   async function refreshSystem(){try{systemState=await request('/system');$('build-version').textContent='V'+systemState.version;$('system-status').textContent='LOCAL UNIVERSE';$('system-dot').dataset.status='online';if(systemState.launch&&binding)boot(systemState.launch);}catch{$('system-status').textContent='OFFLINE';$('system-dot').dataset.status='offline';}}
   document.addEventListener('keydown',e=>{

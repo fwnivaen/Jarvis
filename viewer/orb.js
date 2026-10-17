@@ -2,10 +2,34 @@
 (() => {
   'use strict';
   const CONFIG = Object.freeze({bands:24,ticks:112,fft:1024,pixelRatio:2,minHz:80,maxHz:8000,
-    floorDB:-70,ceilingDB:-12,smoothing:.65,staleMs:600,activeFrameMs:32,idleFrameMs:160,
-    cometMs:1600,idleBreathMs:5000,ringTurnMs:36000,micGain:4,renderTimeoutMs:16000,
+    floorDB:-70,ceilingDB:-12,smoothing:.65,staleMs:600,activeFrameMs:16,idleFrameMs:16,
+    cometMs:1600,idleBreathMs:6000,ringTurnMs:48000,micGain:4,renderTimeoutMs:16000,
     ringRadius:.405,tickRadius:.35,waveRadius:.23,coreRadius:.27,progressWidth:2,
     waveformWidth:1.4,tickWidth:1,dotRadius:1,staticDots:96,modelCharacters:44});
+  const VISUAL = Object.freeze({particles:1200,particleRatio:1.5,particleSize:2.1,cameraZ:3.4,
+    cameraFov:45,sphereRadius:.88,innerRadius:.42,outerRadius:.96,goldenAngle:2.3999632297,
+    breathDepth:.035,drift:.075,thinkSpin:1.4,thinkContract:.16,listenExpand:.12,
+    activationMs:900,activationRadius:.32,ringRadii:[.465,.415,.365],ringSpeeds:[1,-1.45,.65],
+    hintMs:2000,hintKey:'jarvis.hud.voice-hint',reducedFrameMs:160});
+  const PARTICLE_VERTEX = `
+    uniform float uTime;uniform float uLevel;uniform float uThinking;uniform float uReduced;
+    uniform float uSize;uniform float uRatio;uniform float uBreath;
+    attribute float aPhase;attribute float aSize;varying float vLight;
+    void main(){vec3 p=position;float t=uTime*(1.-uReduced);
+      float angle=t*(.075+uThinking*1.4)+p.y*.3+uThinking*length(p)*sin(t*.7);
+      mat2 spin=mat2(cos(angle),-sin(angle),sin(angle),cos(angle));p.xz=spin*p.xz;
+      p*=1.+uBreath*.035*(1.-uReduced)-uThinking*.16+uLevel*.12*(1.-uReduced);
+      p+=normalize(p)*sin(aPhase+t*2.)*uLevel*.035*(1.-uReduced);
+      vec4 mv=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*mv;
+      gl_PointSize=uSize*uRatio*aSize*(3.4/-mv.z);
+      vLight=(.3+.7*smoothstep(-.9,.9,p.z))*(.78+.22*sin(aPhase+t*.7));
+    }`;
+  const PARTICLE_FRAGMENT = `
+    uniform vec3 uColor;varying float vLight;
+    void main(){float r=length(gl_PointCoord-.5)*2.;if(r>1.)discard;
+      float glow=exp(-r*r*3.5);gl_FragColor=vec4(mix(uColor,vec3(.87,.98,1.),pow(vLight,3.)*.45),glow*vLight*.85);
+      #include <colorspace_fragment>
+    }`;
   const STATES = Object.freeze(['IDLE','LISTENING','THINKING','SPEAKING','EXECUTING','AWAITING APPROVAL','ERROR']);
   const host = document.getElementById('jarvis-orb-host');
   if (!host) return;
@@ -14,18 +38,20 @@
   host.classList.add('jarvis-orb');
   host.innerHTML = `<div class="orb-instrument" data-state="IDLE">
     <div class="orb-halo" aria-hidden="true"></div>
+    <canvas class="orb-particles" aria-hidden="true"></canvas>
     <canvas class="orb-telemetry" aria-hidden="true"></canvas>
     <button type="button" class="orb-core" aria-label="Turn microphone on" aria-pressed="false">
       <span class="orb-caustic" aria-hidden="true"></span><span class="orb-name">J.A.R.V.I.S.</span>
       <span class="orb-dot" aria-hidden="true"></span>
     </button><svg class="orb-approval-line" aria-hidden="true"><path></path></svg>
-  </div><div class="orb-state" role="status" aria-live="polite">IDLE</div>
-  <button type="button" class="orb-model" aria-haspopup="dialog" aria-controls="brain-picker">Connecting brain</button>
-  <div class="orb-detail">Hold Space to talk</div>
-  <details class="orb-input-settings"><summary aria-label="Microphone input settings">Microphone input</summary>
+  </div><div class="orb-status-chip"><span class="orb-state" role="status" aria-live="polite">IDLE</span><span class="orb-status-divider" aria-hidden="true">·</span>
+  <button type="button" class="orb-model" aria-haspopup="dialog" aria-controls="brain-picker">Connecting brain</button></div>
+  <div class="orb-voice-hint">Hold Space to talk</div>
+  <details class="orb-input-settings"><summary aria-label="Microphone input settings" title="Microphone input settings"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2v12M8 2v12M13 2v12M1 5h4M6 11h4M11 6h4"/></svg></summary>
     <label>Input device<select class="orb-device" aria-label="Microphone input device"><option value="">System default</option></select></label>
     <p class="orb-device-note">Device selection uses the local Mac recognizer.</p>
     <p class="orb-signal-detail">Microphone off · no audio sampled</p>
+    <div class="orb-detail">Hold Space to talk</div>
   </details>`;
   const $ = selector => host.querySelector(selector);
   const instrument = $('.orb-instrument'), canvas = $('.orb-telemetry'), ctx = canvas.getContext('2d');
@@ -35,6 +61,29 @@
   let micRequest = 0, audioContext = null, playback = null, renderController = null, outputUnavailable = false;
   let heldSpace = false, enabledBeforeSpace = false, lastDraw = 0, spectrum = new Array(CONFIG.bands).fill(0);
   let connected = true, stopped = false, micPending = false, outputLoading = false, dirty = true;
+  let particleView = null, listeningAt = -Infinity, rotationClock = 0, lastAnimation = 0, visualInk = null;
+  try{if(!sessionStorage.getItem(VISUAL.hintKey)){host.classList.add('show-voice-hint');sessionStorage.setItem(VISUAL.hintKey,'1');setTimeout(()=>host.classList.remove('show-voice-hint'),VISUAL.hintMs);}}catch{}
+  async function initParticles(){
+    let renderer;
+    try{
+      const THREE=await import('/three.module.js');if(stopped)return;
+      renderer=new THREE.WebGLRenderer({canvas:$('.orb-particles'),alpha:true,antialias:false,powerPreference:'low-power'});
+      renderer.setPixelRatio(Math.min(devicePixelRatio||1,VISUAL.particleRatio));renderer.setClearColor(0,0);
+      const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(VISUAL.cameraFov,1,.1,10);camera.position.z=VISUAL.cameraZ;
+      const positions=new Float32Array(VISUAL.particles*3),phases=new Float32Array(VISUAL.particles),sizes=new Float32Array(VISUAL.particles);
+      for(let i=0;i<VISUAL.particles;i++){
+        const y=1-2*(i+.5)/VISUAL.particles,r=Math.sqrt(1-y*y),angle=i*VISUAL.goldenAngle;
+        const seed=((Math.imul(i+1,16807)>>>0)%997)/997,radius=VISUAL.sphereRadius*(i%3?VISUAL.outerRadius:VISUAL.innerRadius+seed*.5);
+        positions.set([Math.cos(angle)*r*radius,y*radius,Math.sin(angle)*r*radius],i*3);phases[i]=seed*Math.PI*2;sizes[i]=.55+seed*.7;
+      }
+      const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));geometry.setAttribute('aPhase',new THREE.BufferAttribute(phases,1));geometry.setAttribute('aSize',new THREE.BufferAttribute(sizes,1));
+      const material=new THREE.ShaderMaterial({vertexShader:PARTICLE_VERTEX,fragmentShader:PARTICLE_FRAGMENT,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+        uniforms:{uTime:{value:0},uLevel:{value:0},uThinking:{value:0},uReduced:{value:0},uBreath:{value:0},uSize:{value:VISUAL.particleSize},uRatio:{value:renderer.getPixelRatio()},uColor:{value:new THREE.Color(color('--accent'))}}});
+      const points=new THREE.Points(geometry,material);scene.add(points);
+      particleView={renderer,scene,camera,geometry,material};resize();dirty=true;
+    }catch{renderer?.dispose();host.classList.add('orb-particle-fallback');}
+  }
+
   const clamp = value => Math.max(0, Math.min(1, Number(value) || 0));
   const editable = element => !!element?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
   const rootStyle = () => getComputedStyle(document.documentElement);
@@ -103,7 +152,7 @@
   }
   function sync() {
     const next=selectedState();
-    if(next!==currentState){currentState=next;instrument.dataset.state=next;label.textContent=next;dirty=true;}
+    if(next!==currentState){currentState=next;instrument.dataset.state=next;label.textContent=next;host.dataset.state=next;if(next==='LISTENING')listeningAt=performance.now();dirty=true;}
     core.setAttribute('aria-pressed',String(voice.enabled));core.setAttribute('aria-label',voice.enabled?'Turn microphone off':'Turn microphone on');
     refreshDetail();
   }
@@ -161,7 +210,7 @@
   }
   function setModel(brain) {
     const text=typeof brain==='string'?brain:brain?.model||brain?.label;
-    if(text){model.textContent=text.slice(0,CONFIG.modelCharacters);model.title='Switch brain · '+text;}
+    if(text){model.textContent=text.replace(/^(?:CODEX|OPENROUTER)\s*[·/]\s*/i,'').slice(0,CONFIG.modelCharacters).toUpperCase();model.title='Switch brain · '+text;}
   }
   function toggleMicrophone() {document.getElementById('mic')?.click();}
   core.addEventListener('click',()=>{if(currentState==='ERROR'){explicit=null;voice.notice='';sync();}toggleMicrophone();});
@@ -190,42 +239,51 @@
   }else window.JarvisVoice?.endHold?.();}
   window.addEventListener('keyup',event=>{if(event.code==='Space'){if(heldSpace)event.preventDefault();releaseSpace();}});
   window.addEventListener('blur',releaseSpace);
-  function resize(){const size=instrument.clientWidth;const ratio=Math.min(devicePixelRatio||1,CONFIG.pixelRatio);canvas.width=size*ratio;canvas.height=size*ratio;canvas.style.width=size+'px';canvas.style.height=size+'px';ctx.setTransform(ratio,0,0,ratio,0,0);dirty=true;}
+  function resize(){const size=instrument.clientWidth;const ratio=Math.min(devicePixelRatio||1,CONFIG.pixelRatio);canvas.width=size*ratio;canvas.height=size*ratio;canvas.style.width=size+'px';canvas.style.height=size+'px';ctx.setTransform(ratio,0,0,ratio,0,0);particleView?.renderer.setSize(size,size,false);dirty=true;}
   new ResizeObserver(resize).observe(instrument);
   function line(angle,radius,extension,width,ink,alpha,size){ctx.globalAlpha=alpha;ctx.strokeStyle=ink;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(size/2+Math.cos(angle)*radius,size/2+Math.sin(angle)*radius);ctx.lineTo(size/2+Math.cos(angle)*(radius+extension),size/2+Math.sin(angle)*(radius+extension));ctx.stroke();}
   function draw(now) {
     if(stopped)return;requestAnimationFrame(draw);
     const active=currentState!=='IDLE'&&currentState!=='ERROR';
-    if(!active&&!dirty)return;
-    if(now-lastDraw<(active&&!reduced.matches?CONFIG.activeFrameMs:CONFIG.idleFrameMs)||document.hidden)return;lastDraw=now;
-    dirty=false;
+    const frameMs=reduced.matches?VISUAL.reducedFrameMs:CONFIG.activeFrameMs;
+    if(document.hidden||now-lastDraw<frameMs||reduced.matches&&!active&&!dirty)return;
+    const delta=lastAnimation?Math.min(now-lastAnimation,100):0;lastAnimation=now;lastDraw=now;dirty=false;
+    if(!reduced.matches)rotationClock+=delta*(currentState==='THINKING'?4:1);
     const size=instrument.clientWidth;if(!size)return;ctx.clearRect(0,0,size,size);
     const ink=color(currentState==='ERROR'?'--danger':currentState==='AWAITING APPROVAL'?'--warn':'--accent');
-    const muted=color('--text-tertiary');const radius=size*CONFIG.ringRadius;
+    const center=size/2,breath=reduced.matches?0:Math.sin(now/CONFIG.idleBreathMs*Math.PI*2);
     let measured=null;
     if(currentState==='SPEAKING'&&playback)measured=readSpectrum(playback.meter);
     else if(currentState==='LISTENING'&&voice.enabled){if(voice.backend==='native'&&native&&Date.now()-native.received<CONFIG.staleMs)measured=native;else if(browserMic)measured=readSpectrum(browserMic.meter);}
     spectrum=measured?.bands||new Array(CONFIG.bands).fill(0);
     const amplitude=measured?.rms||0;instrument.style.setProperty('--orb-level',String(amplitude));
-    for(let index=0;index<CONFIG.staticDots;index++){const angle=index/CONFIG.staticDots*Math.PI*2;ctx.globalAlpha=.14;ctx.fillStyle=muted;ctx.beginPath();ctx.arc(size/2+Math.cos(angle)*radius,size/2+Math.sin(angle)*radius,CONFIG.dotRadius,0,Math.PI*2);ctx.fill();}
-    const rotation=active&&!reduced.matches?now/CONFIG.ringTurnMs*Math.PI*2:0;
-    for(let index=0;index<CONFIG.ticks;index++){
-      const energy=spectrum[Math.floor(index/CONFIG.ticks*CONFIG.bands)];
-      const angle=index/CONFIG.ticks*Math.PI*2-Math.PI/2+rotation;
-      line(angle,size*CONFIG.tickRadius,size*(.012+energy*.045),CONFIG.tickWidth,ink,active?.18+energy*.72:.10,size);
+    if(particleView){
+      const u=particleView.material.uniforms;u.uTime.value=now/1000;u.uLevel.value=amplitude;u.uThinking.value=currentState==='THINKING'?1:0;u.uReduced.value=reduced.matches?1:0;u.uBreath.value=breath;
+      if(ink!==visualInk){u.uColor.value.set(ink);visualInk=ink;}
+      particleView.renderer.render(particleView.scene,particleView.camera);
     }
-    if(measured&&(!reduced.matches))for(let index=0;index<CONFIG.bands;index++){
-      const x=size*.31+index/(CONFIG.bands-1)*size*.38,height=spectrum[index]*size*.18;
-      ctx.globalAlpha=.3+spectrum[index]*.7;ctx.strokeStyle=ink;ctx.lineWidth=CONFIG.waveformWidth;ctx.beginPath();ctx.moveTo(x,size/2-height/2);ctx.lineTo(x,size/2+height/2);ctx.stroke();
+    VISUAL.ringRadii.forEach((ratio,ring)=>{
+      const radius=size*ratio,turn=rotationClock/CONFIG.ringTurnMs*Math.PI*2*VISUAL.ringSpeeds[ring];
+      ctx.strokeStyle=ink;ctx.lineWidth=CONFIG.tickWidth;ctx.globalAlpha=ring===0?.16:.28;
+      ctx.beginPath();ctx.arc(center,center,radius,0,Math.PI*2);ctx.stroke();
+      ctx.globalAlpha=.7;ctx.beginPath();ctx.arc(center,center,radius,turn,turn+Math.PI*(ring===1?.42:.2));ctx.stroke();
+      if(ring<2)for(let i=0;i<CONFIG.ticks/2;i++){
+        const angle=i/(CONFIG.ticks/2)*Math.PI*2+turn,major=i%7===0;
+        line(angle,radius,major?size*.022:size*.008,CONFIG.tickWidth,ink,major?.55:.18,size);
+      }
+    });
+    // A single activation wave; all subsequent audio motion is measured.
+    const activation=(now-listeningAt)/VISUAL.activationMs;
+    if(!reduced.matches&&activation>=0&&activation<1){ctx.globalAlpha=(1-activation)*.7;ctx.strokeStyle=ink;ctx.lineWidth=CONFIG.progressWidth;ctx.beginPath();ctx.arc(center,center,size*(VISUAL.activationRadius+activation*.23),0,Math.PI*2);ctx.stroke();}
+    if(measured&&!reduced.matches)for(let i=0;i<CONFIG.ticks;i++){
+      const energy=spectrum[Math.floor(i/CONFIG.ticks*CONFIG.bands)],angle=i/CONFIG.ticks*Math.PI*2-Math.PI/2;
+      line(angle,size*.335,energy*size*.065,CONFIG.waveformWidth,ink,.35+energy*.65,size);
     }
-    let start=-Math.PI/2,end=start;
-    if(currentState==='LISTENING')end=start+Math.PI*2*amplitude;
-    if(currentState==='THINKING'||(currentState==='EXECUTING'&&explicit?.progress===null)){start+=reduced.matches?0:now/CONFIG.cometMs*Math.PI*2;end=start+Math.PI*.44;}
-    if(currentState==='EXECUTING'&&explicit?.progress!==null)end=start+Math.PI*2*(explicit?.progress||0);
-    if(currentState==='AWAITING APPROVAL')end=start+Math.PI*1.5;
-    if(currentState==='ERROR')end=start+Math.PI*2;
-    if(currentState==='SPEAKING')end=start+Math.PI*2*amplitude;
-    if(end>start){ctx.globalAlpha=currentState==='ERROR'?.42:.9;ctx.strokeStyle=ink;ctx.lineWidth=CONFIG.progressWidth;ctx.lineCap='round';ctx.beginPath();ctx.arc(size/2,size/2,size*.38,start,end);ctx.stroke();}
+    if(currentState==='THINKING'||currentState==='EXECUTING'||currentState==='AWAITING APPROVAL'){
+      const start=-Math.PI/2+(reduced.matches?0:now/CONFIG.cometMs*Math.PI*2);
+      const span=currentState==='EXECUTING'&&explicit?.progress!==null?Math.PI*2*(explicit?.progress||0):Math.PI*.48;
+      ctx.globalAlpha=.8;ctx.strokeStyle=ink;ctx.lineWidth=CONFIG.progressWidth;ctx.beginPath();ctx.arc(center,center,size*.385,start,start+span);ctx.stroke();
+    }
     ctx.globalAlpha=1;
     if(explicit?.target&&currentState==='AWAITING APPROVAL'){
       const target=document.querySelector(explicit.target),path=$('.orb-approval-line path');
@@ -238,7 +296,7 @@
   window.JarvisOrb={updateVoice,nativeAudio,setStatus,setModel,playSpeech,stopSpeech,microphoneDevice:()=>window.JarvisVoice?.inputDevice?.()??$('.orb-device').value,
     setConnected(value){connected=Boolean(value);sync();},
     snapshot:()=>({state:currentState,micEnabled:voice.enabled,audioSource:playback?'local-daniel-output':voice.enabled&&voice.backend==='native'&&native?'native-microphone':browserMic?'browser-microphone':null,spectrum:!!playback||!!browserMic||!!(voice.enabled&&native&&Date.now()-native.received<CONFIG.staleMs)}),
-    destroy(){stopped=true;stopSpeech();stopMicMeter();audioContext?.close();}};
+    destroy(){stopped=true;stopSpeech();stopMicMeter();audioContext?.close();particleView?.geometry.dispose();particleView?.material.dispose();particleView?.renderer.dispose();}};
   window.addEventListener('pagehide',()=>{stopSpeech();stopMicMeter();});
-  resize();sync();requestAnimationFrame(draw);
+  resize();sync();initParticles();requestAnimationFrame(draw);
 })();
