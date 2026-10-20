@@ -1,0 +1,18 @@
+{
+  "enabled": false,
+  "routing_enabled": true,
+  "parallel_workers_enabled": true,
+  "live_monitor_enabled": true,
+  "terminal_monitor_enabled": true,
+  "cheap_vision_enabled": true,
+  "skip_unchanged_frames_enabled": true,
+  "max_workers": 3,
+  "worker_retries": 2,
+  "worker_timeout_s": 45,
+  "max_escalations": 1,
+  "request_timeout_s": 240,
+  "quick_model": "gpt-6-luna",
+  "brain_model": "gpt-6.1-sol",
+  "manual_model": "gpt-6-astra",
+  "effort": "high"
+}

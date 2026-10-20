@@ -80,6 +80,7 @@ import focus
 
 import watch
 import note_store
+import ultra
 WATCH = watch.Watch()
 FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
@@ -126,6 +127,7 @@ PRIVATE_FILE_MODE = 0o600
 UI_VERSION = "2.0"
 LAUNCH_ID = secrets.token_hex(8)
 UI_ASSETS = {
+    "agents.js": "text/javascript", "agents.css": "text/css",
     "theme.js": "text/javascript", "ui.js": "text/javascript",
     "tokens.css": "text/css", "app.css": "text/css", "open-deck.css": "text/css",
     "Inter.woff2": "font/woff2", "JetBrainsMono.woff2": "font/woff2",
@@ -166,12 +168,15 @@ SPOKEN_MODELS = {
     "gpt 6 astra": ("codex-cli", "gpt-6-astra"),
     "luna": ("codex-cli", "gpt-6-luna"),
     "gpt 6 luna": ("codex-cli", "gpt-6-luna"),
+    "sol": ("codex-cli", "gpt-6.1-sol"),
+    "gpt 6.1 sol": ("codex-cli", "gpt-6.1-sol"),
     "openrouter astra": ("openrouter", "openai/gpt-6-astra"),
     "fable 5.1": ("openrouter", "anthropic/claude-fable-5.1"),
     "claude fable 5.1": ("openrouter", "anthropic/claude-fable-5.1"),
 }
-# Both CLI IDs passed real minimal calls with this Mac's login on 2026-10-12.
-CODEX_KNOWN_MODELS = frozenset({"gpt-6-astra", "gpt-6-luna"})
+# Astra/Luna passed real CLI calls on 2026-10-12; Sol high passed app-server
+# inference with this Mac's same Codex login on 2026-10-20.
+CODEX_KNOWN_MODELS = frozenset({"gpt-6-astra", "gpt-6-luna", "gpt-6.1-sol"})
 # Verified against the public catalog; intersect again at startup when keyed.
 OPENROUTER_KNOWN_MODELS = frozenset({"openai/gpt-6-astra", "anthropic/claude-fable-5.1"})
 MODEL_COMMAND_PATTERN = r"^(?:(?:hey )?jarvis[, ]+)?(?:please )?(?:(?:switch|change)(?: (?:your|the))?(?: (?:brain|model))? to|try on|go back to)(?=$|\s)\s*"
@@ -230,6 +235,9 @@ SESSION_LOCK = threading.Lock()
 BRAIN_SLOTS = threading.BoundedSemaphore(MAX_PARALLEL_BRAINS)
 PREFLIGHT_CAPTURES = {}
 PREFLIGHT_CLOSED = {}
+ULTRA_CONFIG_PATH = ROOT / "ultra.json"
+ULTRA = ultra.UltraJarvis(lambda: ultra.CodexBridge(find_codex(), DISABLED_FEATURES,
+    tuple(value for value in CLI_OVERRIDES if not value.startswith("model_reasoning_effort="))))
 
 
 class BrainError(Exception):
@@ -311,6 +319,11 @@ def active_settings():
 
 def brain_status():
     config = active_settings()
+    settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
+    with MODEL_LOCK:
+        automatic = ACTIVE_BRAIN is None
+    if settings.enabled and settings.routing_enabled and automatic:
+        return {"backend": "codex-app-server", "model": "ultra", "label": "ULTRA · Luna / Sol"}
     backend = config.get("brain", "codex-cli")
     label = {"codex-cli": "CODEX", "openrouter": "OPENROUTER", "openai-api": "OPENAI"}.get(backend, "UNKNOWN")
     return {"backend": backend, "model": config["model"], "label": label + " · " + model_label(config["model"])}
@@ -706,6 +719,21 @@ def ask_brain(system, notes, history, question, image=None, webcam=False):
         print(f"Brain [{safe_backend}] {time.monotonic() - started:.{TIME_PRECISION}f}s", flush=True)
 
 
+def answer_request(system, notes, history, question, image=None, webcam=False, automatic=False, watch_token=None):
+    """Flag-off path is the existing brain, including its exact override behavior."""
+    settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
+    with MODEL_LOCK:
+        manual = ACTIVE_BRAIN
+    if (not settings.enabled or (image is None and not settings.routing_enabled)
+            or (image is not None and not settings.cheap_vision_enabled)
+            or (manual is not None and manual[0] != "codex-cli")):
+        return ask_brain(system, notes, history, question, image=image, webcam=webcam) if image is not None else ask_brain(system, notes, history, question)
+    system = system.replace("photo to GPT-6 Astra", "photo to the configured Ultra vision model")
+    return ULTRA.answer(settings, system, notes, history, question, image=image,
+        kind="webcam" if webcam else "screen" if image is not None else "chat",
+        manual_model=manual[1] if manual else None, automatic=automatic, watch_token=watch_token)
+
+
 class GalaxyServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -755,12 +783,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path == "/agents":
+            settings, notice = ultra.Settings.read(ULTRA_CONFIG_PATH)
+            self.send_bytes(json.dumps(ULTRA.public_state(settings, notice)).encode(), "application/json", head=head)
+            return
         if path == "/system":
+            settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
             self.send_bytes(json.dumps({"version": UI_VERSION, "launch": LAUNCH_ID,
                 "notes": len(NOTES), "local": True, "sync": False,
                 "capabilities": {"notes": True, "focus": True, "eyes": True,
                     "screen": True, "models": True, "computer_control": False,
-                    "agents": False, "trading": False, "automations": False}}).encode(), "application/json", head=head)
+                    "agents": settings.enabled and settings.routing_enabled, "trading": False, "automations": False}}).encode(), "application/json", head=head)
             return
         if path == "/voice/devices":
             self.send_bytes(json.dumps(voice_bridge.audio_devices()).encode(), "application/json", head=head)
@@ -946,7 +979,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if self.path in ("/see", "/look"):
                 start = time.monotonic()
-                result = ask_brain(LOOK_PROMPT if self.path == "/look" else SEE_PROMPT, [], [], question, image=image, webcam=self.path == "/look")
+                result = answer_request(LOOK_PROMPT if self.path == "/look" else SEE_PROMPT, [], [], question,
+                    image=image, webcam=self.path == "/look", automatic=body.get("automatic") is True,
+                    watch_token=body.get("watch_token"))
                 result["about_notes"], result["nodes"] = False, []
                 result["elapsed_s"] = round(time.monotonic() - start, TIME_PRECISION)
                 self.send_json(result, 503 if result.get("error") else 200)
@@ -973,7 +1008,7 @@ class Handler(BaseHTTPRequestHandler):
             eyes = FOCUS.state()
             eye_status = {key: eyes[key] for key in ('eyes_active', 'present', 'head_down', 'slouched')}
             system = SYSTEM_PROMPT + " Current local posture status (no image): " + json.dumps(eye_status)
-            result = apply_model_control(ask_brain(system, notes, history, question))
+            result = apply_model_control(answer_request(system, notes, history, question))
             result["elapsed_s"] = round(time.monotonic() - start, TIME_PRECISION)
             if not result.get("error"):
                 with SESSION_LOCK:
@@ -1009,6 +1044,7 @@ def main():
     except KeyboardInterrupt:
         print("\nJarvis stopped.")
     finally:
+        ULTRA.close()
         FOCUS.close()
         server.server_close()
 

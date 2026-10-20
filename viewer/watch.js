@@ -27,9 +27,9 @@
    nextAt=now+COOLDOWN_MS;inFlight=true;controller=new AbortController();
    const timeout=setTimeout(()=>controller?.abort(),REQUEST_MS);
    try {
-    const response=await fetch('/see',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:PROMPT,...io.frame()}),signal:controller.signal});
+    const response=await fetch('/see',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:PROMPT,automatic:true,watch_token:token,...io.frame()}),signal:controller.signal});
     const data=await response.json();
-    if(active && version===generation && atMotion===motion && !io.quiet() && response.ok && typeof data.answer==='string')io.say(data.answer);
+    if(active && version===generation && atMotion===motion && !io.quiet() && response.ok && !data.skipped && typeof data.answer==='string')io.say(data.answer);
    }catch {if(active && version===generation)io.status('Watching · nudge unavailable; waiting before retry');}
    finally{clearTimeout(timeout);inFlight=false;controller=null;}
   }

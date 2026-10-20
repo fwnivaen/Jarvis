@@ -272,8 +272,12 @@ class Harness:
                 valid_answer(answer)
         finally:
             status, value = self.json_request('/model', {'question': 'go back to your normal brain'})
-            require(status == 200 and value.get('brain', {}).get('backend') == config.get('brain', 'codex-cli')
-                    and value['brain']['model'] == config['model'], 'reset did not restore configuration')
+            agent_status, agents = self.json_request('/agents')
+            automatic = agent_status == 200 and agents.get('routing_enabled') is True
+            expected_backend = 'codex-app-server' if automatic else config.get('brain', 'codex-cli')
+            expected_model = 'ultra' if automatic else config['model']
+            require(status == 200 and value.get('brain', {}).get('backend') == expected_backend
+                    and value['brain']['model'] == expected_model, 'reset did not restore the normal route')
         if self.quick:
             raise CheckWarning('exact refusals, swap and reset passed; swapped inference skipped: --quick')
         return 'fake version/key refusals, real Codex swap and answer, reset to config passed'
@@ -401,7 +405,7 @@ class Harness:
 
     def offline(self):
         result = subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests',
-                                 '-p', 'test_offline.py'], cwd=ROOT, capture_output=True,
+                                 '-p', 'test*.py'], cwd=ROOT, capture_output=True,
                                 text=True, timeout=OFFLINE_TIMEOUT_S)
         require(result.returncode == 0, 'offline regression tests failed; run the README test command for details')
         return 'offline regression tests passed without network or real brain calls'

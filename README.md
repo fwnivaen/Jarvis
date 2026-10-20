@@ -1,5 +1,7 @@
 # Jarvis — daily use
 
+Optional Ultra Jarvis Stage 1 adds routing and live agent activity behind an off-by-default flag. See [the complete Stage 1 guide](ULTRA-STAGE-1.md) for Mac run/test commands, limits, rollback and verification.
+
 On this Mac, open Terminal and run this one command:
 
 ```sh
@@ -40,10 +42,11 @@ Click the model name beneath the orb or inside the command bar to open the model
 | --- | --- | --- |
 | Astra / GPT 6 Astra | Codex CLI | `gpt-6-astra` |
 | Luna / GPT 6 Luna | Codex CLI | `gpt-6-luna` |
+| Sol / GPT 6.1 Sol | Codex CLI | `gpt-6.1-sol` |
 | OpenRouter Astra | OpenRouter | `openai/gpt-6-astra` |
 | Fable 5.1 / Claude Fable 5.1 | OpenRouter | `anthropic/claude-fable-5.1` |
 
-Both Codex choices passed real minimal calls on this Mac on October 12, 2026. They use the existing Codex login and its usage allowance. The installed CLI's `exec --help` documents `--model`; its top-level help has no standalone model-list command. Candidates came from its local model catalog, then were verified individually. Only those verified IDs are enabled. The exact alias dictionary and explicit known sets live near the top of `server.py`.
+Astra and Luna passed real minimal calls on this Mac on October 12, 2026; Sol passed high-effort app-server inference on October 20. They use the existing Codex login and its usage allowance. The installed CLI's `exec --help` documents `--model`; its top-level help has no standalone model-list command. Candidates came from its local model catalog, then were verified individually. Only those verified IDs are enabled. The exact alias dictionary and explicit known sets live near the top of `server.py`.
 
 Say **“go back to your normal brain”** to restore the backend and model in local configuration. Every server restart does the same. `/see` uses the active choice, with an explicit limitation if image input is unavailable. The viewer refreshes the chip after swaps and periodically so other open tabs catch up.
 
