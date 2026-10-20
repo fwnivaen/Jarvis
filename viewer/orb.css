@@ -1,11 +1,13 @@
-/* Reticles and particles share the existing assistant state and audio meters. */
-.jarvis-orb{--orb-level:0;color:var(--accent);text-align:center;isolation:isolate}
+/* The supplied particle orb follows the live assistant and its measured audio. */
+.jarvis-orb{--orb-level:0;--orb-accent:#5eead4;--orb-confirm-beat:1400ms;--orb-offline-flicker:4300ms;--orb-core-inset:20%;--orb-halo-opacity:.12;--orb-panel-layer:70;color:var(--orb-accent);text-align:center}
+#jarvis-orb-host:has(.orb-input-settings[open]){z-index:var(--orb-panel-layer)}
 .orb-instrument{position:relative;width:var(--orb-size);height:var(--orb-size);margin-inline:auto}
 .orb-particles,.orb-telemetry{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .orb-particles{z-index:1}
+:root[data-theme="light"] .orb-particles{filter:invert(1) hue-rotate(180deg)}
 .orb-telemetry{z-index:2}
-.orb-halo{position:absolute;inset:8%;border-radius:50%;background:radial-gradient(circle,var(--accent-glow),transparent 68%);opacity:calc(.3 + var(--orb-level)*.5);transform:scale(calc(1 + var(--orb-level)*.1));transition:opacity var(--fast) var(--ease-out),transform var(--fast) var(--ease-out)}
-.orb-core{position:absolute;inset:20%;z-index:3;display:grid;place-items:center;padding:0;border:var(--hairline) solid transparent;border-radius:50%;background:radial-gradient(circle,transparent 40%,var(--accent-dim));color:var(--accent-bright);cursor:pointer;transition:border-color var(--fast) var(--ease-out),box-shadow var(--fast) var(--ease-out)}
+.orb-halo{position:absolute;inset:8%;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--orb-accent) 16%,transparent),transparent 68%);opacity:calc(var(--orb-halo-opacity) + var(--orb-level)*.5);transform:scale(calc(1 + var(--orb-level)*.1));transition:opacity var(--fast) var(--ease-out),transform var(--fast) var(--ease-out)}
+.orb-core{position:absolute;inset:var(--orb-core-inset);z-index:3;display:grid;place-items:center;padding:0;border:var(--hairline) solid transparent;border-radius:50%;background:transparent;color:var(--orb-accent);cursor:pointer;transition:border-color var(--fast) var(--ease-out),box-shadow var(--fast) var(--ease-out)}
 .orb-core:hover{border-color:var(--accent-glow);box-shadow:0 0 var(--space-6) var(--accent-dim)}
 .orb-core:focus-visible,.orb-model:focus-visible,.orb-input-settings summary:focus-visible,.orb-device:focus-visible{outline:var(--focus-width) solid var(--accent);outline-offset:var(--space-1)}
 .orb-name{font:500 var(--orb-label-size)/1 var(--mono);letter-spacing:.19em;text-shadow:0 0 var(--space-3) var(--accent-glow);padding-left:.19em}
@@ -14,7 +16,8 @@
 .orb-instrument[data-state="IDLE"] .orb-halo{animation:orb-idle-breath var(--orb-breath) var(--ease-out) infinite}
 .orb-status-chip{position:absolute;top:calc(100% + var(--space-3));left:50%;transform:translateX(-50%);display:flex;align-items:center;justify-content:center;gap:var(--space-2);width:max-content;max-width:calc(100vw - var(--space-9));padding:var(--space-2) var(--space-3);border:var(--hairline) solid var(--accent-dim);border-radius:var(--radius-pill);background:var(--surface-1);backdrop-filter:blur(var(--glass-blur));white-space:nowrap}
 .orb-state,.orb-model,.orb-status-divider{font:400 var(--orb-chip-size)/1.4 var(--mono);letter-spacing:.12em}
-.orb-state{color:var(--accent)}
+.orb-state{color:var(--orb-accent);transition:color var(--cinema) var(--ease-out)}
+:root[data-theme="light"] .orb-state{color:color-mix(in srgb,var(--orb-accent) 45%,#12242b)}
 .orb-state::before{content:"";display:inline-block;width:var(--space-1);height:var(--space-1);border-radius:50%;background:currentColor;vertical-align:middle;margin-right:var(--space-2);box-shadow:0 0 var(--space-2) var(--accent-glow)}
 .orb-model{color:var(--text-secondary);padding:0;border:0;background:transparent;overflow:hidden;text-overflow:ellipsis;max-width:var(--legend-width);cursor:pointer}
 .orb-model:hover{color:var(--accent-bright)}
@@ -27,6 +30,7 @@
 .orb-input-settings summary::-webkit-details-marker{display:none}
 .orb-input-settings summary svg{width:var(--space-3);height:var(--space-3);stroke:currentColor;stroke-width:var(--hairline);fill:none}
 .orb-input-settings[open]{width:var(--preview-width);max-width:calc(100vw - var(--space-7));padding:var(--space-4);border:var(--hairline) solid var(--stroke-default);border-radius:var(--radius-card);background:var(--surface-2);text-align:left}
+.orb-input-settings[open]{left:calc(100% + var(--space-3));right:auto;top:50%;transform:translateY(-50%);max-height:calc(100dvh - var(--header) - var(--space-7));overflow-y:auto;box-sizing:border-box}
 .orb-input-settings[open] summary{margin-left:auto;margin-bottom:var(--space-2)}
 .orb-input-settings label{display:grid;gap:var(--space-2);color:var(--text-primary)}
 .orb-device{width:100%;padding:var(--space-2);border:var(--hairline) solid var(--stroke-strong);border-radius:var(--radius-chip);background:var(--surface-1);font:inherit}
@@ -36,11 +40,26 @@
 .orb-instrument[data-state="AWAITING APPROVAL"] .orb-approval-line{visibility:visible}
 .jarvis-orb[data-state="ERROR"] .orb-state{color:var(--danger)}
 .jarvis-orb[data-state="AWAITING APPROVAL"] .orb-state{color:var(--warn)}
+.jarvis-orb[data-mode="confirm"] .orb-state{animation:orb-label-beat var(--orb-confirm-beat) infinite}
+.jarvis-orb[data-mode="offline"] .orb-state{animation:orb-label-flicker var(--orb-offline-flicker) infinite}
+.orb-renderer-ready .orb-halo,.orb-renderer-ready.is-booting .orb-halo{display:none}
+.is-booting .orb-renderer-ready .orb-particles{animation:none}
+.orb-input-settings .orb-preview-settings>summary{display:block;width:auto;height:auto;list-style:revert;margin:var(--space-4) 0 var(--space-2);opacity:1;color:var(--text-primary);font:inherit;text-align:left}
+.orb-preview-note{color:var(--text-secondary);font-size:var(--type-eyebrow);margin:var(--space-2) 0}
+.orb-preview-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2)}
+.orb-preview-controls button{padding:var(--space-2);min-height:var(--touch-target);border:var(--hairline) solid var(--stroke-default);border-radius:var(--radius-chip);background:var(--surface-1);color:var(--text-secondary);font:400 var(--type-eyebrow)/var(--line-height) var(--mono);cursor:pointer}
+.orb-preview-controls button:hover,.orb-preview-controls button[aria-pressed="true"]{color:var(--text-primary);border-color:var(--orb-accent)}
+.orb-preview-controls button:focus-visible{outline:var(--focus-width) solid var(--accent);outline-offset:var(--space-1)}
+.orb-preview-controls button:disabled{opacity:var(--disabled-alpha);cursor:default}
+.jarvis-orb[data-preview="true"] .orb-status-chip{border-style:dashed}
+@keyframes orb-label-beat{0%,40%,100%{opacity:.6;text-shadow:none}4%{opacity:1;text-shadow:0 0 var(--space-3) var(--orb-accent)}22%{opacity:.95;text-shadow:0 0 var(--space-2) var(--orb-accent)}}
+@keyframes orb-label-flicker{0%,30%,34%,70%,72%,100%{opacity:1}31%,33%{opacity:.2}32%{opacity:.8}71%{opacity:.35}}
 .jarvis-orb[data-state="ERROR"] .orb-halo{background:radial-gradient(circle,var(--danger),transparent 68%);opacity:.12}
 .orb-particle-fallback .orb-core{border-color:var(--accent-glow);background:radial-gradient(circle,var(--accent-dim),transparent)}
 @keyframes orb-idle-breath{0%,100%{opacity:.22;transform:scale(.95)}50%{opacity:.4;transform:scale(1.04)}}
 @keyframes orb-hint{0%,75%{opacity:.7}100%{opacity:0}}
-@media(max-width:700px){.orb-name{font-size:var(--orb-chip-size)}.orb-input-settings{right:calc(-1 * var(--space-7))}.orb-input-settings[open]{right:calc(-1 * var(--space-8))}}
+@media(max-width:1000px){.orb-input-settings[open]{left:50%;right:auto;top:50%;transform:translate(-50%,-50%)}}
+@media(max-width:700px){.orb-name{font-size:var(--orb-chip-size)}.orb-input-settings{right:calc(-1 * var(--space-7))}}
 @media(prefers-reduced-motion:reduce){.jarvis-orb *{animation:none!important}.orb-halo{transform:none}}
 :root[data-motion="reduced"] .jarvis-orb *{animation:none!important}
 @media(prefers-contrast:more){.orb-status-chip{border-color:var(--text-secondary)}.orb-model,.orb-device-note,.orb-signal-detail,.orb-detail{color:var(--text-primary)}}

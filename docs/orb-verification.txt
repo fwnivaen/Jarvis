@@ -1,0 +1,43 @@
+Jarvis reference orb integration — 2026-10-19
+
+node --check viewer/orb.js: PASS
+node --check viewer/ui.js: PASS
+node tests/orb.cjs: ORB PASS
+node tests/voice.cjs: VOICE PASS; WAKE PASS; CHAT PASS
+python3 -m unittest discover -s tests -p test_orb_audio.py: 3 tests, OK
+
+Visible browser checks:
+- Real WebGL particle core and layered rings render over the galaxy with transparency.
+- Idle, Listening, Thinking, Speaking, Confirm, Offline, Wake and Live controls checked.
+- Wake leaves the microphone off; preview controls do not change live voice state.
+- Desktop and exact 390x844 CSS viewport: no horizontal overflow; menu controls
+  are inside the viewport and are not covered by the command bar.
+- In-app browser: exact 768x900 tablet menu and 1440x900 desktop layout checked;
+  the tablet menu is fully inside the viewport and its Wake control is unobstructed.
+- Temporary viewport overrides reset after testing.
+- FOCUS PROBE: 16 pass, 0 fail | 1440x900
+  Full title: PASS viewport | PASS visible | PASS reload-read-only | PASS focused |
+  PASS deferred | PASS unavailable | PASS paused | PASS drift | PASS excused |
+  PASS home | PASS intent-window | PASS commands | PASS pixel-identical |
+  PASS pixel-change | PASS disconnect | PASS visible-at-finish
+
+Full preflight, final run after the last renderer change:
+13 pass, 1 fail, 2 warn
+
+Quick preflight after the final CSS-only tablet-panel adjustment:
+8 pass, 1 fail, 7 warn
+The same Focus read is the only failure; the additional warnings skip live model
+inference in quick mode. Served-file comparisons include the final stylesheet.
+
+The failure is the running Focus sensor intermittently reporting the foreground
+browser tab as unavailable. A preceding full run reported 14 pass, 0 fail, 2 warn.
+No Focus controller or sensor code was changed for this visual update. The live
+tick thread is alive/fresh. Four Chrome windows were present; the assistant's app
+tab uses 127.0.0.1:4700. ledger-focus-sessions.json is missing. The legacy totals
+were read from ledger-focus.json (8 sessions, 4 aborted, 11460 planned seconds,
+441.9913254140011 on-target seconds, 2 drifts, streak 0).
+
+The two warnings skip OpenAI API checks because the configured brain is Codex CLI.
+All live chat/model/image/capture checks, capture cleanup, served-file comparisons,
+secret-path blocking, and configuration-ignore checks passed. The original Luna
+selection was restored after preflight's model swaps.

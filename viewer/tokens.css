@@ -23,7 +23,7 @@
   --ease-out:cubic-bezier(.22,1,.36,1); --ease-camera:var(--ease-out);
   --header:72px; --sidebar:0px; --safe-width:2048px; --legend-width:196px; --legend-left:40px; --legend-top:48px;
   --control-height:36px; --touch-target:44px; --command-width:640px; --command-height:60px; --command-bottom:40px; --command-focus-scale:1;
-  --orb-size:208px; --orb-bottom:142px; --inspector-width:380px; --preview-width:304px; --answer-width:440px;
+  --orb-size:280px; --orb-bottom:142px; --inspector-width:380px; --preview-width:304px; --answer-width:440px;
   --panel-margin:16px; --content-measure:680px; --card-enter-y:8px; --card-exit:168ms;
   --tracking-small:.18em; --tracking-brand:.3em; --line-height:1.65; --focus-width:2px;
   --hairline:1px; --radius:var(--radius-card); --small-radius:var(--radius-button);
@@ -46,9 +46,10 @@
   --warn:#895C08; --danger:#AF2835; --success:#247C50;
   --material-shadow:inset 0 1px 0 var(--highlight-inner),0 24px 60px -20px rgba(30,45,40,.18); --backdrop:rgba(30,40,35,.2);
 }
-@media (max-width:1920px){:root{--orb-size:208px;--legend-left:32px;--legend-top:32px;--workspace-padding:40px}}
+@media (max-width:1920px){:root{--legend-left:32px;--legend-top:32px;--workspace-padding:40px}}
 @media (max-width:1280px){:root{--command-width:560px;--legend-width:172px;--legend-left:24px;--inspector-width:340px;--preview-width:288px}}
-@media (max-width:700px){:root{--command-width:calc(100vw - 32px);--command-bottom:24px;--orb-size:168px;--orb-bottom:0px;--legend-left:16px;--legend-top:16px;--workspace-padding:24px;--inspector-width:calc(100vw - 32px);--preview-width:calc(100vw - 32px);--answer-width:calc(100vw - 32px)}}
+@media (max-height:760px){:root{--orb-size:240px}}
+@media (max-width:700px){:root{--command-width:calc(100vw - 32px);--command-bottom:24px;--orb-size:208px;--orb-bottom:0px;--legend-left:16px;--legend-top:16px;--workspace-padding:24px;--inspector-width:calc(100vw - 32px);--preview-width:calc(100vw - 32px);--answer-width:calc(100vw - 32px)}}
 @media (prefers-contrast:more){:root{--stroke-default:var(--stroke-strong);--text-tertiary:var(--text-secondary)}}
 @media (prefers-reduced-motion:reduce){:root{--cinema:0ms;--boot-duration:0ms;--base:150ms;--slow:150ms}}
 :root[data-motion="reduced"]{--cinema:0ms;--boot-duration:0ms;--base:150ms;--slow:150ms}

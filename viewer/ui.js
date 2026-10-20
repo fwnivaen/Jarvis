@@ -230,7 +230,7 @@
     const done=()=>{clearTimeout(timer);layer.remove();document.body.classList.remove('is-booting');window.JarvisGalaxy?.boot?.(0);document.removeEventListener('keydown',done);document.removeEventListener('pointerdown',done);};
     document.addEventListener('keydown',done,{once:true});document.addEventListener('pointerdown',done,{once:true});const timer=setTimeout(done,duration);
   }
-  async function refreshSystem(){try{systemState=await request('/system');$('build-version').textContent='V'+systemState.version;$('system-status').textContent='LOCAL UNIVERSE';$('system-dot').dataset.status='online';if(systemState.launch&&binding)boot(systemState.launch);}catch{$('system-status').textContent='OFFLINE';$('system-dot').dataset.status='offline';}}
+  async function refreshSystem(){try{systemState=await request('/system');$('build-version').textContent='V'+systemState.version;$('system-status').textContent='LOCAL UNIVERSE';$('system-dot').dataset.status='online';window.JarvisOrb?.setConnected(true);if(systemState.launch&&binding)boot(systemState.launch);}catch{$('system-status').textContent='OFFLINE';$('system-dot').dataset.status='offline';window.JarvisOrb?.setConnected(false);}}
   document.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();return;}
     if(e.key==='Escape'){
