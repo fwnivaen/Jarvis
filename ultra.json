@@ -4,6 +4,8 @@
   "parallel_workers_enabled": true,
   "live_monitor_enabled": true,
   "terminal_monitor_enabled": true,
+  "crew_profiles_enabled": true,
+  "crew_visual_enabled": true,
   "cheap_vision_enabled": true,
   "skip_unchanged_frames_enabled": true,
   "max_workers": 3,

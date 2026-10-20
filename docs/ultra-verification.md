@@ -2,7 +2,22 @@
 
 Stage 1 is implemented for review. The committed master feature flag is OFF. Verification used a separate local server on port 4701 with Ultra enabled, leaving the existing port 4700 server running.
 
-## Results
+## Crew revision
+
+The top-left galaxy crew now represents one boss and three real worker slots. The boss uses GPT-6.1 Sol max; the workers use GPT-6.1 Sol medium, GPT-6 Luna max and GPT-6 Luna high. Simple and vision requests still use the direct Luna high path. A source or math promotion updates the matching worker's displayed effective model/effort. Both new crew flags can be switched off independently; the master remains OFF.
+
+- **112 Python tests passed**, including 30 Ultra tests; **13 JavaScript suites passed**. New tests cover the exact profiles, cheap direct/vision/manual overrides, stable slot identity, promotion effort, config fallbacks, separate boss/worker deadlines, the visual hierarchy, disconnected/recovered state and persistent avatar elements.
+- A real three-worker request completed in **126.9 seconds**, with zero retries and zero escalations. Sol max planning took **70.4s**; Sol medium, Luna max and Luna high workers took **5.8s**, **9.3s** and **9.8s** concurrently; Sol max final review took **46.7s**. All five calls completed and reported usage. Max was substantially slower than the prior high-effort run on this request; no general latency claim is inferred.
+- Workers retain one **45-second** deadline covering retries and any promotion. Boss calls share the remaining **240-second request** budget by default, rather than being limited as workers.
+- Full live preflight: **13 pass, 1 fail, 2 warn**. This run's failure is “Running server cannot reliably read the front tab.” The original long-lived port 4700 server still reports foreground activity unavailable; no Focus implementation or permissions were changed. The two warnings remain API-key checks skipped for Codex login.
+- Visible probe: **FOCUS PROBE: 16 pass, 0 fail | 1440x900**, with all 16 case names read from its full title at the actual asserted viewport.
+- Browser layout: the default desktop shows the crew at x92/y96, with a collapsed activity drawer at the top right. At an actual 1024 × 750 viewport, the open monitor starts 12 pixels to the right of the crew. At 390 × 844, all four personnel fit in a compact row. Native crew/table collapse, note selection and the phone drawer were checked; temporary viewport overrides are reset after verification. Avatars pause with a connection-interrupted marker if polling fails, and resume only after recovery. Full view and other workspaces hide the crew; reduced-motion preferences stop animation.
+
+Current screenshots: [desktop crew](screenshots/ultra-crew-desktop.jpg), [real live request](screenshots/ultra-crew-live.jpg), [phone crew](screenshots/ultra-crew-mobile.jpg).
+
+The effort choices were rechecked against the official [Sol model page](https://developers.openai.com/api/docs/models/gpt-6.1-sol) and [Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna), then exercised through the existing bridge, which checks the installed account's model catalog before inference. No packages or credentials were added.
+
+## Original Stage 1 results (before the crew revision)
 
 | Check | Result |
 | --- | --- |

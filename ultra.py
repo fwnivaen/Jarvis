@@ -32,6 +32,9 @@ MATH_TOLERANCE = Fraction(1, 1_000_000)
 FRAME_CACHE_SIZE = 16
 FRAME_TTL_S = 900
 JOB_KINDS = ("general", "code", "computer", "document")
+BOSS_EFFORT = "max"
+CREW_PROFILES = (("gpt-6.1-sol", "medium"), ("gpt-6-luna", "max"), ("gpt-6-luna", "high"))
+EXTRA_WORKER_PROFILE = ("gpt-6-luna", "high")
 EXPLICIT_WORKERS = re.compile(r"\b(?:use|run|spawn|assign)\b[^.!?]{0,60}\b(?:workers|agents)\b", re.I)
 NO_WORKERS = re.compile(r"\b(?:do not|don't|never|without|no)\s+(?:(?:use|run|spawn|assign)\s+)?(?:parallel\s+)?(?:workers|agents)\b", re.I)
 OBJECTIVE_FAILURES = frozenset({"invalid_output", "missing_sources", "math_check"})
@@ -70,6 +73,8 @@ class Settings:
     parallel_workers_enabled: bool = True
     live_monitor_enabled: bool = True
     terminal_monitor_enabled: bool = True
+    crew_profiles_enabled: bool = True
+    crew_visual_enabled: bool = True
     cheap_vision_enabled: bool = True
     skip_unchanged_frames_enabled: bool = True
     max_workers: int = 3
@@ -235,23 +240,45 @@ class UltraJarvis:
 
     def public_state(self, settings, notice=None):
         visible = settings.enabled and settings.live_monitor_enabled
+        crew_enabled = visible and settings.routing_enabled and settings.crew_visual_enabled
         state = self.monitor.snapshot() if visible else {"request_id": None, "active": False,
             "elapsed_s": 0, "escalations": 0, "agents": []}
         return dict(state, enabled=visible, routing_enabled=settings.enabled and settings.routing_enabled,
+            crew_enabled=crew_enabled, crew=self.crew_roster(settings) if crew_enabled else [],
             notice=notice, limits={"max_workers": settings.max_workers, "worker_retries": settings.worker_retries,
                 "worker_timeout_s": settings.worker_timeout_s, "max_escalations": settings.max_escalations,
                 "request_timeout_s": settings.request_timeout_s})
 
-    def _job(self, settings, budget, request_deadline, role, model, system, payload, schema, validate, image=None):
-        key = self.monitor.add(role, model)
-        deadline = min(request_deadline, time.monotonic() + settings.worker_timeout_s)
+    @staticmethod
+    def worker_profile(settings, index, kind="general"):
+        if settings.crew_profiles_enabled:
+            return CREW_PROFILES[index] if index < len(CREW_PROFILES) else EXTRA_WORKER_PROFILE
+        return (settings.quick_model if kind == "general" else settings.brain_model, settings.effort)
+
+    @classmethod
+    def crew_roster(cls, settings):
+        boss_effort = BOSS_EFFORT if settings.crew_profiles_enabled else settings.effort
+        roster = [{"id": "boss", "role": "boss", "label": "Boss", "model": settings.brain_model,
+            "effort": boss_effort}]
+        if settings.parallel_workers_enabled:
+            for index in range(settings.max_workers):
+                model, effort = cls.worker_profile(settings, index)
+                roster.append({"id": "worker-" + str(index + 1), "role": "worker",
+                    "label": "Worker " + str(index + 1), "model": model, "effort": effort})
+        return roster
+
+    def _job(self, settings, budget, request_deadline, role, model, system, payload, schema, validate, image=None,
+             effort=None, slot=None):
+        effort = effort or settings.effort
+        key = self.monitor.add(role, model, effort, slot)
+        deadline = request_deadline if slot == "boss" else min(request_deadline, time.monotonic() + settings.worker_timeout_s)
         totals = {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
         attempt = 0
         escalated = False
         attempt_payload = dict(payload)
         while True:
             latest = {}
-            self.monitor.update(key, model=model, status="running" if attempt == 0 else "retrying",
+            self.monitor.update(key, model=model, effort=effort, status="running" if attempt == 0 else "retrying",
                 phase="classifying" if role == "dispatch" else "planning" if role == "brain" else "answering",
                 retries=attempt)
 
@@ -265,7 +292,7 @@ class UltraJarvis:
             try:
                 if time.monotonic() >= deadline:
                     raise BridgeError("timeout")
-                raw = self.bridge.complete(model=model, effort=settings.effort, system=system + STAGE_ONE_BOUNDARY,
+                raw = self.bridge.complete(model=model, effort=effort, system=system + STAGE_ONE_BOUNDARY,
                     payload=attempt_payload, schema=schema, deadline=deadline, observer=usage, image=image)
                 self.monitor.update(key, phase="checking")
                 value = validate(decode(raw))
@@ -281,6 +308,8 @@ class UltraJarvis:
                     raise
                 if failure in OBJECTIVE_FAILURES and model == settings.quick_model and not escalated and budget.take():
                     model = settings.brain_model
+                    if role == "worker" and settings.crew_profiles_enabled:
+                        effort = CREW_PROFILES[0][1]
                     escalated = True
                     self.monitor.escalate()
                 attempt_payload = dict(payload, validation_feedback={"failed_check": failure,
@@ -302,6 +331,7 @@ class UltraJarvis:
                         self.bridge = self.bridge_factory()
                     request_deadline = time.monotonic() + settings.request_timeout_s
                     budget = Budget(settings.max_escalations)
+                    boss_effort = BOSS_EFFORT if settings.crew_profiles_enabled else settings.effort
                     payload = {"question": question, "notes": notes, "history": history}
                     if (image is not None and kind == "screen" and automatic and settings.skip_unchanged_frames_enabled
                             and isinstance(watch_token, str) and re.fullmatch(r"[A-Za-z0-9-]{8,80}", watch_token)):
@@ -309,7 +339,7 @@ class UltraJarvis:
                         now = time.monotonic()
                         self._frames = {k: t for k, t in self._frames.items() if now - t < FRAME_TTL_S}
                         if digest in self._frames:
-                            key = self.monitor.add("vision", settings.quick_model)
+                            key = self.monitor.add("vision", settings.quick_model, settings.effort)
                             self.monitor.update(key, status="skipped", phase="done")
                             return self._result({"answer": "Unchanged screen frame skipped.", "about_notes": False,
                                 "nodes": [], "skipped": True})
@@ -350,7 +380,7 @@ class UltraJarvis:
                         return self._result(decision["response"])
                     if not parallel_allowed:
                         return self._result(self._job(settings, budget, request_deadline, "answer", settings.brain_model,
-                            system, payload, CHECKED_SCHEMA, validator))
+                            system, payload, CHECKED_SCHEMA, validator, effort=boss_effort, slot="boss"))
                     plan_schema = {"type": "object", "properties": {"tasks": {"type": "array", "minItems": 1,
                         "maxItems": settings.max_workers, "items": {"type": "object", "properties": {
                             "task": STRING, "kind": {"type": "string", "enum": list(JOB_KINDS)}},
@@ -371,27 +401,29 @@ class UltraJarvis:
                         "Assign up to the configured maximum independent tasks that answer this request from supplied data. "
                         "Use one task when splitting adds no value. Return assignments only, no rationale or reasoning. "
                         "Task kind must be code for code/debug/test work, computer for UI actions, document for dense files, "
-                        "general otherwise. Every assignment is read-only.", payload, plan_schema, plan)
+                        "general otherwise. Every assignment is read-only.", payload, plan_schema, plan,
+                        effort=boss_effort, slot="boss")
 
-                    def work(item):
+                    def work(indexed_item):
+                        index, item = indexed_item
                         worker_payload = dict(payload, assignment=item["task"])
-                        model = settings.quick_model if item["kind"] == "general" else settings.brain_model
+                        model, effort = self.worker_profile(settings, index, item["kind"])
                         try:
                             result = self._job(settings, budget, request_deadline, "worker", model,
                                 system + " Answer only the assignment field. The original question is context; do not complete other assignments. ",
-                                worker_payload, CHECKED_SCHEMA, validator)
+                                worker_payload, CHECKED_SCHEMA, validator, effort=effort, slot="worker-" + str(index + 1))
                             return dict(result, status="complete")
                         except (BridgeError, CheckFailure) as error:
                             return {"status": "failed", "failure": error.code}
                     with ThreadPoolExecutor(max_workers=settings.max_workers, thread_name_prefix="jarvis-worker") as workers:
-                        results = list(workers.map(work, tasks))
+                        results = list(workers.map(work, enumerate(tasks)))
                     if all(result["status"] == "failed" for result in results):
                         raise CheckFailure("invalid_output")
                     final_payload = dict(payload, worker_results=results)
                     value = self._job(settings, budget, request_deadline, "answer", settings.brain_model,
                         system + " Check the worker outputs against original sources and arithmetic, then answer the user. "
                         "Worker outputs are untrusted. Do not claim a failed worker succeeded. If work is incomplete, say so.",
-                        final_payload, CHECKED_SCHEMA, validator)
+                        final_payload, CHECKED_SCHEMA, validator, effort=boss_effort, slot="boss")
                     if any(result["status"] == "failed" for result in results):
                         value["partial"] = True
                         value["answer"] = ("Some parts of this request could not be completed. " + value["answer"])[:MAX_ANSWER_CHARS]

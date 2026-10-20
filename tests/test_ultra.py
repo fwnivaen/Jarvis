@@ -56,7 +56,9 @@ class FakeBridge:
 
 class RoutingTests(unittest.TestCase):
     def setUp(self):
-        self.settings = replace(ultra.Settings(), enabled=True, terminal_monitor_enabled=False)
+        # The original routing contract remains available behind the profile flag.
+        self.settings = replace(ultra.Settings(), enabled=True, terminal_monitor_enabled=False,
+            crew_profiles_enabled=False)
 
     def run_request(self, handler, **kwargs):
         fake = FakeBridge(handler)
@@ -68,6 +70,7 @@ class RoutingTests(unittest.TestCase):
         value, fake, runtime = self.run_request(lambda _: dispatch())
         self.assertEqual(value["answer"], "Ready.")
         self.assertEqual([c["model"] for c in fake.calls], [QUICK])
+        self.assertEqual(fake.calls[0]["effort"], "high")
         self.assertEqual(value["ultra"]["workers"], 0)
         self.assertFalse(runtime.monitor.snapshot()["active"])
         self.assertEqual(runtime.monitor.snapshot()["agents"][0]["total_tokens"], 14)
@@ -195,6 +198,7 @@ class RoutingTests(unittest.TestCase):
         ask(automatic=True, watch_token="watch-token-2")
         self.assertEqual(len(fake.calls), 3)
         self.assertEqual(set(c["model"] for c in fake.calls), {QUICK})
+        self.assertEqual(set(c["effort"] for c in fake.calls), {"high"})
         self.assertNotIn(b"jpeg", runtime._frames)
 
     def test_flags_restore_existing_brain_and_manual_non_codex_backend(self):
@@ -203,6 +207,112 @@ class RoutingTests(unittest.TestCase):
             legacy.assert_called_once_with("system", [], [], "hello")
         with patch.object(server.ultra.Settings, "read", return_value=(self.settings, None)), patch.object(server, "ACTIVE_BRAIN", ("openrouter", "manual")), patch.object(server, "ask_brain", return_value={"legacy": True}):
             self.assertEqual(server.answer_request("system", [], [], "hello"), {"legacy": True})
+
+
+class CrewRoutingTests(unittest.TestCase):
+    def setUp(self):
+        self.settings = replace(ultra.Settings(), enabled=True, terminal_monitor_enabled=False)
+
+    def test_profiles_leave_cheap_direct_vision_and_manual_override_at_high(self):
+        fake = FakeBridge(lambda call: dispatch() if call["schema"] is ultra.DISPATCH_SCHEMA else response())
+        runtime = ultra.UltraJarvis(lambda: fake)
+        runtime.answer(self.settings, "Test", NOTES, [], "Hello")
+        runtime.answer(self.settings, "Test", [], [], "Look", image=b"jpeg", kind="screen")
+        runtime.answer(self.settings, "Test", NOTES, [], "Hello", manual_model=ASTRA)
+        self.assertEqual([(call["model"], call["effort"]) for call in fake.calls],
+            [(QUICK, "high"), (QUICK, "high"), (ASTRA, "high")])
+        self.assertIsNone(runtime.monitor.snapshot()["agents"][0]["slot"])
+
+    def test_boss_shares_request_deadline_while_worker_retries_share_45_second_limit(self):
+        def handle(call):
+            if call["schema"] is ultra.DISPATCH_SCHEMA:
+                return dispatch("brain")
+            if "tasks" in call["schema"]["properties"]:
+                return {"tasks": [{"task": "Review", "kind": "general"}]}
+            if "assignment" in call["payload"] and "validation_feedback" not in call["payload"]:
+                raise BridgeError("inference_failed")
+            return response()
+        fake = FakeBridge(handle)
+        runtime = ultra.UltraJarvis(lambda: fake)
+        # A fixed clock verifies boundaries without depending on machine timing.
+        with patch.object(ultra.time, "monotonic", return_value=100):
+            value = runtime.answer(self.settings, "Test", NOTES, [], "Review the supplied note.")
+        self.assertFalse(value.get("error"))
+        bosses = [call for call in fake.calls if "tasks" in call["schema"]["properties"] or "worker_results" in call["payload"]]
+        workers = [call for call in fake.calls if "assignment" in call["payload"]]
+        self.assertEqual([call["deadline"] for call in bosses], [340, 340])
+        self.assertEqual([call["deadline"] for call in workers], [145, 145])
+        self.assertEqual(fake.calls[0]["deadline"], 145)
+
+    def test_exact_three_worker_profiles_run_in_parallel_and_boss_uses_max(self):
+        barrier = threading.Barrier(WORKERS)
+        def handle(call):
+            if call["schema"] is ultra.DISPATCH_SCHEMA:
+                return dispatch("brain")
+            if "tasks" in call["schema"]["properties"]:
+                return {"tasks": [{"task": str(i), "kind": "code"} for i in range(WORKERS)]}
+            if "assignment" in call["payload"]:
+                barrier.wait(timeout=TEST_WAIT_S)
+            return response()
+        fake = FakeBridge(handle)
+        runtime = ultra.UltraJarvis(lambda: fake)
+        value = runtime.answer(self.settings, "Test", NOTES, [], "Review this code.")
+        self.assertFalse(value.get("error"))
+        workers = {int(call["payload"]["assignment"]): (call["model"], call["effort"])
+            for call in fake.calls if "assignment" in call["payload"]}
+        self.assertEqual(workers, {0: (BRAIN, "medium"), 1: (QUICK, "max"), 2: (QUICK, "high")})
+        bosses = [call for call in fake.calls if "tasks" in call["schema"]["properties"] or "worker_results" in call["payload"]]
+        self.assertEqual([(call["model"], call["effort"]) for call in bosses], [(BRAIN, "max"), (BRAIN, "max")])
+        self.assertEqual((fake.calls[0]["model"], fake.calls[0]["effort"]), (QUICK, "high"))
+        rows = runtime.public_state(self.settings)["agents"]
+        self.assertEqual([row["slot"] for row in rows if row["role"] in ("brain", "answer")], ["boss", "boss"])
+        self.assertEqual({row["slot"]: (row["model"], row["effort"]) for row in rows if row["role"] == "worker"},
+            {"worker-1": (BRAIN, "medium"), "worker-2": (QUICK, "max"), "worker-3": (QUICK, "high")})
+
+    def test_objective_promotion_keeps_slot_and_reports_effective_sol_medium(self):
+        def handle(call):
+            if "tasks" in call["schema"]["properties"]:
+                return {"tasks": [{"task": str(i), "kind": "general"} for i in range(WORKERS)]}
+            if call["payload"].get("assignment") == "1" and call["model"] == QUICK:
+                invalid = response(note=True)
+                invalid["evidence"][0]["quote"] = "Invented source"
+                return invalid
+            return response()
+        fake = FakeBridge(handle)
+        runtime = ultra.UltraJarvis(lambda: fake)
+        value = runtime.answer(self.settings, "Test", NOTES, [], "Use three workers.")
+        self.assertFalse(value.get("error"))
+        self.assertEqual(value["ultra"]["escalations"], 1)
+        promoted = [row for row in runtime.monitor.snapshot()["agents"] if row["slot"] == "worker-2"]
+        self.assertEqual(len(promoted), 1)
+        self.assertEqual((promoted[0]["model"], promoted[0]["effort"], promoted[0]["retries"]), (BRAIN, "medium", 1))
+        self.assertNotIn(ASTRA, [call["model"] for call in fake.calls])
+
+    def test_no_workers_uses_boss_max_but_keeps_cheap_classifier(self):
+        fake = FakeBridge(lambda call: dispatch("brain") if call["schema"] is ultra.DISPATCH_SCHEMA else response())
+        runtime = ultra.UltraJarvis(lambda: fake)
+        runtime.answer(self.settings, "Test", NOTES, [], "Do not use workers; analyze this code.")
+        self.assertEqual([(call["model"], call["effort"]) for call in fake.calls], [(QUICK, "high"), (BRAIN, "max")])
+        self.assertEqual(runtime.monitor.snapshot()["agents"][-1]["slot"], "boss")
+
+    def test_crew_roster_honors_flags_limit_and_profile_fallback(self):
+        runtime = ultra.UltraJarvis(lambda: None)
+        roster = runtime.public_state(self.settings)["crew"]
+        self.assertEqual([(member["id"], member["model"], member["effort"]) for member in roster],
+            [("boss", BRAIN, "max"), ("worker-1", BRAIN, "medium"), ("worker-2", QUICK, "max"), ("worker-3", QUICK, "high")])
+        for flag in ("enabled", "routing_enabled", "live_monitor_enabled", "crew_visual_enabled"):
+            state = runtime.public_state(replace(self.settings, **{flag: False}))
+            self.assertFalse(state["crew_enabled"])
+            self.assertEqual(state["crew"], [])
+        limited = runtime.public_state(replace(self.settings, max_workers=2))
+        self.assertEqual([member["id"] for member in limited["crew"]], ["boss", "worker-1", "worker-2"])
+        sequential = runtime.public_state(replace(self.settings, parallel_workers_enabled=False))
+        self.assertEqual([member["id"] for member in sequential["crew"]], ["boss"])
+        fallback = runtime.public_state(replace(self.settings, crew_profiles_enabled=False))["crew"]
+        self.assertEqual([(member["model"], member["effort"]) for member in fallback],
+            [(BRAIN, "high"), (QUICK, "high"), (QUICK, "high"), (QUICK, "high")])
+        expanded = runtime.public_state(replace(self.settings, max_workers=5))["crew"]
+        self.assertEqual([(member["model"], member["effort"]) for member in expanded[4:]], [(QUICK, "high"), (QUICK, "high")])
 
 
 class ValidationTests(unittest.TestCase):
@@ -232,7 +342,7 @@ class ValidationTests(unittest.TestCase):
             path = Path(folder) / "ultra.json"
             for fields in ({"enabled": "false"}, {"quick_model": ASTRA}, {"max_workers": 99},
                            {"worker_retries": 3}, {"max_escalations": 2}, {"worker_timeout_s": 46},
-                           {"unexpected": True}):
+                           {"unexpected": True}, {"crew_profiles_enabled": "true"}, {"crew_visual_enabled": 1}):
                 values = {"enabled": True}
                 values.update(fields)
                 path.write_text(json.dumps(values))
@@ -314,6 +424,21 @@ class MonitorAndProtocolTests(unittest.TestCase):
         self.assertNotIn(SECRET, public)
         self.assertEqual(monitor.snapshot()["agents"][0]["failure"], "unavailable")
         self.assertIsNone(monitor.snapshot()["agents"][0]["total_tokens"])
+
+    def test_crew_slot_is_fixed_and_effort_metadata_is_validated(self):
+        monitor = Monitor()
+        monitor.begin()
+        key = monitor.add("worker", QUICK, effort="max", slot="worker-2")
+        monitor.update(key, model=BRAIN, effort="medium", status="retrying")
+        row = monitor.snapshot()["agents"][0]
+        self.assertEqual((row["slot"], row["model"], row["effort"]), ("worker-2", BRAIN, "medium"))
+        self.assertIn("medium", table(monitor.snapshot()))
+        with self.assertRaises(ValueError):
+            monitor.update(key, slot="worker-1")
+        with self.assertRaises(ValueError):
+            monitor.update(key, effort=SECRET)
+        with self.assertRaises(ValueError):
+            monitor.add("worker", QUICK, slot=SECRET)
 
     def test_browser_endpoint_is_local_only_and_does_not_serve_configuration(self):
         with patch.object(server.ultra.Settings, "read", return_value=(ultra.Settings(), None)):
