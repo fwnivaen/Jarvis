@@ -5,16 +5,16 @@ const handler=source.slice(source.indexOf('  function wake('),source.indexOf('  
 let resumes=0,frames=0,wake;
 const graph={resumeAnimation(){resumes++;assert.ok(resumes<4,'synchronous change must not recurse');wake();}};
 const factory=new Function('graph','requestAnimationFrame','performance',`
-  const GALAXY={idleSettleMs:240};let disposed=false,awakeUntil=0,resuming=false,frame=null,ticking=false;const stats={idle:true};function frameTick(){}
+  const GALAXY={idleSettleMs:240},document={hidden:false};let visible=true;let disposed=false,awakeUntil=0,resuming=false,frame=null,ticking=false;const stats={idle:true};function frameTick(){}
   ${handler}
-  return {wake,startTick(){frame=null;ticking=true;},dispose(){disposed=true;},snapshot(){return {awakeUntil,frame,idle:stats.idle};}};
+  return {wake,hide(){document.hidden=true;},show(){document.hidden=false;},startTick(){frame=null;ticking=true;},dispose(){disposed=true;},snapshot(){return {awakeUntil,frame,idle:stats.idle};}};
 `);
 const api=factory(graph,()=>++frames,{now:()=>100});wake=api.wake;
 wake();assert.equal(resumes,1);assert.equal(frames,1);assert.equal(api.snapshot().awakeUntil,340);
 wake(1000);assert.equal(resumes,2);assert.equal(frames,1);assert.equal(api.snapshot().awakeUntil,1100);
 api.startTick();wake();assert.equal(resumes,3);assert.equal(frames,1,'change during a running tick must not create a second RAF loop');
-api.dispose();wake();assert.equal(resumes,3);
-console.log('GALAXY LIFECYCLE PASS: synchronous control changes cannot recurse on resume; wake coalesces frames; disposed renderers stay stopped.');
+api.hide();wake();assert.equal(resumes,3,'a hidden tab must not restart rendering');api.show();api.dispose();wake();assert.equal(resumes,3);
+console.log('GALAXY LIFECYCLE PASS: synchronous control changes cannot recurse on resume; wake coalesces frames; hidden tabs and disposed renderers stay stopped.');
 
 // The production numeric grid keeps border cells distinct and returns the nearest
 // projected note. Empty and out-of-radius queries must not select a distant note.

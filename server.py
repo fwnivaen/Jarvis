@@ -127,7 +127,9 @@ UI_VERSION = "2.0"
 LAUNCH_ID = secrets.token_hex(8)
 UI_ASSETS = {
     "theme.js": "text/javascript", "ui.js": "text/javascript",
-    "tokens.css": "text/css", "app.css": "text/css",
+    "tokens.css": "text/css", "app.css": "text/css", "open-deck.css": "text/css",
+    "Inter.woff2": "font/woff2", "JetBrainsMono.woff2": "font/woff2",
+    "postprocessing.module.js": "text/javascript",
     "galaxy.js": "text/javascript", "layout-worker.js": "text/javascript",
     "galaxy-benchmark.html": "text/html; charset=utf-8", "galaxy-benchmark.js": "text/javascript",
     "orb.js": "text/javascript", "orb.css": "text/css", "focus-v2.css": "text/css",

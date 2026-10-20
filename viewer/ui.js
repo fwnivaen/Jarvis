@@ -3,14 +3,14 @@
   'use strict';
   const SETTINGS=Object.freeze({preferenceKey:'jarvis.preferences.v2',pinKey:'jarvis.pins.v2',historyKey:'jarvis.notifications.v2',
     insightMs:8000,hoverMs:240,statusMs:5000,bootMs:2400,bootReducedMs:0,placementGap:16,placementStep:24,
-    paletteLimit:60,historyLimit:40,soundMs:90,soundGain:.018,soundHz:620,monoPlaces:0,sheetDismissPx:80});
+    paletteLimit:60,historyLimit:40,soundMs:90,soundGain:.018,soundHz:620,monoPlaces:0,sheetDismissPx:80,clockMs:1000,clockMinutes:1440,percent:100});
   const $=id=>document.getElementById(id),create=(tag,className,text)=>{const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e;};
   const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}};
   const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{}};
   const preferences=load(SETTINGS.preferenceKey,{theme:'dark',motion:'system',sounds:false,wake:false});
   const pins=load(SETTINGS.pinKey,{}),history=load(SETTINGS.historyKey,[]);
   let binding=null,currentWorkspace='galaxy',currentNote=null,previewNote=null,lastAnswer=null,lastQuestion='',selectedPalette=0,paletteItems=[],hoverTimer=null,insightTimer=null,insightText='',noteRequest=0,approval=null,workTimer=null;
-  let systemState=null,focusState=null,watchState=null,lastFocusElement=null;
+  let systemState=null,focusState=null,watchState=null,lastFocusElement=null,serverAvailable=true,backendAvailable=true;
   const noteKey=node=>node.group+'/'+node.label;
   const notes=()=>binding?.graph.nodes||[];
   const endpoint=value=>typeof value==='object'?value.id:value;
@@ -117,7 +117,7 @@
   $('command-palette').addEventListener('click',e=>{if(e.target===$('command-palette'))closePalette();});
   document.querySelectorAll('[data-workspace]').forEach(button=>button.onclick=()=>setWorkspace(button.dataset.workspace));
   $('command-model').onclick=()=>$('brain-chip').click();$('computer-control').onclick=()=>setWorkspace('computer');
-  $('answer-close').onclick=()=>{$('answer-card').dataset.idle='true';};
+  $('answer-close').onclick=()=>setBriefing(false);
   $('answer-read').onclick=()=>{$('full-answer-text').textContent=$('answer').textContent;$('full-answer').showModal();};
   $('full-answer-close').onclick=()=>$('full-answer').close();
   $('answer-galaxy').onclick=()=>{setWorkspace('galaxy');const ids=lastAnswer?.nodes||[];if(ids.length){binding?.select(notes().find(n=>n.id===ids[0]));insight(ids.length+' cited '+(ids.length===1?'note':'notes')+' shown in your galaxy.');}};
@@ -126,7 +126,7 @@
   $('detail-open').onclick=()=>{const node=binding?.selected();if(node)openNote(node);};
   function workspaceFrame(title,description){const view=$('workspace-view');view.replaceChildren();const body=create('div','workspace-body'),head=create('div','workspace-header'),titles=create('div');titles.append(create('h1',null,title),create('p',null,description));const back=create('button','control','Back to galaxy');back.onclick=()=>setWorkspace('galaxy');head.append(titles,back);body.append(head);view.append(body);return body;}
   function setWorkspace(name){
-    currentWorkspace=name;hidePreview();hideInsight();clearInterval(workTimer);workTimer=null;
+    currentWorkspace=name;document.body.dataset.workspace=name;window.JarvisGalaxy?.setVisible(name==='galaxy');hidePreview();hideInsight();clearInterval(workTimer);workTimer=null;
     for(const selector of ['.sidebar','#graph','.scene-controls','#jarvis-orb-host','#detail','#chat','#galaxy-tree']){const element=document.querySelector(selector);if(element){element.inert=name!=='galaxy';if(name==='galaxy')element.removeAttribute('aria-hidden');else element.setAttribute('aria-hidden','true');}}
     $('workspace-view').hidden=name==='galaxy';$('breadcrumb').textContent='/ '+({galaxy:'Knowledge Galaxy',brain:'Project Brain',work:'Mission Control',integrations:'Integrations'}[name]||name.charAt(0).toUpperCase()+name.slice(1));
     document.querySelectorAll('[data-workspace]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.workspace===name)));
@@ -189,7 +189,7 @@
         binding?.replaceGraph(result.graph);card.dataset.executing='false';window.JarvisOrb?.setStatus(null);card.replaceChildren(create('div','eyebrow','Verified'),create('h2',null,'Changes saved'),create('p',null,'Saved to your existing Markdown file and indexed for recall.'),button('Done',()=>{card.remove();approval=null;window.JarvisOrb?.setStatus(null);done?.();}));sound();announce('Saved and verified '+node.label);
       }catch(error){card.dataset.executing='false';card.append(create('p','answer-meta',error.message));confirm.disabled=false;cancel.disabled=false;window.JarvisOrb?.setStatus('ERROR',{message:error.message});}
     };
-    actions.append(confirm,cancel);card.append(actions);$('stage').append(card);approval=card;window.JarvisOrb?.setStatus('AWAITING APPROVAL',{target:'#approval-card'});confirm.focus();
+    actions.append(confirm,cancel);card.append(actions);$('stage').append(card);approval=card;$('jarvis-orb-host').inert=false;$('jarvis-orb-host').removeAttribute('aria-hidden');window.JarvisOrb?.setStatus('AWAITING APPROVAL',{target:'#approval-card'});confirm.focus();
   }
   function renderWork(){const body=workspaceFrame('Mission Control','Live state from your local JARVIS services.');row(body,'Focus session','Server-owned timer and drift accounting',button('Open Focus',()=>{setWorkspace('galaxy');window.JarvisFocus?.expand?.();}));row(body,'Eyes','Local posture tracking; camera stays off until you enable it.',button('Toggle Eyes',()=>$('eyes').click()));row(body,'Screen watch','One Entire Screen share for watching and questions.',button('Toggle watch',()=>$('screen').click()));row(body,'Current activity','',create('output','service-state'));body.lastChild.lastChild.id='work-activity';row(body,'Focus state','',create('output','service-state'));body.lastChild.lastChild.id='work-focus';row(body,'Watch state','',create('output','service-state'));body.lastChild.lastChild.id='work-watch';row(body,'Agents and automations','No agent runner or automation service is connected.',button('Connection details',()=>setWorkspace('agents')));updateWork();}
   async function updateWork(){try{[focusState,watchState]=await Promise.all([request('/focus'),request('/watch')]);if($('work-focus'))$('work-focus').textContent=focusState.active?(focusState.paused?'Paused':focusState.lock_deferred?'Waiting to lock':focusState.drifting?'Drifting':'Focused'):'No active session';if($('work-watch'))$('work-watch').textContent=watchState.active?'Watching':'Off';if($('work-activity'))$('work-activity').textContent=$('voice-status').textContent||'Ready';}catch{if($('work-activity'))$('work-activity').textContent='Local server unavailable';}}
@@ -220,7 +220,7 @@
     row(body,'Available now','Notes, Focus, Eyes, screen watch, and model integrations remain usable.',button('Open Mission Control',()=>setWorkspace('work')));
   }
   function renderHistory(){const body=workspaceFrame('Notification history','Insights from this browser, saved locally.');if(!history.length)body.append(create('p','note-content','No archived insights yet.'));history.forEach(item=>row(body,item.text,new Date(item.time).toLocaleString()));}
-  function renderHelp(){const body=workspaceFrame('Keyboard shortcuts','Operate JARVIS without leaving the keyboard.');[['⌘ K / Ctrl K','Search notes, workspaces and actions'],['F','Fit the galaxy'],['Esc','Close the current surface or selection'],['Arrow keys','Walk a selected note’s links'],['Tab','Cycle constellations when the galaxy has focus'],['Space, held','Push to talk outside text fields'],['Shift + drag / right drag','Pan the galaxy'],['Scroll / pinch','Zoom toward the pointer']].forEach(([key,text])=>row(body,key,text));}
+  function renderHelp(){const body=workspaceFrame('Keyboard shortcuts','Operate JARVIS without leaving the keyboard.');[['⌘ K / Ctrl K','Search notes, workspaces and actions'],['F','Toggle full view'],['Shift + F','Fit the galaxy'],['Esc','Close the current surface or selection'],['Arrow keys','Walk a selected note’s links'],['Tab','Cycle constellations when the galaxy has focus'],['Space, held','Push to talk outside text fields'],['Shift + drag / right drag','Pan the galaxy'],['Scroll / pinch','Zoom toward the pointer']].forEach(([key,text])=>row(body,key,text));}
   function boot(launch){
     const key='jarvis.boot.hud';try{if(sessionStorage.getItem(key))return;sessionStorage.setItem(key,'1');}catch{}
     const reduced=preferences.motion==='reduced'||matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduced)return;
@@ -230,7 +230,8 @@
     const done=()=>{clearTimeout(timer);layer.remove();document.body.classList.remove('is-booting');window.JarvisGalaxy?.boot?.(0);document.removeEventListener('keydown',done);document.removeEventListener('pointerdown',done);};
     document.addEventListener('keydown',done,{once:true});document.addEventListener('pointerdown',done,{once:true});const timer=setTimeout(done,duration);
   }
-  async function refreshSystem(){try{systemState=await request('/system');$('build-version').textContent='V'+systemState.version;$('system-status').textContent='LOCAL UNIVERSE';$('system-dot').dataset.status='online';window.JarvisOrb?.setConnected(true);if(systemState.launch&&binding)boot(systemState.launch);}catch{$('system-status').textContent='OFFLINE';$('system-dot').dataset.status='offline';window.JarvisOrb?.setConnected(false);}}
+  function connectionState(){const connected=serverAvailable&&backendAvailable;$('system-status').textContent=connected?'ONLINE':'OFFLINE';$('system-dot').dataset.status=connected?'online':'offline';window.JarvisOrb?.setConnected(connected);}
+  async function refreshSystem(){try{const previousLaunch=systemState?.launch;systemState=await request('/system');if(binding&&(systemState.notes!==notes().filter(n=>!n.capture_hub).length||(previousLaunch&&previousLaunch!==systemState.launch))){const response=await fetch('/graph-data.js',{cache:'no-store'}),match=(await response.text()).match(/^\s*const GRAPH = ([\s\S]*);\s*$/);if(!response.ok||!match)throw Error('The note index is unavailable.');const data=JSON.parse(match[1]);if(!Array.isArray(data.nodes)||!Array.isArray(data.links))throw Error('Invalid note index.');binding.replaceGraph(data);}serverAvailable=true;$('build-version').textContent='V'+systemState.version;connectionState();if(systemState.launch&&binding)boot(systemState.launch);}catch{serverAvailable=false;connectionState();}}
   document.addEventListener('keydown',e=>{
     if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openPalette();return;}
     if(e.key==='Escape'){
@@ -246,12 +247,12 @@
   }
   $('palette-results').addEventListener('click',()=>{delete $('palette-input').dataset.mention;});
   window.addEventListener('jarvis:selection',event=>{
-    hidePreview();const node=event.detail?.node;if(!node){drawLeader();return;}$('detail-meta').textContent=metadata(node);
-    if(event.detail?.source==='pointer'){$('detail').hidden=true;showPreview(node);}
-    else{const serial=++noteRequest;request('/note?id='+node.id).then(data=>{if(serial!==noteRequest||binding?.selected()?.id!==node.id)return;$('detail-excerpt').replaceChildren();renderMarkdown($('detail-excerpt'),data.text,(line,checked)=>{const lines=data.text.split('\n');lines[line]=lines[line].replace(/^(\s*[-*]\s+\[)[ xX](\])/,(_,a,b)=>a+(checked?'x':' ')+b);approveEdit(node,data,lines.join('\n'),()=>binding?.select(notes().find(n=>n.id===node.id)||node));});}).catch(()=>{});}
+    hidePreview();const node=event.detail?.node;if(!node){selectNote(null);drawLeader();return;}$('detail-meta').textContent=metadata(node);
+    selectNote(node,event.detail?.source!=='pointer');
+    {const serial=++noteRequest;request('/note?id='+node.id).then(data=>{if(serial!==noteRequest||binding?.selected()?.id!==node.id)return;$('detail-excerpt').replaceChildren();renderMarkdown($('detail-excerpt'),data.text,(line,checked)=>{const lines=data.text.split('\n');lines[line]=lines[line].replace(/^(\s*[-*]\s+\[)[ xX](\])/,(_,a,b)=>a+(checked?'x':' ')+b);approveEdit(node,data,lines.join('\n'),()=>binding?.select(notes().find(n=>n.id===node.id)||node));});}).catch(()=>{});}
     announce('Selected '+node.label+', '+links(node).length+' linked notes.');drawLeader();
   });
-  window.addEventListener('jarvis:hover',event=>{clearTimeout(hoverTimer);if(event.detail?.node)hoverTimer=setTimeout(()=>showPreview(event.detail.node),SETTINGS.hoverMs);else if(!previewNote||!pins[noteKey(previewNote)])hoverTimer=setTimeout(hidePreview,SETTINGS.hoverMs);});
+  // Galaxy labels and highlighted real links provide hover feedback without an extra card.
   $('preview').onmouseenter=()=>clearTimeout(hoverTimer);$('preview').onmouseleave=()=>{if(previewNote&&!pins[noteKey(previewNote)])hoverTimer=setTimeout(hidePreview,SETTINGS.hoverMs);};
   window.addEventListener('jarvis:camera',()=>{placePreview();drawLeader();});
   window.addEventListener('jarvis:interaction',()=>{document.querySelector('.scene-foot').dataset.dismissed='true';});
@@ -266,12 +267,29 @@
   window.JarvisUI={
     connect(api){binding=api;rebuildTree();applyPreferences();refreshSystem();},
     isPinned(node){return Boolean(pins[noteKey(node)]);},
-    openPalette,setWorkspace,insight,
-    onQuestion(question){lastQuestion=question;$('answer-question').textContent=question;$('answer-question').hidden=false;$('answer-label').textContent='JARVIS / '+question;$('answer-card').dataset.idle='false';$('answer-galaxy').hidden=true;$('answer-read').hidden=true;hidePreview();},
-    onAnswer(data){lastAnswer=data;$('answer-galaxy').hidden=!data.nodes?.length;$('answer-read').hidden=false;announce(data.answer);if(data.nodes?.length)insight(data.nodes.length+' source '+(data.nodes.length===1?'note':'notes')+' grounded this answer.');},
+    openPalette,openMention,openNote,setWorkspace,insight,selectNote,setBriefing,toggleFullView,
+    onBackend(available){backendAvailable=Boolean(available);connectionState();},
+    onQuestion(question){setBriefing(true);lastQuestion=question;$('answer-question').textContent=question;$('answer-question').hidden=false;$('answer-label').textContent='JARVIS / '+question;$('answer-card').dataset.idle='false';$('answer-galaxy').hidden=true;$('answer-read').hidden=true;hidePreview();},
+    onAnswer(data){lastAnswer=data;$('answer-galaxy').hidden=!data.nodes?.length;$('answer-read').hidden=false;announce(data.answer);},
     onGraph(){rebuildTree();window.JarvisGalaxy?.refresh();},
     get preferences(){return {...preferences};},
     get activeWorkspace(){return currentWorkspace;}
   };
+  function setBriefing(open){$('answer-card').dataset.idle=String(!open);$('briefing-toggle').setAttribute('aria-expanded',String(open));}
+  function selectNote(node,expand=false){const pill=$('selected-note');pill.hidden=!node;if(!node){pill.setAttribute('aria-expanded','false');return;}$('selected-title').textContent=node.label;pill.style.setProperty('--selection-color',color(node));pill.setAttribute('aria-expanded',String(Boolean(expand)));}
+  function toggleFullView(force){const full=typeof force==='boolean'?force:!document.body.classList.contains('is-full-view');document.body.classList.toggle('is-full-view',full);$('full-view').setAttribute('aria-pressed',String(full));$('full-view-exit').hidden=!full;window.JarvisGalaxy?.wake();}
+  const exit=create('button','full-view-exit','Exit full view · F');exit.id='full-view-exit';exit.hidden=true;exit.onclick=()=>toggleFullView(false);document.body.append(exit);
+  $('full-view').onclick=()=>toggleFullView();
+  document.addEventListener('keydown',event=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.altKey||event.shiftKey||event.target.closest?.('input,textarea,select,[contenteditable="true"],dialog'))return;if(event.key.toLowerCase()==='f'){event.preventDefault();toggleFullView();}if(event.key==='Escape'&&document.body.classList.contains('is-full-view')){event.preventDefault();toggleFullView(false);}});
+  $('selected-note').onclick=()=>{const node=binding?.selected();if(!node)return;const expand=$('detail').hidden;$('detail').hidden=!expand;selectNote(node,expand);};
+  $('briefing-toggle').onclick=()=>setBriefing($('answer-card').dataset.idle==='true');
+  $('attach-note').onclick=openMention;
+  $('rail-focus').onclick=$('clock-focus').onclick=()=>{setWorkspace('galaxy');if(window.JarvisFocus?.state?.active)window.JarvisFocus.expand();else $('focus').click();};
+  $('rail-eyes').onclick=()=>$('eyes').click();$('rail-screen').onclick=()=>$('screen').click();
+  let clockFocus=null;
+  function updateClock(){const date=new Date();$('deck-clock').textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});$('deck-clock').dateTime=date.toISOString();const fraction=clockFocus?.active?Math.min(1,Math.max(0,clockFocus.elapsed_s/Math.max(1,clockFocus.planned_s))):(date.getHours()*60+date.getMinutes())/SETTINGS.clockMinutes;$('clock-progress').style.strokeDashoffset=String(SETTINGS.percent*(1-fraction));}
+  window.addEventListener('jarvis:focus-state',event=>{clockFocus=event.detail;$('rail-focus').setAttribute('aria-pressed',String(Boolean(clockFocus?.active)));updateClock();});
+  for(const [tool,rail]of [['eyes','rail-eyes'],['screen','rail-screen']])new MutationObserver(()=>$(rail).setAttribute('aria-pressed',$(tool).getAttribute('aria-pressed')||'false')).observe($(tool),{attributes:true,attributeFilter:['aria-pressed']});
+  updateClock();setInterval(updateClock,SETTINGS.clockMs);document.body.dataset.workspace='galaxy';
   refreshSystem();setInterval(refreshSystem,SETTINGS.statusMs);applyPreferences();
 })();
