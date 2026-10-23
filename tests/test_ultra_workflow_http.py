@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import server
 import ultra
-from test_offline import request
+from test_offline import TEST_CONFIG, request
 
 ORIGIN = "http://127.0.0.1:4700"
 QUESTION = "Compare the supplied notes."
@@ -16,6 +16,11 @@ ANSWER = {"answer": "Ready.", "about_notes": False, "nodes": []}
 
 
 class WorkflowHttpTests(unittest.TestCase):
+    def setUp(self):
+        config = patch.object(server, "load_config", return_value=dict(TEST_CONFIG))
+        config.start()
+        self.addCleanup(config.stop)
+
     def test_workflow_metadata_uses_local_boundary(self):
         for path, method, value in (
                 ("/agents/workflows", "workflow_catalog", {"enabled": True, "workflows": []}),

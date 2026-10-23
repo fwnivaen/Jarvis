@@ -22,6 +22,7 @@ TEST_PORT = 4700
 TEST_NOTE_ID = 2
 TEST_TIMEOUT_S = 10
 REQUEST_LIMIT_EXCESS = 1
+TEST_CONFIG = {"brain": "codex-cli", "model": "gpt-6-astra"}
 
 
 class FakeSocket:
@@ -79,6 +80,9 @@ class Preflight(unittest.TestCase):
             self.assertTrue(server.ask_brain('system', [], [], 'look', image=b'jpeg', webcam=True)['error'])
 
     def setUp(self):
+        config = patch.object(server, 'load_config', return_value=dict(TEST_CONFIG))
+        config.start()
+        self.addCleanup(config.stop)
         self.scratch = tempfile.TemporaryDirectory()
         self.addCleanup(self.scratch.cleanup)
         root = Path(self.scratch.name)
