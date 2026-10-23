@@ -1,115 +1,158 @@
-// Metadata-only activity drawer. Never render prompts, output, or reasoning events.
+// A small, equal-footed constellation. Read existing activity; never run agent work.
 (() => {
   'use strict';
-  const SETTINGS = Object.freeze({pollMs:750, disabledPollMs:5000, hiddenPollMs:3000,
-    timeoutGraceMs:10000, secondsToMs:1000, elapsedDigits:1, workerDigits:2, recentEvents:3, maxCrewSlots:16});
-  const root=document.getElementById('agent-monitor');
-  if(!root)return;
-  const rows=document.getElementById('agent-rows'),status=document.getElementById('agent-summary'),
-    meta=document.getElementById('agent-limits');
-  const crew=document.getElementById('agent-crew'),members=document.getElementById('crew-members'),
-    crewStatus=document.getElementById('crew-summary');
-  const labels={dispatch:'Quick route',brain:'Brain',worker:'Worker',answer:'Final answer',vision:'Vision'};
-  const states={running:'Working',retrying:'Retrying',complete:'Complete',failed:'Needs attention',skipped:'Skipped',queued:'Queued'};
-  const phases={classifying:'Routing',planning:'Planning',answering:'Working',checking:'Checking',drafting:'Drafting',
-    sharing:'Sharing reports',reviewing:'Peer review',reporting:'Reporting to boss',recovering:'Recovering'};
-  const eventLabels=Object.freeze({planned:'Boss assigned the work',drafts_ready:'Worker drafts ready',
-    peer_review_started:'Workers reviewing shared reports',peer_review_complete:'Peer review complete',
-    reported:'Reports handed to boss',resumed:'Saved work resumed',checkpoint_saved:'Progress saved'});
-  const crewActivity=crew?part(crew,'p','crew-activity'):null;
+  const SETTINGS=Object.freeze({pollMs:750,discoveryMs:4000,hiddenPollMs:3000,disabledPollMs:5000,
+    fetchTimeoutMs:6000,terminalMs:12000,timeoutGraceMs:10000,secondsToMs:1000,elapsedDigits:1,
+    recentEvents:3,maxCrewSlots:16,taskChars:240});
+  const IDENTITIES=Object.freeze([
+    {slot:'worker-1',name:'Scout',tone:'cyan',glyph:'<path d="m28 15 12 13-12 13-12-13Z"/><path d="m28 20 6 8-6 8-6-8Z"/><path d="M28 9v4m0 30v4M9 28h4m30 0h4"/>'},
+    {slot:'worker-2',name:'Weave',tone:'violet',glyph:'<ellipse cx="28" cy="28" rx="15" ry="6"/><ellipse cx="28" cy="28" rx="15" ry="6" transform="rotate(60 28 28)"/><ellipse cx="28" cy="28" rx="15" ry="6" transform="rotate(120 28 28)"/><circle cx="28" cy="28" r="2"/>'},
+    {slot:'worker-3',name:'Prism',tone:'amber',glyph:'<path d="m28 12 14 8v16l-14 8-14-8V20Z"/><path d="m14 20 14 8 14-8M28 28v16m0-32v16L14 36m14-8 14 8"/>'}
+  ]);
+  const ACTIVE=new Set(['running','retrying']);
+  const TERMINAL=new Set(['complete','failed','cancelled','interrupted']);
+  const STATES={idle:'Idle',running:'Working',retrying:'Retrying',queued:'Queued',complete:'Done',failed:'Check',cancelled:'Stopped',interrupted:'Interrupted',skipped:'Unused'};
+  const PHASES={classifying:'Preparing',planning:'Preparing',answering:'Working',checking:'Checking',drafting:'Drafting',sharing:'Sharing findings',reviewing:'Reviewing together',reporting:'Combining findings',recovering:'Recovering'};
+  const EVENTS={planned:'Work assigned',drafts_ready:'Findings ready',peer_review_started:'Reviewing shared findings',peer_review_complete:'Shared review complete',reported:'Findings combined',resumed:'Saved work resumed',checkpoint_saved:'Progress saved'};
+  const root=document.getElementById('agent-monitor'),crew=document.getElementById('agent-crew');
+  if(!root||!crew)return;
+  const rows=document.getElementById('agent-rows'),status=document.getElementById('agent-summary'),meta=document.getElementById('agent-limits'),
+    members=document.getElementById('crew-members'),crewStatus=document.getElementById('crew-summary'),activity=document.getElementById('crew-activity');
   const eventList=part(root,'ol','agent-events');eventList.ariaLabel='Recent agent activity';eventList.hidden=true;
-  const cards=new Map();
-  // Fixed local SVG artwork. Model data only enters textContent below.
-  const workerGlyph='<svg viewBox="0 0 80 80" aria-hidden="true"><circle class="crew-orbit" cx="40" cy="39" r="35"/><circle class="crew-halo" cx="40" cy="39" r="29"/><path class="crew-body-line" d="M22 69v-6c0-9 8-15 18-15s18 6 18 15v6M35 47v5m10-5v5M29 57l4 12m18-12-4 12"/><rect class="crew-helmet" x="24" y="15" width="32" height="33" rx="13"/><rect class="crew-visor" x="29" y="25" width="22" height="12" rx="5"/><path class="crew-face" d="M34 31h3m6 0h3M34 42h12M40 15V9"/><circle class="crew-beacon" cx="40" cy="8" r="2"/><path class="crew-arm" d="M22 57l-4 8 9 5m30-13 5 6-6 5"/><rect class="crew-tablet" x="44" y="55" width="14" height="18" rx="3"/><path class="crew-face" d="M48 60h6m-6 4h4"/></svg>';
-  const bossGlyph='<svg viewBox="0 0 80 80" aria-hidden="true"><circle class="crew-orbit" cx="40" cy="42" r="35"/><circle class="crew-halo" cx="40" cy="42" r="29"/><path class="crew-crown" d="m29 12-3-9 9 5 5-7 5 7 9-5-3 9Z"/><path class="crew-body-line" d="M20 75v-8c0-10 8-15 20-15s20 5 20 15v8M31 56l9 9 9-9M40 65v10"/><rect class="crew-helmet" x="23" y="18" width="34" height="33" rx="13"/><rect class="crew-visor" x="28" y="28" width="24" height="12" rx="5"/><path class="crew-face" d="M33 34h4m6 0h4M35 45h10"/><path class="crew-badge" d="m40 66 2 4 4 1-4 2-2 4-2-4-4-2 4-1Z"/></svg>';
-  let timer=null,destroyed=false,last=null;
-  function cell(row,text){const element=document.createElement('td');element.textContent=String(text);row.append(element);}
+  const cards=IDENTITIES.map(identity=>{
+    const card=part(members,'article','crew-card');card.dataset.slot=identity.slot;card.dataset.tone=identity.tone;
+    const avatar=part(card,'div','crew-avatar');avatar.innerHTML='<svg viewBox="0 0 56 56" aria-hidden="true"><circle class="crew-halo" cx="28" cy="28" r="23"/><circle class="crew-orbit" cx="28" cy="28" r="23"/><g class="crew-symbol">'+identity.glyph+'</g><circle class="crew-spark" cx="28" cy="5" r="2"/></svg>';
+    const name=part(card,'h3','crew-name',identity.name),state=part(card,'p','crew-state','Idle');
+    return {card,avatar,name,state};
+  });
+  const links=[...crew.querySelectorAll('.crew-link')];
+  let timer=null,destroyed=false,last=null,workflow=null,workflowHealthy=true,nextDiscovery=0;
   function part(parent,tag,className,text){const element=document.createElement(tag);element.className=className;if(text!==undefined)element.textContent=text;parent.append(element);return element;}
-  function eventText(event){
-    if(!event||!Object.hasOwn(eventLabels,event.kind))return null;
-    if(event.slot!==null&&event.slot!==undefined){
+  function cell(row,text){part(row,'td','',String(text));}
+  function elapsed(value){return Number.isFinite(value)?value.toFixed(SETTINGS.elapsedDigits)+'s':'—';}
+  function publicEvent(event){
+    if(!event||!Object.hasOwn(EVENTS,event.kind))return null;
+    if(event.slot!==null&&event.slot!==undefined&&event.slot!=='boss'){
       const number=Number(String(event.slot).split('-')[1]);
-      if(event.slot!=='boss'&&(!Number.isInteger(number)||number<1||number>SETTINGS.maxCrewSlots||event.slot!==`worker-${number}`))return null;
-    }
-    return eventLabels[event.kind];
+      if(!Number.isInteger(number)||number<1||number>SETTINGS.maxCrewSlots||event.slot!==`worker-${number}`)return null;
+    }return EVENTS[event.kind];
   }
-  function renderEvents(data){
-    const events=(Array.isArray(data.events)?data.events:[]).filter(event=>eventText(event)).slice(-SETTINGS.recentEvents);
-    eventList.replaceChildren();eventList.hidden=!events.length;
-    for(const event of events){
-      const elapsed=Number.isFinite(event.elapsed_s)?event.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s · ':'';
-      part(eventList,'li','agent-event',elapsed+eventText(event));
-    }
-    if(crewActivity){crewActivity.hidden=!events.length;crewActivity.textContent=events.length?eventText(events[events.length-1]):'';}
+  function currentWorkflow(){
+    if(!workflow)return null;
+    if(!TERMINAL.has(workflow.status))return workflow;
+    const ended=(workflow.created_at+workflow.elapsed_s)*SETTINGS.secondsToMs;
+    return Date.now()-ended<SETTINGS.terminalMs?workflow:null;
   }
-  function makeCard(profile){
-    const card=part(members,'article','crew-card'+(profile.id==='boss'?' crew-card--boss':''));
-    card.dataset.slot=profile.id;card.dataset.tone=profile.id==='boss'?'gold':profile.id==='worker-1'?'blue':profile.id==='worker-2'?'violet':'mint';
-    const avatar=part(card,'div','crew-avatar');avatar.innerHTML=profile.id==='boss'?bossGlyph:workerGlyph;
-    const info=part(card,'div','crew-info'),name=part(info,'h3','crew-name',profile.id==='boss'?'BOSS':'WORKER '+profile.id.split('-')[1].padStart(SETTINGS.workerDigits,'0')),
-      model=part(info,'p','crew-model'),effort=part(info,'span','crew-effort'),state=part(info,'p','crew-state'),metrics=part(info,'p','crew-metrics');
-    return {card,name,model,effort,state,metrics};
-  }
-  function renderCrew(data){
-    if(!crew||!members||!crewStatus)return;
-    const roster=Array.isArray(data.crew)?data.crew:[];
-    crew.hidden=!(data.enabled&&data.crew_enabled&&roster.length);
+  function renderConstellation(){
+    const run=currentWorkflow(),fromWorkflow=Boolean(run),data=fromWorkflow?run:last;
+    crew.hidden=!(fromWorkflow||last?.enabled&&last?.crew_enabled);
     if(crew.hidden)return;
-    crew.dataset.connected='true';
-    const signature=roster.map(profile=>profile.id).join('|');
-    if(members.dataset.roster!==signature){members.replaceChildren();cards.clear();for(const profile of roster)cards.set(profile.id,makeCard(profile));members.dataset.roster=signature;}
-    let working=0,reviewing=0;
-    for(const profile of roster){
-      const view=cards.get(profile.id),jobs=data.agents.filter(job=>job.slot===profile.id),job=jobs[jobs.length-1],model=job?.model||profile.model,
-        effort=job?.effort||profile.effort,state=job?.status||'idle';
-      view.card.dataset.status=state;
-      view.card.dataset.phase=Object.hasOwn(phases,job?.phase)?job.phase:'';
-      view.model.textContent=model==='gpt-6.1-sol'?'6.1 SOL':model==='gpt-6-luna'?'LUNA':model==='gpt-6-astra'?'ASTRA':model;
-      view.effort.textContent=String(effort).toUpperCase();
-      view.state.textContent=state==='idle'?(data.agents.length&&!data.active?'Not needed':'Standby'):state==='running'?(phases[job.phase]||'Working'):state==='complete'&&['drafting','sharing'].includes(job?.phase)&&data.active?'Draft ready':states[state]||'Standby';
-      if(profile.id==='boss'&&job?.role==='brain'&&state==='complete'&&data.active)view.state.textContent='Plan ready';
-      view.metrics.textContent=job?`${job.elapsed_s.toFixed(SETTINGS.elapsedDigits)}s · ${job.total_tokens===null?'tokens pending':job.total_tokens.toLocaleString()+' tokens'}`:profile.id==='boss'?'Plans & checks':'Ready for a task';
-      if(profile.role==='worker'&&['running','retrying','queued'].includes(state)){working++;if(job.phase==='reviewing')reviewing++;}
+    const healthy=fromWorkflow?workflowHealthy:Boolean(last?.connected);
+    crew.dataset.connected=String(healthy);
+    const isActive=fromWorkflow?!TERMINAL.has(run.status):Boolean(data?.active);
+    const agents=(isActive||fromWorkflow)&&Array.isArray(data?.agents)?data.agents:[];
+    const selected=IDENTITIES.map(identity=>agents.filter(job=>job.slot===identity.slot).at(-1));
+    const working=selected.filter(job=>ACTIVE.has(job?.status)).length;
+    const engaged=selected.map(job=>isActive&&(ACTIVE.has(job?.status)||job?.status==='complete'));
+    const reviewer=fromWorkflow?agents.find(job=>job.slot==='reviewer'&&ACTIVE.has(job.status)):
+      agents.find(job=>['brain','answer'].includes(job.role)&&ACTIVE.has(job.status));
+    const peerReview=!fromWorkflow&&selected.some(job=>ACTIVE.has(job?.status)&&job.phase==='reviewing');
+    const combining=Boolean(isActive&&reviewer&&selected.some(job=>job?.status==='complete'));
+    const count=engaged.filter(Boolean).length;
+    crew.dataset.mode=healthy?(count===3?'trio':count===2?'pair':working?'solo':combining?'combining':'idle'):'offline';
+    crew.dataset.active=String(isActive&&healthy);
+    for(const [index,view] of cards.entries()){
+      const job=selected[index];
+      const state=job&&Object.hasOwn(STATES,job.status)?job.status:'idle';
+      view.card.dataset.status=state;view.card.dataset.phase=combining?'combining':peerReview?'reviewing':'';
+      view.state.textContent=healthy?(ACTIVE.has(state)&&job?.current_tool?'Using a tool':peerReview&&ACTIVE.has(state)?'Reviewing':STATES[state]):'Offline';
+      view.card.title=IDENTITIES[index].name+' · '+view.state.textContent+(fromWorkflow&&job?.task?' · '+String(job.task).slice(0,SETTINGS.taskChars):'')+(job?' · '+elapsed(job.elapsed_s):'');
     }
-    const workers=roster.filter(profile=>profile.role==='worker').length;
-    const activeJob=data.agents.find(job=>['running','retrying'].includes(job.status));
-    crew.dataset.active=String(data.active);
-    crewStatus.textContent=data.active?(working?`${working}/${workers} ${reviewing===working?'reviewing':'working'}`:activeJob?.slot==='boss'?'Boss working':labels[activeJob?.role]||'Standing by'):data.agents.length?'Standing by · last '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':'Standing by';
+    for(const link of links){
+      const [a,b]=link.dataset.pair.split('-').map(Number);
+      link.dataset.active=String(Boolean(healthy&&isActive&&engaged[a]&&engaged[b]));
+      link.dataset.phase=combining?'merge':'shared';
+    }
+    crewStatus.textContent=!healthy?'Offline':isActive?(working?working+' working':combining?'Combining':'Preparing'):fromWorkflow?run.status==='complete'?'Complete':'Stopped':'Ready';
+    activity.textContent=!healthy?'Activity connection interrupted':!isActive?(fromWorkflow?run.status==='complete'?'Findings ready in Work':'Saved work available in Work':'Ready for your next task'):
+      combining?'Combining their findings':peerReview?'Reviewing shared findings':count===3?'All three · one shared task':count===2?'Two agents · one shared task':working?'One agent · focused work':fromWorkflow?'Finding sources & assigning work':'Preparing your request';
+    crew.dataset.source=fromWorkflow?'workflow':'chat';
   }
-  function render(data){
-    last=data;root.hidden=!data.enabled;
-    renderEvents(data);
-    renderCrew(data);
-    if(!data.enabled)return;
-    status.textContent=data.active?'Working · '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':data.agents.length?'Last request · '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':'Ready';
-    meta.textContent=`Up to ${data.limits.max_workers} workers · ${data.limits.worker_timeout_s}s per worker · ${data.escalations}/${data.limits.max_escalations} escalations`;
+  function renderLegacy(data){
+    last={...data,connected:true};root.hidden=!data.enabled;
+    if(!data.enabled){renderConstellation();return;}
+    const run=currentWorkflow();
+    if(run){renderWorkflowTable(run);renderConstellation();return;}
+    status.textContent=data.active?'Working · '+elapsed(data.elapsed_s):data.agents.length?'Last request · '+elapsed(data.elapsed_s):'Ready';
+    meta.textContent=`Up to ${data.limits.max_workers} agents · ${data.limits.worker_timeout_s}s per agent`;
     rows.replaceChildren();
     for(const agent of data.agents){
       const row=document.createElement('tr');row.dataset.status=agent.status;
-      const phase=Object.hasOwn(phases,agent.phase)?phases[agent.phase]:null;
-      cell(row,labels[agent.role]||'Agent');cell(row,agent.model);cell(row,agent.effort||'—');cell(row,phase?`${agent.status} · ${phase}`:agent.status);
-      cell(row,agent.current_tool||'—');cell(row,agent.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s');
-      cell(row,agent.retries);cell(row,agent.total_tokens===null?'Unavailable':agent.total_tokens.toLocaleString());
+      const identity=IDENTITIES.find(item=>item.slot===agent.slot),label=identity?.name||({dispatch:'Quick answer',brain:'Preparation',answer:'Final review',vision:'Vision'}[agent.role]||'Agent');
+      const phase=Object.hasOwn(PHASES,agent.phase)?PHASES[agent.phase]:null;
+      for(const value of [label,agent.model,agent.effort||'—',phase?`${agent.status} · ${phase}`:agent.status,agent.current_tool||'—',elapsed(agent.elapsed_s),agent.retries,agent.total_tokens===null?'Unavailable':agent.total_tokens.toLocaleString()])cell(row,value);
       rows.append(row);
     }
+    const events=(data.events||[]).filter(event=>publicEvent(event)).slice(-SETTINGS.recentEvents);
+    eventList.replaceChildren();eventList.hidden=!events.length;
+    for(const event of events)part(eventList,'li','agent-event',(Number.isFinite(event.elapsed_s)?elapsed(event.elapsed_s)+' · ':'')+publicEvent(event));
+    renderConstellation();
+  }
+  function renderWorkflowTable(run){
+    root.hidden=false;status.textContent=(TERMINAL.has(run.status)?'Saved workflow':'Workflow active')+' · '+elapsed(run.elapsed_s);
+    meta.textContent='Three agent signals · shared findings · '+run.tool_calls+' tool calls';
+    rows.replaceChildren();
+    for(const agent of run.agents){
+      const row=document.createElement('tr');row.dataset.status=agent.status;
+      const label=IDENTITIES.find(item=>item.slot===agent.slot)?.name||'Final review';
+      for(const value of [label,agent.model,agent.effort,STATES[agent.status]||'Idle','—',elapsed(agent.elapsed_s),Math.max(0,agent.attempts-1),agent.usage_reported?agent.tokens.toLocaleString():'Unavailable'])cell(row,value);
+      rows.append(row);
+    }
+    eventList.hidden=true;eventList.replaceChildren();
+  }
+  function acceptWorkflow(run){
+    if(destroyed||!run||!Array.isArray(run.agents)||typeof run.id!=='string'||typeof run.status!=='string')return;
+    if(workflow&&!TERMINAL.has(workflow.status)&&run.id!==workflow.id&&run.created_at<workflow.created_at)return;
+    workflow=run;workflowHealthy=true;
+    if(currentWorkflow())renderWorkflowTable(run);
+    renderConstellation();
+  }
+  async function read(path){const response=await fetch(path,{cache:'no-store',signal:AbortSignal.timeout(SETTINGS.fetchTimeoutMs)});if(!response.ok)throw Error('Activity unavailable');return response.json();}
+  async function refreshWorkflow(){
+    if(workflow&&!TERMINAL.has(workflow.status)){
+      try{acceptWorkflow(await read('/workflows/run?id='+encodeURIComponent(workflow.id)));}
+      catch{workflowHealthy=false;renderConstellation();}
+      return;
+    }
+    if(Date.now()<nextDiscovery){renderConstellation();return;}
+    nextDiscovery=Date.now()+SETTINGS.discoveryMs;
+    try{
+      const data=await read('/workflows');
+      if(destroyed)return;
+      if(data.enabled&&data.available&&Array.isArray(data.runs)){
+        const candidate=data.runs.find(run=>run.id===data.active)||data.runs[0];
+        if(candidate)acceptWorkflow(candidate);
+      }
+    }catch{/* Ordinary chat remains visible if workflow integration is disabled. */}
   }
   async function refresh(){
-    try{
-      const response=await fetch('/agents',{cache:'no-store'});
-      if(!response.ok)throw Error();
-      const data=await response.json();
-      if(destroyed)return;
-      if(typeof data.enabled!=='boolean'||!Array.isArray(data.agents)||!data.limits)throw Error();
-      render(data);
-    }catch{
-      if(!root.hidden)status.textContent='Activity connection interrupted';
-      if(crew&&!crew.hidden){crew.dataset.connected='false';crewStatus.textContent='Connection interrupted';}
-    }finally{
-      if(!destroyed)timer=setTimeout(refresh,document.hidden?SETTINGS.hiddenPollMs:last?.enabled?SETTINGS.pollMs:SETTINGS.disabledPollMs);
-    }
+    await Promise.allSettled([refreshWorkflow(),(async()=>{
+      try{
+        const data=await read('/agents');if(destroyed)return;
+        if(typeof data.enabled!=='boolean'||!Array.isArray(data.agents)||!data.limits)throw Error('Invalid activity');
+        renderLegacy(data);
+      }catch{
+        if(last)last.connected=false;
+        if(!currentWorkflow()){status.textContent='Activity connection interrupted';renderConstellation();}
+      }
+    })()]);
+    if(!destroyed)timer=setTimeout(refresh,document.hidden?SETTINGS.hiddenPollMs:last?.enabled?SETTINGS.pollMs:SETTINGS.disabledPollMs);
   }
   function timeoutMs(fallback){return last?.routing_enabled?Math.max(fallback,last.limits.request_timeout_s*SETTINGS.secondsToMs+SETTINGS.timeoutGraceMs):fallback;}
-  function destroy(){destroyed=true;clearTimeout(timer);}
+  function destroy(){destroyed=true;clearTimeout(timer);window.removeEventListener('jarvis:workflow-state',onWorkflow);}
+  function onWorkflow(event){if(!destroyed)acceptWorkflow(event.detail);}
+  document.getElementById('crew-open-work').onclick=()=>window.JarvisUI?.setWorkspace('work');
+  window.addEventListener('jarvis:workflow-state',onWorkflow);
   window.addEventListener('pagehide',destroy,{once:true});
   window.JarvisAgents={timeoutMs,destroy};
   refresh();

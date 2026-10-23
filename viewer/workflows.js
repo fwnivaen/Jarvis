@@ -39,6 +39,7 @@
       const visibleState=value=>JSON.stringify(value,(key,item)=>key==='remaining_s'?undefined:item);
       if(TERMINAL.has(run.status)&&visibleState(run)===visibleState(last))return;
       last=run;
+      window.dispatchEvent(new CustomEvent('jarvis:workflow-state',{detail:run}));
       detail.replaceChildren();
       const title=make('div','workflow-run-heading'),state=make('span','workflow-state',run.status);state.dataset.state=run.status;
       title.append(make('h3',null,run.question),state);detail.append(title);

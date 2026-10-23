@@ -4,7 +4,7 @@ A personal AI assistant that connects a Markdown knowledge vault, a 3D galaxy, v
 
 [![Checks](https://github.com/fwnivaen/Jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/fwnivaen/Jarvis/actions/workflows/ci.yml)
 
-![Jarvis desktop with the knowledge galaxy, animated orb and boss/worker crew](docs/screenshots/ultra-complete-desktop.jpg)
+![Jarvis galaxy with three real working agent signals and their shared constellation](docs/screenshots/agents-live.jpg)
 
 Jarvis runs on a local Python server with a plain JavaScript viewer and native macOS helpers. Notes, search indexes and runtime state live on your machine. Model requests use the configured cloud backend; selected note excerpts and explicit vision frames can leave the machine. The included 30-note café vault is fictional demonstration data.
 
@@ -12,7 +12,7 @@ Jarvis runs on a local Python server with a plain JavaScript viewer and native m
 
 - **Grounded knowledge:** search Markdown notes, follow citations into the galaxy, capture new notes and edit with revision checks.
 - **Collaborative agents:** a boss assigns work to up to three workers, shares their findings, checks their reports and returns one answer. Simple requests use a single cheaper call.
-- **Live activity:** the glassy crew, collapsible drawer and terminal table show models, tools, timing, retries and reported tokens. Private reasoning is never displayed.
+- **Live activity:** compact Scout, Weave and Prism signals glow as agents work and connect around shared findings. The existing drawer and Work view show tools, timing, retries and reported tokens. Private reasoning is never displayed.
 - **Hybrid memory:** local semantic and keyword search, PDF/DOCX/XLSX text imports, and preferences that persist across sessions.
 - **Voice and vision:** an animated orb, browser/native speech, local posture landmarks, explicit camera questions and screen watch with local frame comparisons.
 - **Focus and tools:** native macOS focus controls and a shared registry of 12 tools available to the crew and an MCP stdio client.
@@ -50,7 +50,7 @@ This starts the original path. Cloud answers still require a configured, availab
 
 ## Visible agent workflows
 
-Run `./start-workflows.sh` after setup, open [localhost:4700](http://localhost:4700), and select **Work**. Launch a task, follow real parallel agents and tool activity, inspect verified findings, cancel work, or retry a saved checkpoint within its original budget. LangGraph runs locally through the existing signed-in model connection; no hosted Studio is required. [Setup and controls](docs/WORKFLOWS.md) · [Measured comparison](docs/framework-evaluation.md).
+Run `./start-workflows.sh` after setup, open [localhost:4700](http://localhost:4700), and select **Work**. Launch a task, follow real parallel agents and tool activity, inspect verified findings, cancel work, or retry a saved checkpoint within its original budget. Return to **Galaxy** to watch the compact three-agent constellation. LangGraph runs locally through the existing signed-in model connection; no hosted Studio is required. [Setup and controls](docs/WORKFLOWS.md) · [Agent visuals and checks](docs/agent-visuals.md) · [Measured comparison](docs/framework-evaluation.md).
 
 ## Try it
 
@@ -59,7 +59,7 @@ Run `./start-workflows.sh` after setup, open [localhost:4700](http://localhost:4
 - “Remember that the supplier review is next Tuesday.”
 - Import a document from Notes, or add an explicit preference in Settings.
 
-The default crew is a **Sol max boss**, with **Sol medium**, **Luna max** and **Luna high** workers. Exact model IDs and efforts are validated against the installed account catalog. The worker cap is configurable; the default deadline is 45 seconds with at most two retries and one escalation per request. Astra is manual-only in the Ultra route.
+The legacy chat crew's default model configuration uses a **Sol max** coordinator, with **Sol medium**, **Luna max** and **Luna high** workers. These remain runtime profiles; the Galaxy display uses three equal agent symbols. Exact model IDs and efforts are validated against the installed account catalog. The worker cap is configurable; the default deadline is 45 seconds with at most two retries and one escalation per request. Astra is manual-only in the Ultra route.
 
 ## Verify it
 
@@ -71,7 +71,7 @@ python3 preflight.py
 
 The first two commands check repository hygiene and the regression suite. Full preflight requires the running Mac server, performs real model calls and cleans up its own temporary capture. CI runs the automated suite without account credentials or physical sensor access and builds the native helpers on macOS.
 
-The latest local verification contains **163 passing Python tests** and **14 passing JavaScript suites**. The visible Focus fixture passed **16/16 cases at 1440×900**. The latest full live preflight recorded **14 pass, 0 fail, 2 warn**; the two API-key checks were skipped for Codex sign-in. Fresh-clone regressions and the macOS helper builds also pass in CI. Earlier foreground-tab access failures remain documented as a permission-sensitive limitation. [Full evidence and limitations](docs/ultra-verification.md).
+The latest local verification contains **184 passing Python tests** and **14 passing JavaScript suites**. The visible Focus fixture passed **16/16 cases at 1440×900**. The final full live preflight recorded **14 pass, 0 fail, 2 warn**; API-key/model checks were skipped for Codex sign-in. The agent visuals were inspected with one, two and three participants, on mobile, and with reduced motion; a real three-agent workflow completed. Foreground activity access can still fail intermittently during live preflight. [Current evidence and limitations](docs/agent-visuals.md) · [Earlier verification](docs/ultra-verification.md).
 
 Max-effort workers can reach the 45-second limit; the system returns an explicitly partial result. Document imports extract text rather than OCR or chart images. General computer control and email sending are not exposed by the tool registry. Physical audio, camera accuracy and macOS permissions require local acceptance testing.
 

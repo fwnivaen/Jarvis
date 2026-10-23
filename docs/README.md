@@ -5,6 +5,7 @@
 | [Project overview](../README.md) | Features, demo, quick start and source map |
 | [Ultra Jarvis guide](../ULTRA-JARVIS.md) | Complete setup, model profiles, flags, tools, imports and recovery commands |
 | [Agent workflows](WORKFLOWS.md) | Launch, monitor, cancel and recover LangGraph work inside JARVIS |
+| [Galaxy agent visuals](agent-visuals.md) | Compact three-agent signals, state mapping, screenshots and visual test instructions |
 | [Framework evaluation](framework-evaluation.md) | Source inspection, selection, baseline, live trials and bounded stress results |
 | [Architecture](ARCHITECTURE.md) | Request flow, module boundaries, validation and failure semantics |
 | [Usage](USAGE.md) | Notes, voice, Focus, Eyes and screen-watch controls |

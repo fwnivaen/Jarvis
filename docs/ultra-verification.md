@@ -1,5 +1,13 @@
 # Ultra Jarvis verification
 
+## Compact agent visuals — October 23, 2026
+
+The Galaxy's legacy hierarchy has been replaced by three equal agent signals, without changes to agent execution. One-, two- and three-agent states, shared-work connections, review, completion, offline/recovery, mobile, light mode, reduced motion, collapse and full view were checked. A browser-launched three-agent workflow completed in 24.8 seconds. See the [visual design, real screenshot, labelled fixture screenshots and reproducible checks](agent-visuals.md).
+
+The current regression result is **184 Python tests passed** and **14 JavaScript suites passed**. Final full preflight: **14 pass, 0 fail, 2 warn**. Visible probe: **FOCUS PROBE: 16 pass, 0 fail | 1440x900**. An initial transient foreground-read failure and initial wrong-size probe are documented in the visual verification record; neither is counted as a pass. No Focus behavior or permissions changed.
+
+## Earlier runtime verification
+
 Both stages extend the existing server and viewer. The checked-in master flag remains off; these observations used an independently enabled review server on port 4701. Enable and run commands, feature flags and complete dependency details are in [ULTRA-JARVIS.md](../ULTRA-JARVIS.md). The earlier Stage 1 record is retained in [the historical archive](archive/ultra-stage-1-verification.md).
 
 ## LangGraph workflow integration — October 23, 2026
