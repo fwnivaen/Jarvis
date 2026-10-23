@@ -144,6 +144,7 @@
   function button(text,handler){const b=create('button','control',text);b.onclick=handler;return b;}
   function renderNotes(kind='notes'){
     const body=workspaceFrame(kind==='brain'?'Project Brain':kind==='library'?'Library':'Notes','Your Markdown files. Changes stay in the same local collection.');
+    window.JarvisUltra?.mountNotes(body);
     const layout=create('div','notes-layout'),list=create('nav','notes-list'),reader=create('article','note-reader'),backlinks=create('aside','backlinks');list.setAttribute('aria-label','All notes');
     notes().filter(n=>!n.capture_hub).forEach(node=>list.append(button(node.label,()=>readInto(node,reader,backlinks))));
     layout.append(list,reader,backlinks);body.append(layout);
@@ -196,6 +197,7 @@
   function settingSelect(parent,title,description,key,options){const select=create('select');select.setAttribute('aria-label',title);options.forEach(([value,text])=>{const option=create('option',null,text);option.value=value;select.append(option);});select.value=preferences[key]||options[0][0];select.onchange=()=>{preferences[key]=select.value;applyPreferences();};row(parent,title,description,select);}
   function renderSettings(kind){
     const body=workspaceFrame(kind==='voice'?'Voice':'Settings','Preferences apply immediately and stay on this device.');
+    if(kind!=='voice')window.JarvisUltra?.mountSettings(body);
     if(kind!=='voice'){settingSelect(body,'Appearance','Dark observatory or warm paper.','theme',[['dark','Dark'],['light','Light'],['system','System']]);settingSelect(body,'Motion','System accessibility settings are always respected.','motion',[['system','Follow system'],['reduced','Reduced motion']]);
       const sounds=button(preferences.sounds?'On':'Off',()=>{preferences.sounds=!preferences.sounds;store(SETTINGS.preferenceKey,preferences);sounds.textContent=preferences.sounds?'On':'Off';sound();});row(body,'Interface sounds','Quiet, optional, and off by default.',sounds);
       row(body,'Build','V'+(systemState?.version||'2.0')+' · Local Python / Three.js viewer',button('Keyboard shortcuts',()=>setWorkspace('help')));
@@ -266,6 +268,7 @@
   new MutationObserver(()=>{const text=$('brain-chip').textContent.replace(/\s*▾$/,'');$('command-model').textContent=text.replace(/^.*?·\s*/,'');window.JarvisOrb?.setModel(text);}).observe($('brain-chip'),{childList:true,characterData:true,subtree:true});
   window.JarvisUI={
     connect(api){binding=api;rebuildTree();applyPreferences();refreshSystem();},
+    async refreshGraph(){const data=await request('/notes/graph');binding?.replaceGraph(data);rebuildTree();refreshSystem();},
     isPinned(node){return Boolean(pins[noteKey(node)]);},
     openPalette,openMention,openNote,setWorkspace,insight,selectNote,setBriefing,toggleFullView,
     onBackend(available){backendAvailable=Boolean(available);connectionState();},

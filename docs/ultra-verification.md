@@ -1,65 +1,59 @@
-# Ultra Jarvis Stage 1 verification — October 20, 2026
+# Ultra Jarvis verification — October 22, 2026
 
-Stage 1 is implemented for review. The committed master feature flag is OFF. Verification used a separate local server on port 4701 with Ultra enabled, leaving the existing port 4700 server running.
+Both stages extend the existing server and viewer. The checked-in master flag remains off, with an independently enabled review server at `http://127.0.0.1:4701/?mute=1`. Enable and run commands, feature flags and complete dependency details are in [ULTRA-JARVIS.md](../ULTRA-JARVIS.md). The earlier Stage 1 record is retained in [ultra-stage-1-verification.md](ultra-stage-1-verification.md).
 
-## Crew revision
+## Automated and live checks
 
-The top-left galaxy crew now represents one boss and three real worker slots. The boss uses GPT-6.1 Sol max; the workers use GPT-6.1 Sol medium, GPT-6 Luna max and GPT-6 Luna high. Simple and vision requests still use the direct Luna high path. A source or math promotion updates the matching worker's displayed effective model/effort. Both new crew flags can be switched off independently; the master remains OFF.
-
-- **112 Python tests passed**, including 30 Ultra tests; **13 JavaScript suites passed**. New tests cover the exact profiles, cheap direct/vision/manual overrides, stable slot identity, promotion effort, config fallbacks, separate boss/worker deadlines, the visual hierarchy, disconnected/recovered state and persistent avatar elements.
-- A real three-worker request completed in **126.9 seconds**, with zero retries and zero escalations. Sol max planning took **70.4s**; Sol medium, Luna max and Luna high workers took **5.8s**, **9.3s** and **9.8s** concurrently; Sol max final review took **46.7s**. All five calls completed and reported usage. Max was substantially slower than the prior high-effort run on this request; no general latency claim is inferred.
-- Workers retain one **45-second** deadline covering retries and any promotion. Boss calls share the remaining **240-second request** budget by default, rather than being limited as workers.
-- Full live preflight: **13 pass, 1 fail, 2 warn**. This run's failure is “Running server cannot reliably read the front tab.” The original long-lived port 4700 server still reports foreground activity unavailable; no Focus implementation or permissions were changed. The two warnings remain API-key checks skipped for Codex login.
-- Visible probe: **FOCUS PROBE: 16 pass, 0 fail | 1440x900**, with all 16 case names read from its full title at the actual asserted viewport.
-- Browser layout: the default desktop shows the crew at x92/y96, with a collapsed activity drawer at the top right. At an actual 1024 × 750 viewport, the open monitor starts 12 pixels to the right of the crew. At 390 × 844, all four personnel fit in a compact row. Native crew/table collapse, note selection and the phone drawer were checked; temporary viewport overrides are reset after verification. Avatars pause with a connection-interrupted marker if polling fails, and resume only after recovery. Full view and other workspaces hide the crew; reduced-motion preferences stop animation.
-
-Current screenshots: [desktop crew](screenshots/ultra-crew-desktop.jpg), [real live request](screenshots/ultra-crew-live.jpg), [phone crew](screenshots/ultra-crew-mobile.jpg).
-
-The effort choices were rechecked against the official [Sol model page](https://developers.openai.com/api/docs/models/gpt-6.1-sol) and [Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna), then exercised through the existing bridge, which checks the installed account's model catalog before inference. No packages or credentials were added.
-
-## Original Stage 1 results (before the crew revision)
-
-| Check | Result |
+| Check | Observed result |
 | --- | --- |
-| Python regressions | **105 tests passed**: the existing 82 plus 23 new routing/protocol/privacy/limit tests |
-| Browser controller regressions | **13 JavaScript suites passed**, including the new activity drawer suite |
-| Real warm Codex connection | Luna high completed in 6.4s; Sol high completed in 4.7s; both reported usage |
-| Simple request | One Luna dispatch call, zero workers, zero escalations; real request completed in 9.1s |
-| Explicit parallel request | Sol planning, **3 concurrent Luna workers**, Sol final answer; all completed in **47.3s**, zero retries, zero escalations |
-| Worker timings in that request | 8.0s, 4.1s, 7.7s; planner 24.5s; final check 14.8s |
-| Sources in final answer | Three actual supplied note IDs; supporting quotes validated locally |
-| Real image check | Full preflight's real red JPEG was correctly identified through the Luna vision route |
-| Drawer | Actual model/status/time/retries/token values visible; native collapse/reopen verified; desktop and mobile screenshots saved |
-| Duplicate frames | Automatic same-lease duplicates skipped; explicit fresh questions still call vision; regression tests passed |
-| Failure handling | Retry and timeout tests passed; one shared promotion budget tested under racing workers; tool approvals refused; failed turns cannot return partial streamed output as success |
-| Privacy | Reasoning/plan events discarded, unapproved tool requests refused, monitor has no free-text task/output fields, local-only endpoint and configuration allowlist tests passed |
-| Full live preflight | **13 pass, 1 fail, 2 warn** |
+| Python suite in the local virtual environment | **163 tests passed**, including the real local embedding, persistent vector search, PDF/DOCX/XLSX imports and MCP stdio checks |
+| JavaScript regressions | **14 suites passed**, covering the existing galaxy, orb, voice, Focus, camera, screen watch, capture/source behavior and both crew suites |
+| Final full live preflight | **13 pass, 1 fail, 2 warn**; the failure is the running server's foreground-tab read |
 | Visible Focus probe | **FOCUS PROBE: 16 pass, 0 fail \| 1440x900** |
+| Real dynamic tool call | `preferences_get` completed through the warm Codex connection in **8.7 seconds** end to end; one registry call, zero workers and zero escalations |
+| Real image request | Full preflight correctly identified the red JPEG through the cheap Luna vision route |
+| Real three-worker collaboration | Boss planning and final review completed; Sol medium and Luna high each drafted and reviewed available peer findings; Luna max reached its **45-second** draft limit; a boss-reviewed **partial** answer was returned |
+| Read back that saved partial answer | **2.08 seconds**, no model call, the same observed evaluation totals and `resumable: false` |
+| MCP protocol | A real stdio client negotiated **2026-07-28**, discovered all **12 tools** and called the local registry |
+| Source hygiene | No secrets, notes, generated graph data, models, virtual environments or private runtime journals are included in the upgrade archive |
 
-The real three-worker request asked for independent findings from Menu Pricing, Opening Checklist and Launch Campaign. All five monitored model jobs finished successfully; the answer cited all three notes. No code, screen actions or file writes were executed by workers.
+The two preflight warnings are the existing API-key/model checks skipped because this installation uses Codex sign-in. The live preflight also passed note retrieval, capture followed by immediate recall and cleanup, model switching/reset, served-file integrity and browser access restrictions. An earlier full run passed **14 pass, 0 fail, 2 warn**, but full runs after the last server restart failed the foreground check, first on activity and then on the front tab. The final run is the current result; the earlier pass is not substituted for it.
 
-An earlier real failure run exercised the guardrails: one worker reached exactly 45.0 seconds, the request used exactly one promotion, and failed work was retained in activity state. That run exposed overly strict decimal rounding and inadequate retry-format feedback. Both were repaired, regression tested and followed by the successful three-worker run above. Explicit worker requests now bypass probabilistic cheap classification; an explicit request without workers also remains sequential.
+Field diagnostics were fetched from the actual running review server. Its Focus tick was alive and fresh, with no active session or armed target. A subsequent diagnostic could read the foreground application but reported browser-tab access unavailable. The session ledger had five entries and the legacy ledger had six counter keys. Chrome's Window menu listed **five windows**. The controlled tab host was `127.0.0.1:4701`, while the physical foreground window differed and changed during inspection. UI control was then left alone. No identities were added to diagnostics, and no Focus implementation or permission changes were made. The simulated probe below does not establish reliable physical foreground tracking.
 
-## Remaining live limitation
-
-Full preflight fails **Focus instruments (running server)** with “Running server cannot read foreground activity.” The pre-upgrade running server also reported foreground activity unavailable before implementation. No Focus implementation, ledger or permission behavior was changed for Stage 1. This remains a live host/access limitation; it is not counted as a pass. No physical Focus timing or audible speech result is claimed.
-
-The two warnings are the existing OpenAI API-key/model checks, skipped because Codex subscription login is active. No API key was needed or requested.
-
-The browser probe was visible and read from its full title at an actual page viewport of 1440 × 900. An initial wrong-size run was correctly treated as failed; the final title was:
+The final visible probe title was read in full at an asserted actual page viewport of 1440 × 900:
 
 ```text
 FOCUS PROBE: 16 pass, 0 fail | 1440x900 | PASS viewport | PASS visible | PASS reload-read-only | PASS focused | PASS deferred | PASS unavailable | PASS paused | PASS drift | PASS excused | PASS home | PASS intent-window | PASS commands | PASS pixel-identical | PASS pixel-change | PASS disconnect | PASS visible-at-finish
 ```
 
-Field instruments: the current numeric session ledger contained four existing entries; the legacy aggregate ledger had its expected six counter keys. No identities were logged. Controlled tab host was `127.0.0.1:4701`. Browser-window count was **missing** from the enabled UI inventory adapter, rather than inferred from tab count. Neither a fresh imported Focus object nor the simulated probe was used as evidence that the long-lived foreground reader works.
+## Collaboration and limits
 
-**UNVERIFIED:** actual webcam imagery and physical voice output in this session, general cost savings, benchmark/per-task price claims in the request, and future Stage 2 packages. Existing camera/voice controller regressions pass; no new permissions were granted during testing.
+The final live collaboration took **110.6 seconds** end to end. Its monitor measured **109.6 seconds**, five model jobs, four completed jobs, one failed worker, zero retries, zero escalations and **191,955 reported tokens**. Those are observations for this run, not a general speed or cost claim. The failed worker was Luna max. Its timeout did not hold the other workers behind a shared draft barrier: they exchanged and reviewed available findings before the boss synthesized the partial answer.
 
-## Review artifacts
+Earlier live trials exposed two issues that were corrected: final synthesis repeated retrieval instead of using all supplied tool sources, and a global draft barrier consumed the faster workers' review budget while one slow worker drafted. Final synthesis now receives all validated reports and retrieved passages with executable tools disabled. Drafts and reviews share one pool of at most three workers, and reviews start when peer findings become available. Regression tests cover the source handoff, shared worker deadlines, one peer-review round and parallelism bound.
 
-- [Desktop: three completed workers and final answer](screenshots/ultra-stage-1-desktop.jpg)
-- [Mobile drawer](screenshots/ultra-stage-1-mobile.jpg)
-- [Run, test, enable and roll back](../ULTRA-STAGE-1.md)
+The requested max-effort settings can still exceed the fixed 45-second worker budget. They were preserved. A worker timeout remains visible and the answer is marked partial. A boss timeout produces an explicit “not received a final boss review” notice with only locally checked findings. Neither timeout nor self-reported confidence triggers escalation.
 
-The complete-file archive excludes `config.json`, all keys, notes, generated graph data, virtual environments and private runtime state. Stage 2 has not been started.
+Checkpoint tests cover context mismatches, original absolute deadlines, shared retry/escalation counters, source revisions, all observed token usage, completed and partial answer readback, and retained worker statuses in the monitor. New checkpoints preserve the full metadata roster so reopening an answer cannot mislabel previously used workers as “Not needed.” Tool journals deduplicate identical writes from peers and retries; interrupted uncertain writes are not automatically repeated. A deliberately slow local callback also confirmed that a worker's model wait remains bounded by its deadline.
+
+## Memory, documents and tools
+
+The isolated Python 3.12 environment contains the pinned official releases listed in `requirements-ultra.txt`. A real `BAAI/bge-small-en-v1.5` embedding produced **384 dimensions**. A synonym query found the matching note, and the embedded Qdrant index reopened successfully from local disk. Missing optional dependencies and embedding/index failures retain the original keyword retrieval behavior.
+
+Real PDF, DOCX and XLSX fixtures were converted to Markdown. Tests cover paragraph/table order, formulas retained as text, provenance hashes, repeat-import reuse, refusal to overwrite edited imports, bounded input sizes, path/symlink restrictions and imported titles surviving server rebuilds. Text extraction does not perform OCR or reconstruct chart images.
+
+The same typed tool registry serves crew calls, local HTTP and MCP. Tests cover all feature flags, explicit persistent preferences, local origin boundaries, current note revisions, screen request/confirmation distinctions and refusal of arbitrary built-in shell/file/browser tools. The installed Codex build requires the documented experimental dynamic-tool protocol and its `code_mode_host`; code-mode execution and unrelated tools remain disabled. Real tool execution was verified after applying that compatibility setting.
+
+## Visual verification
+
+The top-left glassy hierarchy retains the requested Sol max boss, Sol medium worker, Luna max worker and Luna high worker. Avatars are stable while their status changes. The nearby drawer shows only safe activity metadata; model output, prompts and private reasoning do not enter its table or terminal counterpart.
+
+Desktop, compact mobile, collapse/reopen and Settings memory/import controls were inspected in a visible browser. At an actual **390 × 844** viewport, all four figures fit without horizontal overflow. Full view and other workspaces hide the crew, and reduced-motion preferences stop the decorative animation. Temporary viewport overrides were reset after checking.
+
+- [Finished desktop](screenshots/ultra-complete-desktop.jpg)
+- [Actual live collaboration](screenshots/ultra-collaboration-live.jpg)
+- [Memory and import controls](screenshots/ultra-memory-settings.jpg)
+- [Compact mobile crew](screenshots/ultra-complete-mobile.jpg)
+
+**UNVERIFIED:** physical webcam imagery and audible native speech in this session, OCR/chart reconstruction, the prompt's benchmark and price ratios, general latency/cost savings, universal subscription model entitlement and future compatibility of experimental app-server APIs. Existing voice/camera controller regressions pass; those do not establish physical audio or camera results.

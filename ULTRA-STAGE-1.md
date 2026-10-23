@@ -1,3 +1,5 @@
+> Historical Stage 1 guide. For the complete upgrade, current tools, dependencies and run commands, see [ULTRA-JARVIS.md](ULTRA-JARVIS.md).
+
 # Ultra Jarvis — Stage 1 review
 
 This extends the existing Python server, orb, galaxy, notes, voice, Eyes, Focus and screen watch. Stage 2 (memory/imports/preferences/MCP tools and action approvals) is deliberately deferred for review.

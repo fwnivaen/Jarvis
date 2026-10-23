@@ -42,6 +42,10 @@
 .crew-metrics{margin:4px 0 0;font:400 6px var(--mono);line-height:1.6;color:var(--text-tertiary);white-space:nowrap}
 .crew-caption{margin:15px 4px 0;padding:10px 0 11px;border-top:1px solid var(--deck-stroke);color:var(--text-tertiary);font:400 8px var(--font);letter-spacing:.02em;text-align:center}
 .crew-caption-dot{display:inline-block;width:3px;height:3px;margin-right:5px;vertical-align:2px;border-radius:50%;background:var(--accent);opacity:.6}
+.crew-activity{margin:0;padding:9px 13px;border-top:1px solid var(--deck-stroke);color:var(--text-secondary);font:400 8px var(--mono);line-height:1.6}
+.crew-activity::before{content:'↳';margin-right:7px;color:var(--accent)}
+.crew-activity[hidden]{display:none}
+.crew-card[data-phase="reviewing"] .crew-tablet{stroke-width:1.8;fill:color-mix(in srgb,var(--crew-color) 12%,#0a151c)}
 .crew-card:is([data-status="running"],[data-status="retrying"]) .crew-avatar{opacity:1}
 .crew-card:is([data-status="running"],[data-status="retrying"]) .crew-orbit{animation:crew-orbit var(--crew-cycle) linear infinite;opacity:.85}
 .crew-card:is([data-status="running"],[data-status="retrying"]) .crew-visor{animation:crew-pulse var(--crew-pulse) ease-in-out infinite}
@@ -85,6 +89,9 @@ body[data-workspace]:not([data-workspace="galaxy"]) #agent-crew,.is-full-view #a
 #agent-monitor tr[data-status="failed"] td{color:var(--warning,#f4b182)}
 #agent-limits,#agent-privacy{margin:9px 15px;font-size:9px;color:var(--text-secondary);line-height:1.6}
 #agent-privacy{opacity:.75}
+.agent-events{margin:9px 15px;padding:9px 0 0;list-style:none;border-top:1px solid var(--deck-stroke);color:var(--text-secondary);font-size:8px;line-height:1.8}
+.agent-events[hidden]{display:none}
+.agent-event::before{content:'·';display:inline-block;margin-right:7px;color:var(--accent)}
 body[data-workspace]:not([data-workspace="galaxy"]) #agent-monitor,.is-full-view #agent-monitor{display:none}
 .stage:has(#agent-monitor[open]:not([hidden])) .chat-top{top:calc(var(--agents-top) + var(--agents-height) + 12px);max-height:calc(100dvh - var(--agents-top) - var(--agents-height) - 140px)}
 @media(max-width:1050px){:root{--agents-width:440px;--agents-orb-gap:224px;--agents-top:120px}#agent-monitor{width:min(var(--agents-width),calc(100% - 250px))}}
@@ -110,3 +117,6 @@ body[data-workspace]:not([data-workspace="galaxy"]) #agent-monitor,.is-full-view
 :root[data-motion="reduced"] #agent-crew *{animation:none!important;transition:none!important}
 @media(min-width:761px){#agent-monitor:not([open]){width:var(--agents-collapsed-width);right:30px;top:var(--crew-top)}}
 @media(min-width:761px) and (max-width:1050px){.stage:has(#agent-crew:not([hidden])) #agent-monitor[open]{left:calc(var(--crew-left) + var(--crew-width) + var(--crew-gap));right:16px;width:auto}}
+
+.ultra-settings{margin-top:20px;padding:20px;border:1px solid var(--deck-stroke);border-radius:14px;background:var(--deck-bg,rgba(12,20,28,.5));backdrop-filter:blur(18px)}
+.ultra-settings h2{font-size:16px;margin:0 0 14px}.ultra-settings h3{font-size:13px;margin-top:18px}.ultra-settings p{font-size:12px;line-height:1.6;overflow-wrap:anywhere}.ultra-settings form{display:flex;gap:8px;flex-wrap:wrap}.ultra-settings input,.ultra-settings select{min-width:0;max-width:100%;padding:9px;border:1px solid var(--deck-stroke);border-radius:8px;background:transparent;color:inherit}.ultra-settings button{padding:8px 12px;border:1px solid var(--deck-stroke);border-radius:8px;background:transparent;color:inherit;cursor:pointer}

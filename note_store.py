@@ -37,7 +37,7 @@ def read(note, directory):
     if path.stat().st_size > MAX_NOTE_BYTES:
         raise NoteError("This note is too large for the editor.")
     text = path.read_text(encoding="utf-8")
-    title = text.splitlines()[0][2:].strip() or path.stem if path.parent.name == "captures" and text.startswith("# ") else path.stem
+    title = text.splitlines()[0][2:].strip() or path.stem if path.parent.name in ("captures", "imports") and text.startswith("# ") else path.stem
     identity = path.relative_to(Path(directory).resolve()).as_posix()
     return dict(id=note["id"], title=title, group=note["group"],
                 text=text, revision=revision(text, identity), edited_at=path.stat().st_mtime)

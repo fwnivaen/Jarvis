@@ -16,5 +16,16 @@
   "quick_model": "gpt-6-luna",
   "brain_model": "gpt-6.1-sol",
   "manual_model": "gpt-6-astra",
-  "effort": "high"
+  "effort": "high",
+  "collaboration_enabled": true,
+  "structured_reports_enabled": true,
+  "workflows_enabled": true,
+  "checkpoint_enabled": true,
+  "evaluation_enabled": true,
+  "memory_enabled": true,
+  "semantic_search_enabled": true,
+  "document_import_enabled": true,
+  "preferences_enabled": true,
+  "tools_enabled": true,
+  "mcp_enabled": true
 }

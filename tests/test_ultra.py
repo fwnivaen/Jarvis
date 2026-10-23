@@ -58,7 +58,8 @@ class RoutingTests(unittest.TestCase):
     def setUp(self):
         # The original routing contract remains available behind the profile flag.
         self.settings = replace(ultra.Settings(), enabled=True, terminal_monitor_enabled=False,
-            crew_profiles_enabled=False)
+            crew_profiles_enabled=False, collaboration_enabled=False, structured_reports_enabled=False,
+            workflows_enabled=False, checkpoint_enabled=False, evaluation_enabled=False)
 
     def run_request(self, handler, **kwargs):
         fake = FakeBridge(handler)
@@ -211,7 +212,9 @@ class RoutingTests(unittest.TestCase):
 
 class CrewRoutingTests(unittest.TestCase):
     def setUp(self):
-        self.settings = replace(ultra.Settings(), enabled=True, terminal_monitor_enabled=False)
+        self.settings = replace(ultra.Settings(), enabled=True, terminal_monitor_enabled=False,
+            collaboration_enabled=False, structured_reports_enabled=False, workflows_enabled=False,
+            checkpoint_enabled=False, evaluation_enabled=False)
 
     def test_profiles_leave_cheap_direct_vision_and_manual_override_at_high(self):
         fake = FakeBridge(lambda call: dispatch() if call["schema"] is ultra.DISPATCH_SCHEMA else response())

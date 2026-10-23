@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const SETTINGS = Object.freeze({pollMs:750, disabledPollMs:5000, hiddenPollMs:3000,
-    timeoutGraceMs:10000, secondsToMs:1000, elapsedDigits:1, workerDigits:2});
+    timeoutGraceMs:10000, secondsToMs:1000, elapsedDigits:1, workerDigits:2, recentEvents:3, maxCrewSlots:16});
   const root=document.getElementById('agent-monitor');
   if(!root)return;
   const rows=document.getElementById('agent-rows'),status=document.getElementById('agent-summary'),
@@ -11,7 +11,13 @@
     crewStatus=document.getElementById('crew-summary');
   const labels={dispatch:'Quick route',brain:'Brain',worker:'Worker',answer:'Final answer',vision:'Vision'};
   const states={running:'Working',retrying:'Retrying',complete:'Complete',failed:'Needs attention',skipped:'Skipped',queued:'Queued'};
-  const phases={classifying:'Routing',planning:'Planning',answering:'Working',checking:'Checking'};
+  const phases={classifying:'Routing',planning:'Planning',answering:'Working',checking:'Checking',drafting:'Drafting',
+    sharing:'Sharing reports',reviewing:'Peer review',reporting:'Reporting to boss',recovering:'Recovering'};
+  const eventLabels=Object.freeze({planned:'Boss assigned the work',drafts_ready:'Worker drafts ready',
+    peer_review_started:'Workers reviewing shared reports',peer_review_complete:'Peer review complete',
+    reported:'Reports handed to boss',resumed:'Saved work resumed',checkpoint_saved:'Progress saved'});
+  const crewActivity=crew?part(crew,'p','crew-activity'):null;
+  const eventList=part(root,'ol','agent-events');eventList.ariaLabel='Recent agent activity';eventList.hidden=true;
   const cards=new Map();
   // Fixed local SVG artwork. Model data only enters textContent below.
   const workerGlyph='<svg viewBox="0 0 80 80" aria-hidden="true"><circle class="crew-orbit" cx="40" cy="39" r="35"/><circle class="crew-halo" cx="40" cy="39" r="29"/><path class="crew-body-line" d="M22 69v-6c0-9 8-15 18-15s18 6 18 15v6M35 47v5m10-5v5M29 57l4 12m18-12-4 12"/><rect class="crew-helmet" x="24" y="15" width="32" height="33" rx="13"/><rect class="crew-visor" x="29" y="25" width="22" height="12" rx="5"/><path class="crew-face" d="M34 31h3m6 0h3M34 42h12M40 15V9"/><circle class="crew-beacon" cx="40" cy="8" r="2"/><path class="crew-arm" d="M22 57l-4 8 9 5m30-13 5 6-6 5"/><rect class="crew-tablet" x="44" y="55" width="14" height="18" rx="3"/><path class="crew-face" d="M48 60h6m-6 4h4"/></svg>';
@@ -19,6 +25,23 @@
   let timer=null,destroyed=false,last=null;
   function cell(row,text){const element=document.createElement('td');element.textContent=String(text);row.append(element);}
   function part(parent,tag,className,text){const element=document.createElement(tag);element.className=className;if(text!==undefined)element.textContent=text;parent.append(element);return element;}
+  function eventText(event){
+    if(!event||!Object.hasOwn(eventLabels,event.kind))return null;
+    if(event.slot!==null&&event.slot!==undefined){
+      const number=Number(String(event.slot).split('-')[1]);
+      if(event.slot!=='boss'&&(!Number.isInteger(number)||number<1||number>SETTINGS.maxCrewSlots||event.slot!==`worker-${number}`))return null;
+    }
+    return eventLabels[event.kind];
+  }
+  function renderEvents(data){
+    const events=(Array.isArray(data.events)?data.events:[]).filter(event=>eventText(event)).slice(-SETTINGS.recentEvents);
+    eventList.replaceChildren();eventList.hidden=!events.length;
+    for(const event of events){
+      const elapsed=Number.isFinite(event.elapsed_s)?event.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s · ':'';
+      part(eventList,'li','agent-event',elapsed+eventText(event));
+    }
+    if(crewActivity){crewActivity.hidden=!events.length;crewActivity.textContent=events.length?eventText(events[events.length-1]):'';}
+  }
   function makeCard(profile){
     const card=part(members,'article','crew-card'+(profile.id==='boss'?' crew-card--boss':''));
     card.dataset.slot=profile.id;card.dataset.tone=profile.id==='boss'?'gold':profile.id==='worker-1'?'blue':profile.id==='worker-2'?'violet':'mint';
@@ -35,25 +58,27 @@
     crew.dataset.connected='true';
     const signature=roster.map(profile=>profile.id).join('|');
     if(members.dataset.roster!==signature){members.replaceChildren();cards.clear();for(const profile of roster)cards.set(profile.id,makeCard(profile));members.dataset.roster=signature;}
-    let working=0;
+    let working=0,reviewing=0;
     for(const profile of roster){
       const view=cards.get(profile.id),jobs=data.agents.filter(job=>job.slot===profile.id),job=jobs[jobs.length-1],model=job?.model||profile.model,
         effort=job?.effort||profile.effort,state=job?.status||'idle';
       view.card.dataset.status=state;
+      view.card.dataset.phase=Object.hasOwn(phases,job?.phase)?job.phase:'';
       view.model.textContent=model==='gpt-6.1-sol'?'6.1 SOL':model==='gpt-6-luna'?'LUNA':model==='gpt-6-astra'?'ASTRA':model;
       view.effort.textContent=String(effort).toUpperCase();
-      view.state.textContent=state==='idle'?(data.agents.length&&!data.active?'Not needed':'Standby'):state==='running'?(phases[job.phase]||'Working'):states[state]||'Standby';
+      view.state.textContent=state==='idle'?(data.agents.length&&!data.active?'Not needed':'Standby'):state==='running'?(phases[job.phase]||'Working'):state==='complete'&&['drafting','sharing'].includes(job?.phase)&&data.active?'Draft ready':states[state]||'Standby';
       if(profile.id==='boss'&&job?.role==='brain'&&state==='complete'&&data.active)view.state.textContent='Plan ready';
       view.metrics.textContent=job?`${job.elapsed_s.toFixed(SETTINGS.elapsedDigits)}s · ${job.total_tokens===null?'tokens pending':job.total_tokens.toLocaleString()+' tokens'}`:profile.id==='boss'?'Plans & checks':'Ready for a task';
-      if(profile.role==='worker'&&['running','retrying','queued'].includes(state))working++;
+      if(profile.role==='worker'&&['running','retrying','queued'].includes(state)){working++;if(job.phase==='reviewing')reviewing++;}
     }
     const workers=roster.filter(profile=>profile.role==='worker').length;
     const activeJob=data.agents.find(job=>['running','retrying'].includes(job.status));
     crew.dataset.active=String(data.active);
-    crewStatus.textContent=data.active?(working?`${working}/${workers} working`:activeJob?.slot==='boss'?'Boss working':labels[activeJob?.role]||'Standing by'):data.agents.length?'Standing by · last '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':'Standing by';
+    crewStatus.textContent=data.active?(working?`${working}/${workers} ${reviewing===working?'reviewing':'working'}`:activeJob?.slot==='boss'?'Boss working':labels[activeJob?.role]||'Standing by'):data.agents.length?'Standing by · last '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':'Standing by';
   }
   function render(data){
     last=data;root.hidden=!data.enabled;
+    renderEvents(data);
     renderCrew(data);
     if(!data.enabled)return;
     status.textContent=data.active?'Working · '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':data.agents.length?'Last request · '+data.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s':'Ready';
@@ -61,7 +86,8 @@
     rows.replaceChildren();
     for(const agent of data.agents){
       const row=document.createElement('tr');row.dataset.status=agent.status;
-      cell(row,labels[agent.role]||'Agent');cell(row,agent.model);cell(row,agent.effort||'—');cell(row,agent.status);
+      const phase=Object.hasOwn(phases,agent.phase)?phases[agent.phase]:null;
+      cell(row,labels[agent.role]||'Agent');cell(row,agent.model);cell(row,agent.effort||'—');cell(row,phase?`${agent.status} · ${phase}`:agent.status);
       cell(row,agent.current_tool||'—');cell(row,agent.elapsed_s.toFixed(SETTINGS.elapsedDigits)+'s');
       cell(row,agent.retries);cell(row,agent.total_tokens===null?'Unavailable':agent.total_tokens.toLocaleString());
       rows.append(row);

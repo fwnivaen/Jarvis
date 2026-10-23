@@ -81,6 +81,9 @@ import focus
 import watch
 import note_store
 import ultra
+import ultra_memory
+import ultra_documents
+import ultra_tools
 WATCH = watch.Watch()
 FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
@@ -110,6 +113,8 @@ SOCKET_TIMEOUT_S = 10
 MAX_REQUEST_BYTES = 16_384
 MAX_VOICE_REQUEST_BYTES = voice_bridge.AUDIO_TEXT_CHARS * 12 + 4096
 MAX_QUESTION_CHARS = 2_000
+MAX_WORKFLOW_CHARS = 32
+MAX_RESUME_RUN_CHARS = 64
 MAX_ANSWER_CHARS = 8_000
 MAX_BRAIN_BYTES = 1_000_000
 CONTEXT_NOTE_CHARS = 8_000
@@ -124,9 +129,11 @@ MAX_PARALLEL_BRAINS = 1
 TIME_PRECISION = 2
 MIN_WORD_CHARS = 2
 PRIVATE_FILE_MODE = 0o600
+PRIVATE_DIRECTORY_MODE = 0o700
 UI_VERSION = "2.0"
 LAUNCH_ID = secrets.token_hex(8)
 UI_ASSETS = {
+    "ultra-ui.js": "text/javascript",
     "agents.js": "text/javascript", "agents.css": "text/css",
     "theme.js": "text/javascript", "ui.js": "text/javascript",
     "tokens.css": "text/css", "app.css": "text/css", "open-deck.css": "text/css",
@@ -443,6 +450,22 @@ def words(text):
 
 
 def retrieve(question, history):
+    settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
+    if settings.enabled and settings.memory_enabled and settings.semantic_search_enabled:
+        with INDEX_LOCK:
+            snapshot = list(NOTES)
+        if not build.NOTES_DIR.is_dir():
+            raise BrainError(build.NOTES_MISSING)
+        query = question
+        if words(question) & FOLLOWUP_WORDS and history:
+            query = history[-1]["question"] + " " + question
+        results = MEMORY.search(snapshot, query[:ultra_memory.MAX_QUERY_CHARS], limit=TOP_NOTES)
+        if MEMORY.semantic_ready:
+            return results
+    return keyword_retrieve(question, history)
+
+
+def keyword_retrieve(question, history):
     current = words(question)
     followup = bool(set(re.findall(r"\w+", question.casefold())) & FOLLOWUP_WORDS) or len(current) < MIN_WORD_CHARS
     previous = words(" ".join(turn["question"] for turn in history)) if followup else set()
@@ -462,7 +485,7 @@ def retrieve(question, history):
             for _, n in ranked[:TOP_NOTES]]
 
 
-def remember(question, preflight_token=None):
+def remember(question, preflight_token=None, operation_deadline=None):
     """Persist first, then publish a complete index snapshot. Never call the brain."""
     global NOTES
     match = CAPTURE_TRIGGER.match(question)
@@ -472,12 +495,14 @@ def remember(question, preflight_token=None):
     title = " ".join(re.findall(r"\w+", content)[:CAPTURE_TITLE_WORDS])[:CAPTURE_TITLE_CHARS] or "Untitled capture"
     stamp = datetime.now().astimezone()
     with INDEX_LOCK:
+        if operation_deadline is not None and time.monotonic() >= operation_deadline:
+            raise BrainError("Capture time budget exhausted.")
         if preflight_token is not None:
             if (not isinstance(preflight_token, str) or not PREFLIGHT_TOKEN.fullmatch(preflight_token)
                     or not content.startswith(f"Preflight {preflight_token} ")
                     or preflight_token in PREFLIGHT_CLOSED or preflight_token in PREFLIGHT_CAPTURES):
                 raise BrainError("Invalid or already completed preflight capture, sir.")
-        related = retrieve(content, [])
+        related = keyword_retrieve(content, [])
         updated = list(NOTES)
         if related:
             parent = related[0]["id"]
@@ -719,7 +744,8 @@ def ask_brain(system, notes, history, question, image=None, webcam=False):
         print(f"Brain [{safe_backend}] {time.monotonic() - started:.{TIME_PRECISION}f}s", flush=True)
 
 
-def answer_request(system, notes, history, question, image=None, webcam=False, automatic=False, watch_token=None):
+def answer_request(system, notes, history, question, image=None, webcam=False, automatic=False, watch_token=None,
+                   workflow=None, resume_run=None):
     """Flag-off path is the existing brain, including its exact override behavior."""
     settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
     with MODEL_LOCK:
@@ -727,11 +753,116 @@ def answer_request(system, notes, history, question, image=None, webcam=False, a
     if (not settings.enabled or (image is None and not settings.routing_enabled)
             or (image is not None and not settings.cheap_vision_enabled)
             or (manual is not None and manual[0] != "codex-cli")):
+        if workflow is not None or resume_run is not None:
+            return {"answer": "Enable Ultra routing and its workflow features before starting or resuming a saved workflow.",
+                "nodes": [], "about_notes": False, "error": True}
         return ask_brain(system, notes, history, question, image=image, webcam=webcam) if image is not None else ask_brain(system, notes, history, question)
+    if manual is not None and (workflow is not None or resume_run is not None):
+        return {"answer": "Return to your normal Ultra brain before starting or resuming a workflow.",
+            "nodes": [], "about_notes": False, "error": True}
     system = system.replace("photo to GPT-6 Astra", "photo to the configured Ultra vision model")
+    if settings.tools_enabled:
+        system = system.replace("Never use tools, execute commands, inspect files, edit files, or browse the network.",
+            "Use only the registered Jarvis tools for the user's request. Never execute commands or browse the network.")
+    preferences = PREFERENCES.read() if settings.memory_enabled and settings.preferences_enabled else {}
     return ULTRA.answer(settings, system, notes, history, question, image=image,
         kind="webcam" if webcam else "screen" if image is not None else "chat",
-        manual_model=manual[1] if manual else None, automatic=automatic, watch_token=watch_token)
+        manual_model=manual[1] if manual else None, automatic=automatic, watch_token=watch_token,
+        workflow=workflow, resume_run=resume_run, preferences=preferences)
+
+
+MEMORY = ultra_memory.HybridMemory()
+PREFERENCES = ultra_memory.Preferences()
+MAX_IMPORT_REQUEST_BYTES = 24 * 1024 * 1024
+TOOL_NOTE_CHARS = 7000
+TOOL_SEARCH_RESULTS = 3
+SCREEN_COMMAND_TTL_S = 30
+SCREEN_CONTROL = {"generation": 0, "action": None, "at": 0}
+SCREEN_CONTROL_LOCK = threading.Lock()
+INBOX = ROOT / ".local" / "ultra-inbox"
+
+
+def ultra_settings():
+    return ultra.Settings.read(ULTRA_CONFIG_PATH)[0]
+
+
+def tool_note_read(id):
+    with INDEX_LOCK:
+        note = next(n for n in NOTES if n["id"] == id)
+        result = note_store.read(note, build.NOTES_DIR)
+    result["truncated"] = len(result["text"]) > TOOL_NOTE_CHARS
+    result["text"] = result["text"][:TOOL_NOTE_CHARS]
+    return result
+
+
+def tool_notes_search(query):
+    found = retrieve(query, [])[:TOOL_SEARCH_RESULTS]
+    with INDEX_LOCK:
+        for item in found:
+            note = next(n for n in NOTES if n["id"] == item["id"])
+            item["revision"] = note_store.read(note, build.NOTES_DIR)["revision"]
+            item["text"] = item["text"][:TOOL_NOTE_CHARS]
+    return {"notes": found}
+
+
+def tool_notes_capture(text, _deadline=None):
+    if not isinstance(text, str) or not text.strip() or len(text) > note_store.MAX_NOTE_CHARS:
+        raise ValueError
+    result = remember("remember that " + text, operation_deadline=_deadline)
+    return {"saved": True, "note": tool_note_read(result["captured"])}
+
+
+def tool_note_write(id, text, revision, _deadline=None):
+    with INDEX_LOCK:
+        if _deadline is not None and time.monotonic() >= _deadline:
+            raise ValueError
+        note = next(n for n in NOTES if n["id"] == id)
+        result = note_store.save(note, build.NOTES_DIR, text, revision)
+        note.update(label=result["title"], text=result["text"], excerpt=result["text"][:build.EXCERPT_CHARS], edited_at=result["edited_at"])
+        build.write_graph(build.make_graph(NOTES))
+    return {"saved": True, "note": tool_note_read(id)}
+
+
+def import_into_vault(path, deadline=None):
+    with INDEX_LOCK:
+        result = ultra_documents.import_document(path, build.NOTES_DIR, deadline=deadline)
+        existing = next((n for n in NOTES if n.get("_path") == result["path"]), None)
+        if existing is None:
+            existing = {"id": len(NOTES), "label": result["title"], "_path": result["path"], "group": "imports",
+                "text": result["text"], "excerpt": result["text"][:build.EXCERPT_CHARS],
+                "edited_at": (build.NOTES_DIR / result["path"]).stat().st_mtime}
+            NOTES.append(existing)
+        build.write_graph(build.make_graph(NOTES))
+    return {"imported": True, "created": result["created"], "note": tool_note_read(existing["id"])}
+
+
+def tool_document_import(filename, _deadline=None):
+    ultra_documents.filename(filename)
+    if INBOX.is_symlink():
+        raise ValueError
+    return import_into_vault(INBOX / filename, deadline=_deadline)
+
+
+def tool_focus_control(action, seconds=None):
+    answer = FOCUS.command(action, seconds)
+    return {"answer": answer, "state": FOCUS.state()}
+
+
+def tool_screen_control(action):
+    with SCREEN_CONTROL_LOCK:
+        SCREEN_CONTROL.update(generation=SCREEN_CONTROL["generation"] + 1, action=action, at=time.monotonic())
+    return {"requested": action, "confirmed": False,
+        "message": "The open Jarvis viewer will apply this request. Starting requires an Entire Screen share. Check screen_watch_status for the active state."}
+
+
+TOOLS = ultra_tools.Registry(ultra_settings, {
+    "notes_search": tool_notes_search, "note_read": tool_note_read, "notes_capture": tool_notes_capture,
+    "note_write": tool_note_write, "preferences_get": lambda: {"preferences": PREFERENCES.read()},
+    "preferences_set": PREFERENCES.set, "preferences_forget": PREFERENCES.forget,
+    "focus_status": FOCUS.state, "focus_control": tool_focus_control,
+    "screen_watch_status": WATCH.state, "screen_watch_control": tool_screen_control,
+    "document_import": tool_document_import})
+ULTRA.tool_layer = TOOLS
 
 
 class GalaxyServer(ThreadingHTTPServer):
@@ -787,6 +918,30 @@ class Handler(BaseHTTPRequestHandler):
             settings, notice = ultra.Settings.read(ULTRA_CONFIG_PATH)
             self.send_bytes(json.dumps(ULTRA.public_state(settings, notice)).encode(), "application/json", head=head)
             return
+        if path in ("/agents/workflows", "/agents/runs"):
+            settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
+            value = ULTRA.workflow_catalog(settings) if path == "/agents/workflows" else ULTRA.run_summaries(settings)
+            self.send_bytes(json.dumps(value).encode(), "application/json", head=head)
+            return
+        if path == "/memory":
+            settings = ultra_settings()
+            enabled = settings.enabled and settings.memory_enabled
+            self.send_bytes(json.dumps({"enabled": enabled, "semantic": MEMORY.status(),
+                "imports_enabled": settings.enabled and settings.document_import_enabled,
+                "preferences_enabled": enabled and settings.preferences_enabled,
+                "preferences": PREFERENCES.read() if enabled and settings.preferences_enabled else {},
+                "mcp_enabled": settings.enabled and settings.tools_enabled and settings.mcp_enabled}).encode(), "application/json", head=head)
+            return
+        if path == "/tools":
+            self.send_bytes(json.dumps({"tools": TOOLS.catalog()}).encode(), "application/json", head=head)
+            return
+        if path == "/tools/screen":
+            with SCREEN_CONTROL_LOCK:
+                settings = ultra_settings()
+                action = SCREEN_CONTROL["action"] if settings.enabled and settings.tools_enabled and time.monotonic() - SCREEN_CONTROL["at"] <= SCREEN_COMMAND_TTL_S else None
+                value = {"generation": SCREEN_CONTROL["generation"], "action": action}
+            self.send_bytes(json.dumps(value).encode(), "application/json", head=head)
+            return
         if path == "/system":
             settings, _ = ultra.Settings.read(ULTRA_CONFIG_PATH)
             self.send_bytes(json.dumps({"version": UI_VERSION, "launch": LAUNCH_ID,
@@ -835,6 +990,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/preflight/status":
             self.send_bytes(json.dumps({"protocol": PREFLIGHT_PROTOCOL}).encode(), "application/json", head=head)
             return
+        if path == "/notes/graph":
+            with INDEX_LOCK:
+                data = build.make_graph(NOTES)
+            self.send_bytes(json.dumps(data).encode(), "application/json", head=head)
+            return
         if path == "/graph-data.js":
             with INDEX_LOCK:
                 data = build.graph_bytes(build.make_graph(NOTES))
@@ -852,7 +1012,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_bytes(target.read_bytes(), mime, head=head)
 
     def do_POST(self):
-        if self.path not in ("/note", "/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop", "/voice/render", "/voice/release"):
+        if self.path not in ("/tools/call", "/memory/import", "/memory/preferences", "/note", "/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop", "/voice/render", "/voice/release"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -863,9 +1023,43 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if not 0 < length <= (MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else note_store.MAX_NOTE_REQUEST_BYTES if self.path == "/note" else MAX_VOICE_REQUEST_BYTES if self.path == "/voice/render" else MAX_REQUEST_BYTES):
+            if not 0 < length <= (MAX_IMPORT_REQUEST_BYTES if self.path == "/memory/import" else MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else note_store.MAX_NOTE_REQUEST_BYTES if self.path == "/note" else MAX_VOICE_REQUEST_BYTES if self.path == "/voice/render" else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
+            if self.path in ("/tools/call", "/memory/import", "/memory/preferences"):
+                if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
+                    self.send_json({"error": True, "answer": "Local viewer requests only."}, 403)
+                    return
+                settings = ultra_settings()
+                try:
+                    if self.path == "/tools/call":
+                        if self.headers.get("X-Jarvis-MCP") == "1" and not settings.mcp_enabled:
+                            raise ultra_tools.ToolError("MCP tools are disabled.")
+                        result = TOOLS.call(body.get("name"), body.get("arguments"))
+                    elif self.path == "/memory/preferences":
+                        if not settings.enabled or not settings.memory_enabled or not settings.preferences_enabled:
+                            raise ultra_tools.ToolError("Preference memory is disabled.")
+                        result = PREFERENCES.forget(body.get("key")) if body.get("forget") is True else PREFERENCES.set(body.get("key"), body.get("value"))
+                    else:
+                        if not settings.enabled or not settings.document_import_enabled:
+                            raise ultra_tools.ToolError("Document import is disabled.")
+                        name = ultra_documents.filename(body.get("filename"))
+                        content = base64.b64decode(body.get("data", ""), validate=True)
+                        if not 0 < len(content) <= ultra_documents.MAX_DOCUMENT_BYTES:
+                            raise ValueError
+                        if INBOX.is_symlink():
+                            raise ValueError
+                        INBOX.mkdir(parents=True, exist_ok=True, mode=PRIVATE_DIRECTORY_MODE)
+                        with tempfile.TemporaryDirectory(prefix="upload-", dir=INBOX) as folder:
+                            target = Path(folder) / name
+                            target.write_bytes(content)
+                            os.chmod(target, PRIVATE_FILE_MODE)
+                            result = import_into_vault(target)
+                    self.send_json(result)
+                except (ValueError, OSError, TypeError, binascii.Error) as error:
+                    message = str(error) if isinstance(error, (ultra_tools.ToolError, ultra_documents.DocumentError)) else "The local operation could not be completed. Check the input and current state."
+                    self.send_json({"error": True, "answer": message}, 400)
+                return
             if self.path == "/note":
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", "") or body.get("approved") is not True:
                     self.send_json({"error": True, "answer": "Approve this edit in the local viewer first."}, 403)
@@ -944,6 +1138,11 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(question, str) or not 0 < len(question.strip()) <= MAX_QUESTION_CHARS:
                 raise ValueError
             question = question.strip()
+            for name, limit in (("workflow", MAX_WORKFLOW_CHARS), ("resume_run", MAX_RESUME_RUN_CHARS)):
+                option = body.get(name)
+                if option is not None and (self.path != "/chat" or not isinstance(option, str)
+                        or not 0 < len(option) <= limit or option != option.strip()):
+                    raise ValueError
             image = None
             if self.path in ("/see", "/look"):
                 if body.get("media_type") != JPEG_MIME or not isinstance(body.get("image"), str):
@@ -1008,7 +1207,8 @@ class Handler(BaseHTTPRequestHandler):
             eyes = FOCUS.state()
             eye_status = {key: eyes[key] for key in ('eyes_active', 'present', 'head_down', 'slouched')}
             system = SYSTEM_PROMPT + " Current local posture status (no image): " + json.dumps(eye_status)
-            result = apply_model_control(answer_request(system, notes, history, question))
+            options = {name: body[name] for name in ("workflow", "resume_run") if body.get(name) is not None}
+            result = apply_model_control(answer_request(system, notes, history, question, **options))
             result["elapsed_s"] = round(time.monotonic() - start, TIME_PRECISION)
             if not result.get("error"):
                 with SESSION_LOCK:
@@ -1045,6 +1245,7 @@ def main():
         print("\nJarvis stopped.")
     finally:
         ULTRA.close()
+        MEMORY.close()
         FOCUS.close()
         server.server_close()
 

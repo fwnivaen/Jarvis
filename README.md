@@ -1,6 +1,6 @@
 # Jarvis — daily use
 
-Optional Ultra Jarvis Stage 1 adds routing and live agent activity behind an off-by-default flag. See [the complete Stage 1 guide](ULTRA-STAGE-1.md) for Mac run/test commands, limits, rollback and verification.
+Ultra Jarvis now includes the boss-and-three-worker crew, live monitoring, shared reports, local semantic memory, document imports, preferences and standard tools. See [the complete Ultra guide](ULTRA-JARVIS.md) for setup, Mac run/test commands, limits and rollback. Its master flag defaults off; after setup and enabling it, the launcher below selects the local Ultra virtual environment automatically. [Verification evidence](docs/ultra-verification.md) includes real model calls and the full preflight results.
 
 On this Mac, open Terminal and run this one command:
 

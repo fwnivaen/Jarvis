@@ -38,7 +38,7 @@ def read_notes(directory=NOTES_DIR):
             continue
         text = path.read_text(encoding="utf-8")
         label = path.stem
-        if path.parent.name == "captures" and text.startswith("# "):
+        if path.parent.name in ("captures", "imports") and text.startswith("# "):
             label = text.splitlines()[0][2:].strip() or label
         notes.append({"id": len(notes), "label": label, "_path": path.relative_to(directory).as_posix(),
                       "edited_at": path.stat().st_mtime,
