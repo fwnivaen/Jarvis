@@ -1,3 +1,5 @@
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
 # Concept G integration — approved scope
 
 The existing app is Python stdlib + vanilla JavaScript / Three.js. This is an integration into its current viewer, with the normal `./start.sh` launcher and existing APIs. No React or runtime build step is added.
@@ -85,6 +87,6 @@ The 9,000 background dust points are decorative, as in the reference. They are n
 - Required visible probe: **FOCUS PROBE: 16 pass, 0 fail | 1440x900**. All individual cases passed, including visible-at-finish, commands, disconnect and pixel-change checks. This is a hermetic controller probe and does not start a real Focus session.
 - Full live preflight: **13 pass, 1 fail, 2 warn**. Chat, configured model, note capture → recall → cleanup, real JPEG vision, static-file consistency, security and configuration-ignore checks passed. The failure is the existing macOS foreground activity/tab reader in Focus: it intermittently returns unreadable/unavailable/foreground-changed. The running server's Focus tick remained fresh, with no active session. Browser window count was unavailable from the automation inventory; the controlled page host was verified as `127.0.0.1:4700`. The two warnings skip OpenAI-specific checks because the configured brain uses Codex CLI. No Focus backend code was changed.
 
-![Desktop, 1440×900](screenshots/galaxy-desktop.jpg)
+![Desktop, 1440×900](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/galaxy-desktop.jpg)
 
-![Mobile, 390×844](screenshots/galaxy-mobile.jpg)
+![Mobile, 390×844](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/galaxy-mobile.jpg)

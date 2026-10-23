@@ -1,4 +1,6 @@
-> Historical Stage 1 guide. For the complete upgrade, current tools, dependencies and run commands, see [ULTRA-JARVIS.md](ULTRA-JARVIS.md).
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
+> Historical Stage 1 guide. For the complete upgrade, current tools, dependencies and run commands, see [ULTRA-JARVIS.md](../../ULTRA-JARVIS.md).
 
 # Ultra Jarvis — Stage 1 review
 
@@ -9,7 +11,7 @@ This extends the existing Python server, orb, galaxy, notes, voice, Eyes, Focus 
 In Terminal:
 
 ```sh
-cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
+cd /path/to/Jarvis
 python3 -m venv --without-pip .local/ultra-venv
 .local/ultra-venv/bin/python tools/ultra_settings.py enable
 .local/ultra-venv/bin/python server.py
@@ -56,7 +58,7 @@ The existing server accepts one user request at a time. The configurable worker 
 With the server running, in another Terminal window:
 
 ```sh
-cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
+cd /path/to/Jarvis
 .local/ultra-venv/bin/python -m unittest discover -s tests -p 'test*.py'
 for test in tests/*.cjs; do node "$test" || break; done
 .local/ultra-venv/bin/python preflight.py

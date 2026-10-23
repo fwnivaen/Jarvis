@@ -1,6 +1,8 @@
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
 # JARVIS V2 handoff
 
-V2 upgrades the existing Python/HTML app in place. The inference services, dense integer note IDs, Markdown vault, Focus engine/native card, voice routing, Eyes and screen-watch lifecycle remain the owners of their existing state. There is no npm build or framework migration. See [DESIGN.md](DESIGN.md) for the audit, preservation matrix and design decisions.
+V2 upgrades the existing Python/HTML app in place. The inference services, dense integer note IDs, Markdown vault, Focus engine/native card, voice routing, Eyes and screen-watch lifecycle remain the owners of their existing state. There is no npm build or framework migration. See [DESIGN.md](design-v2.md) for the audit, preservation matrix and design decisions.
 
 ## Delivered implementation
 
@@ -20,7 +22,7 @@ V2 upgrades the existing Python/HTML app in place. The inference services, dense
 
 ## Needs wiring
 
-The original brief permits typed TODO adapters where upstream modules are absent. [services.d.ts](../viewer/services.d.ts) supplies declaration-only boundaries marked `TODO(sir)` for Agency, Studio, agents, trading, automations, shared workspace, encrypted Vault and computer control. These require each real module's state, authority, cancellation and verified-result contract. There are no invented endpoints, orders, jobs, schedules, metrics or completion responses.
+The original brief permits typed TODO adapters where upstream modules are absent. [services.d.ts](../../viewer/services.d.ts) supplies declaration-only boundaries marked `TODO(sir)` for Agency, Studio, agents, trading, automations, shared workspace, encrypted Vault and computer control. These require each real module's state, authority, cancellation and verified-result contract. There are no invented endpoints, orders, jobs, schedules, metrics or completion responses.
 
 Existing `/chat` returns final JSON. Token/line streaming and retrieval prelighting need real upstream events. Weighted strongest-link narration needs relationship weights absent from the current graph. The optional wake phrase gates recognized transcripts after explicit Mic enablement; it is not an independent always-on hotword engine.
 
@@ -30,7 +32,7 @@ Existing `/chat` returns final JSON. Token/line streaming and retrieval prelight
 | --- | --- |
 | Python offline suite | **82 tests passed**, including private Focus restart state, durable note saves, stable filename/content revision conflicts and audio leases. |
 | JavaScript regression suites | **GALAXY LIFECYCLE, VOICE, WAKE, CHAT, CAPTURE, SOURCES, SCREEN, FOCUS, FOCUS WIDGET, EYES, EYES LIFECYCLE, POSTURE and WATCH passed.** CHAT is included in `voice.cjs`; CAPTURE in `sources.cjs`. |
-| Full live preflight | **14 pass, 0 fail, 2 warn.** Both warnings skip inactive OpenAI-backend checks while Codex is active. Real model switching/reset, chat, capture/immediate recall/cleanup, JPEG understanding, live Focus instruments, static serving and configuration privacy passed. [Exact output](preflight-final.txt). |
+| Full live preflight | **14 pass, 0 fail, 2 warn.** Both warnings skip inactive OpenAI-backend checks while Codex is active. Real model switching/reset, chat, capture/immediate recall/cleanup, JPEG understanding, live Focus instruments, static serving and configuration privacy passed. [Exact output](preflight-v2.txt). |
 | Visible Focus probe | **16 pass, 0 fail**, DOM-asserted **1440×900**, visibility `visible`; exact per-case title below. |
 | Real UI answer | “Who updates the Cash Flow Forecast, and when?” returned the actual Monday/Maya answer and one real source; question, source chip, inspector and orb state verified. No user Markdown was edited for screenshots. |
 | UI review | Dark/light 2048×1152, selection/approval/answer at 1440×900, compact 1024px rail, 768px tablet sheet and 390×844 mobile exercised. Narrow sheet/command separation and no horizontal page overflow were measured. Saved reduced motion and restoration to system motion exercised. |
@@ -44,13 +46,13 @@ FOCUS PROBE: 16 pass, 0 fail | 1440x900 | PASS viewport | PASS visible | PASS re
 
 Repeated stress preflights hit the existing 600ms System Events deadline. Before changing it, the actual running diagnostics were checked (recovered readable activity, fresh live tick, no active session), the legacy ledger schema was read without identities, missing session ledgers/browser-window counts were recorded as missing, and the controlled-tab host was confirmed as local. The bounded query deadline was raised to 1200ms; timeout still fails closed and clears settling. A regression verifies a timed-out sample cannot arm or reuse a target. After restarting the actual server, 8/8 consecutive live diagnostic samples were readable/fresh; the subsequent full preflight result is in the linked output.
 
-Artifacts: [dark desktop](screenshots/galaxy-dark-2048.jpg), [paper desktop](screenshots/galaxy-light-2048.jpg), [selection](screenshots/selection-1440.jpg), [approval](screenshots/note-approval-1440.jpg), [real answer](screenshots/answer-1440.jpg), [tablet](screenshots/note-tablet-768.jpg), [mobile](screenshots/galaxy-mobile-390.jpg), [visible probe](screenshots/focus-probe-1440.jpg). CSS dimensions were asserted independently; exported captures may reflect browser zoom/capture scaling.
+Artifacts: [dark desktop](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/galaxy-dark-2048.jpg), [paper desktop](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/galaxy-light-2048.jpg), [selection](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/selection-1440.jpg), [approval](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/note-approval-1440.jpg), [real answer](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/answer-1440.jpg), [tablet](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/note-tablet-768.jpg), [mobile](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/galaxy-mobile-390.jpg), [visible probe](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/focus-probe-1440.jpg). CSS dimensions were asserted independently; exported captures may reflect browser zoom/capture scaling.
 
 ## Performance evidence and limits
 
 Measured on **MacBookPro17,1, Apple M1, 8 GiB RAM, macOS 27.0.1, Chrome 154**. This is not the brief's MacBook Air/ProMotion acceptance configuration.
 
-The isolated [renderer lab](http://127.0.0.1:4700/galaxy-benchmark.html) uses the production renderer with fictional data and a separate layout cache. It never loads the user's notes or calls a model. [Saved measurement](screenshots/benchmark-10k.json):
+The isolated [renderer lab](http://127.0.0.1:4700/galaxy-benchmark.html) uses the production renderer with fictional data and a separate layout cache. It never loads the user's notes or calls a model. [Saved measurement](renderer-benchmark.json):
 
 | Synthetic load | Recorded value |
 | --- | --- |

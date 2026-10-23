@@ -1,3 +1,5 @@
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
 # Run Jarvis
 
 Current daily launcher and audit test commands are in README.md.
@@ -14,7 +16,7 @@ Requires Python 3.9+, an internet connection for the pinned viewer CDN libraries
 and a signed-in Codex CLI. There is no npm build or Python package installation.
 
 ```bash
-cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
+cd /path/to/Jarvis
 python3 server.py
 ```
 
@@ -24,7 +26,7 @@ refresh the page. `python3 build.py` can also rebuild the graph separately.
 In a second Terminal, run the live preflight while the server stays running:
 
 ```bash
-cd /Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis
+cd /path/to/Jarvis
 python3 preflight.py
 ```
 

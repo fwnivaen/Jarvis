@@ -1,12 +1,14 @@
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
 # Jarvis migration and audit — October 12, 2026
 
 Scope: Prompts 01–07. Prompt 08 is not built and was explicitly excluded.
 
 ## Location and recovery
 
-The working checkout is `/Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis` on Nivaens-MacBook-Pro.local. The server binds to 127.0.0.1:4700. GitHub origin is `https://github.com/fwnivaen/Jarvis.git`, branch main.
+The working checkout is `/path/to/Jarvis` on the development Mac. The server binds to 127.0.0.1:4700. GitHub origin is `https://github.com/fwnivaen/Jarvis.git`, branch main.
 
-The remote audit found no pull requests or unmerged remote branches to recover. The user reported no saved ChatGPT Work files. The other local copy, `/Users/fwnivaen/Documents/Codex/2026-10-08/new-chat-5`, ends at Prompt 02. Its feature code was already superseded. Its useful offline regression tests were adapted into `tests/test_offline.py`; neither that old folder nor any configuration or keys were copied or changed.
+The remote audit found no pull requests or unmerged remote branches to recover. The user reported no saved ChatGPT Work files. The other local copy, `an earlier local checkout`, ends at Prompt 02. Its feature code was already superseded. Its useful offline regression tests were adapted into `tests/test_offline.py`; neither that old folder nor any configuration or keys were copied or changed.
 
 The old persona stash remains untouched. Recommendation: retain it until Prompt 08 is complete, then review and drop it with explicit approval if nothing unique remains.
 
@@ -36,7 +38,7 @@ The approved 900 ms test capture was deleted after the guided checks. Jarvis was
 Start with:
 
 ```sh
-/Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis/start.sh
+/path/to/Jarvis/start.sh
 ```
 
 Use **On your computer** for future chats and this same checkout. Read AGENTS.md and this report before continuing. Prompt 08 should build runtime-only brain switching, the backend/model chip, the exact-name dictionary and its preflight checks. Gemini and OpenRouter were not added during this audit.

@@ -1,3 +1,5 @@
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
 # Ultra Jarvis Stage 1 verification — October 20, 2026
 
 Stage 1 is implemented for review. The committed master feature flag is OFF. Verification used a separate local server on port 4701 with Ultra enabled, leaving the existing port 4700 server running.
@@ -13,7 +15,7 @@ The top-left galaxy crew now represents one boss and three real worker slots. Th
 - Visible probe: **FOCUS PROBE: 16 pass, 0 fail | 1440x900**, with all 16 case names read from its full title at the actual asserted viewport.
 - Browser layout: the default desktop shows the crew at x92/y96, with a collapsed activity drawer at the top right. At an actual 1024 × 750 viewport, the open monitor starts 12 pixels to the right of the crew. At 390 × 844, all four personnel fit in a compact row. Native crew/table collapse, note selection and the phone drawer were checked; temporary viewport overrides are reset after verification. Avatars pause with a connection-interrupted marker if polling fails, and resume only after recovery. Full view and other workspaces hide the crew; reduced-motion preferences stop animation.
 
-Current screenshots: [desktop crew](screenshots/ultra-crew-desktop.jpg), [real live request](screenshots/ultra-crew-live.jpg), [phone crew](screenshots/ultra-crew-mobile.jpg).
+Current screenshots: [desktop crew](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/ultra-crew-desktop.jpg), [real live request](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/ultra-crew-live.jpg), [phone crew](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/ultra-crew-mobile.jpg).
 
 The effort choices were rechecked against the official [Sol model page](https://developers.openai.com/api/docs/models/gpt-6.1-sol) and [Luna model page](https://developers.openai.com/api/docs/models/gpt-6-luna), then exercised through the existing bridge, which checks the installed account's model catalog before inference. No packages or credentials were added.
 
@@ -58,8 +60,8 @@ Field instruments: the current numeric session ledger contained four existing en
 
 ## Review artifacts
 
-- [Desktop: three completed workers and final answer](screenshots/ultra-stage-1-desktop.jpg)
-- [Mobile drawer](screenshots/ultra-stage-1-mobile.jpg)
-- [Run, test, enable and roll back](../ULTRA-STAGE-1.md)
+- [Desktop: three completed workers and final answer](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/ultra-stage-1-desktop.jpg)
+- [Mobile drawer](https://github.com/fwnivaen/Jarvis/blob/a1819019322ca73996927c3a9731e5ec1c22be90/docs/screenshots/ultra-stage-1-mobile.jpg)
+- [Run, test, enable and roll back](ultra-stage-1.md)
 
 The complete-file archive excludes `config.json`, all keys, notes, generated graph data, virtual environments and private runtime state. Stage 2 has not been started.

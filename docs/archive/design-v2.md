@@ -1,6 +1,8 @@
+> Historical development record. Current setup: [Ultra guide](../../ULTRA-JARVIS.md). Current results: [verification](../ultra-verification.md).
+
 # JARVIS V2 design and behavior
 
-This document describes the code in this repository. It records implementation decisions, preserves the existing local services, and identifies gaps against the V2 brief. It does not certify performance or live acceptance; record that evidence in [V2-HANDOFF.md](V2-HANDOFF.md).
+This document describes the code in this repository. It records implementation decisions, preserves the existing local services, and identifies gaps against the V2 brief. It does not certify performance or live acceptance; record that evidence in [V2-HANDOFF.md](v2-handoff.md).
 
 ## Upgrade boundary
 

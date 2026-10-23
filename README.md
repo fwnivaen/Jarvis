@@ -1,284 +1,86 @@
-# Jarvis — daily use
+# Jarvis · Ultra Jarvis
 
-Ultra Jarvis now includes the boss-and-three-worker crew, live monitoring, shared reports, local semantic memory, document imports, preferences and standard tools. See [the complete Ultra guide](ULTRA-JARVIS.md) for setup, Mac run/test commands, limits and rollback. Its master flag defaults off; after setup and enabling it, the launcher below selects the local Ultra virtual environment automatically. [Verification evidence](docs/ultra-verification.md) includes real model calls and the full preflight results.
+A personal AI assistant that connects a Markdown knowledge vault, a 3D galaxy, voice and a bounded team of collaborating agents.
 
-On this Mac, open Terminal and run this one command:
+[![Checks](https://github.com/fwnivaen/Jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/fwnivaen/Jarvis/actions/workflows/ci.yml)
+
+![Jarvis desktop with the knowledge galaxy, animated orb and boss/worker crew](docs/screenshots/ultra-complete-desktop.jpg)
+
+Jarvis runs on a local Python server with a plain JavaScript viewer and native macOS helpers. Notes, search indexes and runtime state live on your machine. Model requests use the configured cloud backend; selected note excerpts and explicit vision frames can leave the machine. The included 30-note café vault is fictional demonstration data.
+
+## What it does
+
+- **Grounded knowledge:** search Markdown notes, follow citations into the galaxy, capture new notes and edit with revision checks.
+- **Collaborative agents:** a boss assigns work to up to three workers, shares their findings, checks their reports and returns one answer. Simple requests use a single cheaper call.
+- **Live activity:** the glassy crew, collapsible drawer and terminal table show models, tools, timing, retries and reported tokens. Private reasoning is never displayed.
+- **Hybrid memory:** local semantic and keyword search, PDF/DOCX/XLSX text imports, and preferences that persist across sessions.
+- **Voice and vision:** an animated orb, browser/native speech, local posture landmarks, explicit camera questions and screen watch with local frame comparisons.
+- **Focus and tools:** native macOS focus controls and a shared registry of 12 tools available to the crew and an MCP stdio client.
+
+## Engineering highlights
+
+The orchestration uses typed JSON contracts and local checks for source quotations and arithmetic. Workers share fixed deadlines, retry limits and one request-wide escalation budget. Failed work remains visible; partial answers are labelled. Checkpoints retain validated work and original budgets, and a durable tool journal prevents retries from repeating the same write.
+
+The viewer has no frontend build step. Its custom Three.js renderer batches note geometry, preserves cached layouts as the vault grows and pauses when hidden. Sensor permissions remain explicit, posture inference stays in the browser, and the server binds only to loopback.
+
+The core server and orchestration use Python's standard library. Optional search, document and MCP packages install inside a project-local virtual environment. CrewAI-style delegation and peer review are implemented directly rather than adding a second orchestration framework.
+
+## Run on macOS
+
+You need Python **3.11+** for the complete upgrade, Chrome, Apple command-line tools for the native helpers, and an installed, signed-in [Codex CLI](https://github.com/openai/codex). Node.js is needed only for the regression checks. Model availability depends on the signed-in account.
 
 ```sh
-/Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis/start.sh
+git clone https://github.com/fwnivaen/Jarvis.git
+cd Jarvis
+python3 tools/setup_ultra.py
+python3 tools/ultra_settings.py enable
+./start.sh
 ```
 
-Open http://localhost:4700 in Chrome and click once to enable speech. Keep Terminal open; Control+C stops Jarvis. The launcher rebuilds the galaxy before starting the server. Approved edits in Notes update the running index immediately; restart and reload after external file edits. Jarvis listens only on this Mac at 127.0.0.1.
+Open [localhost:4700](http://localhost:4700). Setup downloads the optional local embedding model. The server creates its private configuration when missing; no API key is required for the Codex backend. Ultra is opt-in in the committed configuration, and disabling it restores the original route.
 
-## Checks
+To inspect the galaxy without installing the optional packages or compiling native helpers:
 
-From the Jarvis folder, with the server running, run `python3 preflight.py` for the full live checks. `python3 preflight.py --quick` also runs the offline suite but skips model calls; skipped checks are warnings, not passes. Both modes briefly create and clean up a test capture. A tuned numeric FINISH_MS other than 900 produces a warning.
+```sh
+python3 build.py
+python3 server.py
+```
 
-Offline regression tests: `python3 -m unittest discover -s tests -p test_offline.py` (standard library, temporary notes, no network or real brain).
+This starts the original path. Cloud answers still require a configured, available backend. See the [complete setup guide](ULTRA-JARVIS.md) for Python selection, tools, flags and troubleshooting.
 
-## Brain settings
+## Try it
 
-The default backend is `codex-cli`, using your existing Codex sign-in. To use the OpenAI API later, edit only the local root `config.json`: set `brain` to `openai-api`, set `model` to an API model available to your account, and enter your own key in `openai_api_key`. Existing settings reload on each question. Never paste or commit that file or a key. API usage is billed separately. OpenRouter is also supported; see runtime brain switching below.
+- “Who updates the Cash Flow Forecast, and when?”
+- “Use three workers to compare Menu Pricing, Opening Checklist and Launch Campaign.”
+- “Remember that the supplier review is next Tuesday.”
+- Import a document from Notes, or add an explicit preference in Settings.
 
-## Notes and captures
+The default crew is a **Sol max boss**, with **Sol medium**, **Luna max** and **Luna high** workers. Exact model IDs and efforts are validated against the installed account catalog. The worker cap is configurable; the default deadline is 45 seconds with at most two retries and one escalation per request. Astra is manual-only in the Ultra route.
 
-Markdown lives in `notes/`; captures live in `notes/captures/`. Unrelated captures link to one Captures hub. The hub is derived from saved links and survives rebuilds without requiring an extra note file. If the notes folder is missing at startup, the server can show and speak a clear error; the daily launcher stops before starting it. Restore the folder and restart.
+## Verify it
 
-The browser handles voice and screen permissions. The graph libraries and fonts are bundled locally. Internet access is needed for the cloud brain. The old copy in Documents and the old persona stash are retained untouched.
+```sh
+python3 tools/check_repo.py
+python3 tools/check_ultra.py --embeddings
+python3 preflight.py
+```
 
-See RUNNING.md for historical checks, docs/DESIGN.md for V2 decisions, and docs/V2-HANDOFF.md for current verification and service connections.
+The first two commands check repository hygiene and the regression suite. Full preflight requires the running Mac server, performs real model calls and cleans up its own temporary capture. CI runs the automated suite without account credentials or physical sensor access and builds the native helpers on macOS.
 
-## Microphone inside Codex
+The latest local upgrade verification contains **163 passing Python tests** and **14 passing JavaScript suites**. The visible Focus fixture passed **16/16 cases at 1440×900**. The last live preflight recorded **13 pass, 1 fail, 2 warn**: foreground-tab access was inconsistent on the development Mac, and the API-key checks were skipped for Codex sign-in. [Full evidence and limitations](docs/ultra-verification.md).
 
-If browser speech recognition fails, Mic switches to the bundled Mac speech helper. Build it once with `./native/build_voice.sh` (Apple command-line tools required). macOS asks for microphone and speech-recognition permission for Jarvis Voice. Recognition requires an available on-device English recognizer; audio is not sent to an API. Mic off, an in-flight question, or a closed tab stops recording. A ten-second heartbeat limit stops an abandoned session. Temporary transcripts are deleted when the session closes.
+Max-effort workers can reach the 45-second limit; the system returns an explicitly partial result. Document imports extract text rather than OCR or chart images. General computer control and email sending are not exposed by the tool registry. Physical audio, camera accuracy and macOS permissions require local acceptance testing.
 
-Mac speech troubleshooting: `kLSRErrorDomain 201` means Dictation is disabled. Enable it under System Settings → Keyboard → Dictation. Jarvis still explicitly requires on-device recognition. Rebuilding the locally signed helper can cause macOS to request permission again; ordinary Jarvis restarts do not rebuild it.
+## Explore the code
 
-## Runtime brain switching (Prompt 08)
-
-Click the model name beneath the orb or inside the command bar to open the model chooser. Click any listed model to switch; unavailable choices explain why they cannot be used. The chooser also has a return-to-normal button. Speak through the usual mic buffer, or type the same command. Exact standalone names such as “Luna” also switch, while questions such as “What does Luna mean?” remain normal questions. Switching calls no model and never writes your selection to configuration. Unknown names and versions are refused exactly; there is no nearest-match fallback.
-
-| Spoken name after “switch to” or “try on” | Backend | Exact model |
-| --- | --- | --- |
-| Astra / GPT 6 Astra | Codex CLI | `gpt-6-astra` |
-| Luna / GPT 6 Luna | Codex CLI | `gpt-6-luna` |
-| Sol / GPT 6.1 Sol | Codex CLI | `gpt-6.1-sol` |
-| OpenRouter Astra | OpenRouter | `openai/gpt-6-astra` |
-| Fable 5.1 / Claude Fable 5.1 | OpenRouter | `anthropic/claude-fable-5.1` |
-
-Astra and Luna passed real minimal calls on this Mac on October 12, 2026; Sol passed high-effort app-server inference on October 20. They use the existing Codex login and its usage allowance. The installed CLI's `exec --help` documents `--model`; its top-level help has no standalone model-list command. Candidates came from its local model catalog, then were verified individually. Only those verified IDs are enabled. The exact alias dictionary and explicit known sets live near the top of `server.py`.
-
-Say **“go back to your normal brain”** to restore the backend and model in local configuration. Every server restart does the same. `/see` uses the active choice, with an explicit limitation if image input is unavailable. The viewer refreshes the chip after swaps and periodically so other open tabs catch up.
-
-### Add an OpenRouter key later
-
-1. Create an API key in your OpenRouter account, then open the local `config.json` in your editor. Never paste a key into chat or commit this file.
-2. Replace only the `openrouter_api_key` placeholder with your key. Keep `brain` and `model` as they are if you want Codex as the normal startup brain. To make OpenRouter the default instead, set `brain` to `openrouter` and `model` to an exact OpenRouter ID from the table.
-3. Restart Jarvis with `./start.sh`, reload Chrome, and say “try on Claude Fable 5.1” or “switch to OpenRouter Astra”. OpenRouter usage is billed by OpenRouter.
-
-At startup with a real key, Jarvis intersects its explicit OpenRouter known set with the live catalog and reads image capabilities. Missing IDs are dropped. If the catalog cannot be checked, OpenRouter choices stay disabled for that run. After changing a key, restart to refresh this check. With a missing or placeholder key, an OpenRouter-only choice is refused out loud and lists the Codex choices. No backend or model substitution occurs.
-
-`GET /model` returns only public backend/model/label status. `POST /model` accepts a JSON `question` containing the spoken command or exact alias and returns the confirmation/refusal plus current status. Neither endpoint exposes keys.
-
-## Focus sessions
-
-Build the floating desktop card once with `native/build_focus.sh`, then restart
-`python3 server.py`. Click **FOCUS** for thirty minutes, or say/type
-**thirty minutes on this**. Starting while Jarvis is frontmost arms the session:
-the first non-home app/site becomes the target. The card appears at the top-right
-of the main display across Spaces and tints brown during drift. It never takes
-keyboard focus. The viewer also shows the countdown.
-
-The target is the frontmost app's bundle ID; for Chrome-family browsers it also
-includes SHA-256 hashes of the lowercase URL hostname, browser window ID and tab ID (not path, query, fragment, or port). Different paths in the same tab remain focused; another tab or window counts as a different target. Browser internal pages
-are compared by their host too. The local Jarvis root/index tab on port 4700 is
-home base, including its query parameters. Home time counts as permitted time;
-it never triggers a callout. Returning home preserves an excursion so you can
-excuse it there. Returning to the actual target closes the excursion.
-
-The server samples once per second using a **fresh `osascript` process** to query
-System Events, then the active Chrome-family tab when relevant. No cached
-NSWorkspace notification state is used. The reader compares identities internally;
-an optional distraction label leaves it only for the current engine tick and spoken callout. The label is never written to session state, reports, the ledger, episode logs, or notes. `/focus` explicitly constructs a whitelist of booleans and
-numeric counters. No app name, bundle ID, URL, host, or hash enters viewer/card
-state, speech, or the ledger. Raw CLI diagnostics are discarded. Failed queries
-freeze the countdown and show Activity unavailable; they do not invent focus.
-A one-second sampler cannot observe excursions that happen entirely between
-samples. An observed switch gets 800ms grace; at normal query latency its first
-callout is on the following tick, approximately 1–2 seconds after switching.
-
-Commands (speech and typed input use the same handler):
-
-| Say | Effect |
+| Area | Start here |
 | --- | --- |
-| thirty minutes on this | Start; arm if on the Jarvis home tab |
-| call me out every thirty seconds | Set the nag interval (minimum three seconds) |
-| give me fifteen seconds | Suppress speech temporarily; continue accounting |
-| it's okay, I'm doing research | Refund this excursion's time and drift count; stay quiet until back at the target |
-| pause / resume | Freeze / resume countdown and observation |
-| extend by five minutes | Add time to the plan |
-| end the session | Finish and speak the report |
-| abort | Stop, report, and reset the clean streak |
+| HTTP boundaries, retrieval and existing behavior | [server.py](server.py) |
+| Routing, budgets, validation and collaboration | [ultra.py](ultra.py), [codex_bridge.py](codex_bridge.py) |
+| Memory and document conversion | [ultra_memory.py](ultra_memory.py), [ultra_documents.py](ultra_documents.py) |
+| Shared tools and checkpoint recovery | [ultra_tools.py](ultra_tools.py), [ultra_workflows.py](ultra_workflows.py) |
+| Galaxy, orb and live crew | [viewer/](viewer/) |
+| Focus, voice and desktop helpers | [focus.py](focus.py), [voice_bridge.py](voice_bridge.py), [native/](native/) |
+| Regression checks | [tests/](tests/), [CI workflow](.github/workflows/ci.yml) |
 
-One persistent excursion counts once and escalates across three canned speech
-pools with each nag. The macOS `say` process speaks autonomous callouts and the
-report even if the viewer reloads or closes. Starting or controlling focus from `?mute=1` also mutes server-owned accountability speech for that session. An active session also saves a private numeric/boolean recovery snapshot. Restarting restores its remaining time and counters without counting server downtime, discards private target identity, and requires a fresh target lock. Reloading the viewer only fetches its current state.
-
-The report gives minutes permitted/on-target out of planned minutes, drift count,
-and streak. A non-aborted session earns a streak increment when credited time is
-at least 85% of **planned** time; ending early is not a shortcut. The private,
-ignored `ledger-focus.json` stores totals only (sessions, aborts, planned seconds,
-on-target seconds, drifts, streak). This legacy aggregate file stores no session history or timestamps; session records are stored separately as described below.
-If that ledger is malformed or unwritable, the report says it could not be saved.
-
-### macOS 27 permissions, before live testing
-
-In **System Settings → Privacy & Security** grant the **launcher** of the server:
-
-- **Automation → System Events**, and **Automation → Google Chrome** (or the
-  Chrome-family browser used). For `start.sh` in Terminal, the launcher is Terminal;
-  for a server launched from Codex, it is normally Codex. Follow the responsible
-  application name macOS actually shows. The grant is to the launcher controlling
-  those apps, not to Chrome controlling Jarvis.
-- **Accessibility / Device Control and Data Access** for that same launcher if
-  macOS requests it for the System Events frontmost-process query.
-- For the existing native microphone, **Microphone** and **Speech Recognition**
-  belong to **Jarvis Voice**. If browser recognition is selected, Chrome needs
-  microphone access plus the localhost site's microphone permission instead.
-
-Focus needs no Screen Recording, Input Monitoring, Full Disk Access, or remote
-Apple Events permission. The native countdown card and `say` need no such grant.
-An initial permission dialog may outlast the reader's short timeout; allow it and
-let the next tick retry. Denial is shown as Activity unavailable.
-
-### Verification
-
-Run `python3 -m unittest discover -s tests -p 'test*.py'`, `node tests/focus.cjs`,
-the existing voice/sources/screen suites, and `python3 preflight.py`.
-The privacy test exhausts the named public schema across start/arm, drift, pause,
-resume, snooze, excuse, extend and finish, asserting primitive boolean/numeric
-values only; ledger tests assert the aggregate schema separately.
-
-For the physical live loop, bring Chrome forward yourself (background automation
-clicks do not necessarily activate it). Start on Jarvis, switch to a work site,
-and wait for Target locked. Switch to another host and hear a callout within
-three seconds. Switch back: drift tint clears. Reload Jarvis: countdown rejoins.
-Say/type **end the session** and hear the report. Listen on the Mac itself;
-a running `say` process alone does not prove audible output or speaker volume.
-
-Implementation verification (2026-10-13): 31 Python checks and the focus, voice,
-source-camera, and screen browser suites passed; the Swift card compiled. Full
-live preflight reported `13 pass, 0 fail, 2 warn` (inactive API backend skipped).
-
-The authorized automatic foreground test passed against the real running server:
-Chrome switched between two disposable local-site tabs, the server recorded one
-drift, and the callout speech process started **1.50 seconds** after initiating
-the switch. Returning to the target cleared drift; Jarvis home remained exempt;
-reloading rejoined the same countdown. The final report retained exactly one
-drift, its speech process completed, and the test closed its temporary Chrome
-window. No focus session was left running. This timing measures the native speech
-process starting, not an acoustic recording of speaker output. The user separately
-reported hearing the callout within three seconds and seeing the tint clear.
-
-To repeat the physical automation deliberately, run
-`python3 tools/verify_focus_live.py`. It activates Chrome, switches test tabs,
-plays speech, and adds one real test session to aggregate totals. It refuses to
-interrupt an existing session and closes only its own disposable window. The
-local test URLs may show Not found: only their differing hosts matter to this
-reader test. Do not run it while you need uninterrupted foreground control.
-
-Distraction naming: `NAME_DISTRACTIONS` at the top of `focus.py` disables naming when false. Say “drill sergeant mode” or “normal mode” during a session. Each tier cycles four lines; the first callout includes the work intention when supplied.
-
-
-## Eyes
-
-Click **Eyes**, allow camera access, and sit upright during the brief calibration.
-Face and pose landmarks run in the browser using bundled MediaPipe Tasks Vision
-0.10.21 and the Google face / lite pose model assets. No CDN is contacted at runtime
-by the eyes organ. The only posture payload is four booleans: eyes_active, present,
-head_down, slouched. Pixels and landmarks are never posted for posture detection.
-Head-down is a posture heuristic, not recognition of a phone object. Lighting,
-camera placement and calibration affect accuracy; restarting Eyes recalibrates.
-
-A sustained head-down or slouch lasts 700 ms before a dry nudge, with a shared
-30-second cooldown. Absence has 12 seconds of grace. Head-down episodes count as
-focus drifts and their time is deducted while fresh signals are available.
-Say or type **give me a minute** or **no Jarvis, I need to do something important**
-for three minutes without eye or tab nudges. Accounting continues during relief.
-Only the ear button enables the microphone; organs and follow-up prompts cannot.
-
-**look at me** and **what do you think of my shirt?** explicitly send one current
-JPEG to GPT-6 Astra through the Codex backend. This is the intentional cloud-image
-exception. It does not change the selected normal brain. **what do you think of
-this screen** stays on the screen route when screen sharing is enabled.
-Stopping Eyes stops the camera and drops the landmark models.
-
-Tests: `node tests/eyes.cjs` plus the voice/focus/screen/source and Python suites.
-Physical acceptance still requires a person: open `http://localhost:4700/?mute=1`
-for silent testing, enable Eyes and calibrate, lower the head toward a phone,
-and check the visible nudge. Say the relief line with the ear button enabled,
-then hold that posture and switch tabs; no nudge should occur for 180 seconds.
-Muted test tabs intentionally cannot prove audible output. A subsecond physical
-response is not yet verified: inference speed and the posture heuristic must be
-measured on this camera. The deterministic timer crosses at exactly 700 ms.
-
-Eyes also responds to **turn on your eyes**, **turn off your eyes**, and
-**can you see me** locally. The latter reports actual camera readiness without
-sending a photo. Other questions about capabilities receive the implemented
-Eyes description and only current posture booleans, so chat cannot confuse an
-off camera with an unimplemented feature. Camera startup shows model loading,
-permission and calibration progress; **Cancel eyes** stops startup. A permission
-request left unanswered for 30 seconds times out and can be retried. If permission
-was blocked, use the browser's camera permission control for this local site.
-The microphone is never included in the camera permission request.
-
-Tracking uses the local Face Landmarker 3D head rotation, measured relative to
-your upright calibration. Head-down detection works even when your shoulders
-are outside the webcam crop. Slouch detection requires visible, confident
-shoulders and its own upright baseline; the status says when it is unavailable.
-Calibration waits for a steady forward-facing pose instead of averaging movement.
-The local preview draws face/shoulder markers without encoding or uploading an
-image. It shows head tilt and nudge cooldown/relief status. Use **Reset upright
-posture** after moving the camera or chair; choose **Sensitive** if a small phone
-head tilt is missed. Looking up and turning sideways are not head-down signals.
-
-### Screen watch (prompt 14)
-
-Click **Watch screen**, or say “watch my screen” and follow the click prompt if your browser requires it. Choose **Entire Screen**. The picker is given an entire-screen preference, but browsers retain the final choice. Tab/window shares are refused with instructions to choose Entire Screen.
-
-The browser compares 96×54 thumbnails every five seconds. Thumbnails never leave memory. After 60 seconds without a meaningful change, it sends one current JPEG to the selected brain for a short useful suggestion, then waits three minutes before another attempt. Tiny pixel noise is ignored; this is screen stillness, not proof of inactivity. While watching, ordinary questions—including “what do you think of this?”—use that same share. Camera/Eyes remains independent.
-
-“Gimme 3 minutes” silences Eyes, Focus, screen nudges, and late spoken replies. Screen nudges also wait while you speak or ask a question. The single **Watch screen** button becomes **Stop watching** while active. Click it or say “stop watching” to end both watching and the share. Ended, changed, or paused shares cannot produce a stale nudge.
-
-The native desktop face is built with `sh native/build_watch.sh`. It sits above the menu bar across Spaces while a browser watch lease is alive, and disappears when watching stops or the browser disconnects. The local `/watch` heartbeat accepts only a token and a boolean, never screen pixels. All automated browser testing uses `?mute=1`.
-
-Brain introductions use `CURATED_LINES` near the top of `server.py` first, then the new brain's own introduction, then a readable-name fallback. GPT-6 Astra cycles through six lines per server session (including swaps between providers); the cycle repeats only after all six have played. Button requests, spoken commands, resets, and the chat answer control tag `[[SWITCH_MODEL: alias]]` all use `swap_model`.
-
-Local `model_aliases` configuration maps exact spoken names to `[backend, model_id]` pairs. Astra's spoken forms (`astra`, `gpt-6 astra`, `gpt 6 astra`, `gpt-6`) are pinned to `codex-cli` / `gpt-6-astra`; unsupported exact IDs are refused rather than replaced with catalogue neighbours.
-
-
-### Focus truth instruments
-
-`GET /focus/diag` reads the foreground through the reader owned by the running
-server without arming, settling or changing a target. It returns only booleans,
-a settle counter and fixed status enums: foreground readability/browser status,
-tab read status, Jarvis-home/hash presence, app/tab target presence and current
-lane matches, deferred lock, active session, tick-thread liveness and freshness.
-It does not wait for the session lock, so a stuck tick remains diagnosable.
-`tick_thread_alive` alone is insufficient: `tick_status` must also be `fresh`.
-Unknown reads are not evidence of drift. No identity, title, URL or hash is returned.
-
-Open `/?focusdebug=1` for the overlay: session flags, deferred lock, drifts,
-excused state, intent-answer window, last changed-pixel fraction, pixel threshold
-and nudge gate. A null pixel diff means no screen sample yet; no pixels are stored.
-
-Each finished or aborted session appends a strict record to the private ignored
-`ledger-focus-sessions.json`: `timestamp` (UTC), `planned_minutes`, `active_minutes`,
-`on_target_minutes`, `drifts`, `seconds_adrift`, `percent`, `completed`. Percent is
-on-target / planned × 100; active minutes exclude paused/unreadable/deferred time.
-Completed follows the existing end-session semantics (false for abort). Existing
-`ledger-focus.json` remains the legacy totals/streak store; it is not session history.
-Extra keys, nested values, nonfinite numbers and invalid history are rejected.
-
-`/?focusprobe=1` serves a separate, hermetic browser fixture using the actual focus
-controller and pixel comparison. It mocks network, speech and the timer queue;
-no camera, microphone, model, session or ledger is touched. Its title contains a
-summary and PASS/FAIL for every case. Run visibly at **1440×900**; click Run battery
-after setting the viewport if needed. Viewport and visibility are assertions, and
-controller timing uses a deterministic queue rather than hidden-tab wall time.
-This tests viewer behavior; full `python3 preflight.py` independently checks the
-running server and live model chains. Neither substitutes for reproducing a
-reported physical foreground-switch failure.
-
-Before any field fix, follow the debugging law in AGENTS.md: live diag, ledger,
-window count, assistant-tab host, then the exact user flow with instruments on.
-
-## V2 controls
-
-Use Command-K (Control-K) to find notes, Focus, Eyes, screen watch, model integrations, settings, and other workspaces. Notes offers full Markdown reading and revision-checked edits; saving requires an explicit approval and verifies the written content. Dark/paper appearance, reduced motion, and quiet interface sounds are saved on this device. Voice settings offers an optional “Jarvis” transcript gate, off by default. It only operates after you turn Mic on; it does not enable background recording. Hold Space bypasses the phrase gate.
-
-The orb now uses the supplied Jarvis particle-core design: layered counter-rotating rings, a scattering-to-core wake sequence, teal idle breathing and listening inflow, violet thinking, speech-reactive particles, amber confirmation heartbeats, and a desaturated offline power-down. The existing executing, awaiting-approval, and error states remain connected to real operations. Local-service polling drives offline and reconnect states.
-
-Open the small settings icon beside the orb, then **Preview animations**, to try Idle, Listening, Thinking, Speaking, Confirm, Offline, or Wake. Previews are labeled, return to Live after six seconds, never start the microphone, and yield immediately to real activity. The renderer uses the existing local Three.js module with no new packages or build step. Reduced motion freezes decorative animation, and a canvas fallback keeps the controls usable without WebGL.
-
-Voice motion uses measured native microphone FFT or an explicitly enabled browser audio stream, and measured local Daniel WAV output. Native Focus speech cannot supply output spectrum and says so. Missing business services are marked Connection required with typed contracts in viewer/services.d.ts. Orb controller regressions: `node tests/orb.cjs`; existing voice regressions: `node tests/voice.cjs`.
+[Architecture](docs/ARCHITECTURE.md) · [Usage](docs/USAGE.md) · [Documentation index](docs/README.md) · [Third-party notices](THIRD_PARTY.md)

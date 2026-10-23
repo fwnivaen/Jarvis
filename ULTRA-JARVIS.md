@@ -1,21 +1,22 @@
 # Ultra Jarvis — complete upgrade
 
-This extends the existing Python server, Markdown vault, galaxy, orb, Focus, vision and native voice. The lightweight runtime incorporates the selected CrewAI patterns directly: manager delegation, named roles, shared worker reports, peer review, structured evidence, reusable workflows, checkpoints, recovery and measured evaluations. It does not install the CrewAI framework. The new tool path runs requested actions without an additional approval gate, as requested.
+This extends the existing Python server, Markdown vault, galaxy, orb, Focus, vision and native voice. The lightweight runtime incorporates CrewAI-style manager delegation, named roles, shared reports, peer review, structured evidence, reusable workflows, checkpoints, recovery and measured evaluations. It does not install the CrewAI framework. Agent tools perform requested operations without an additional per-action approval drawer; existing editor confirmations and sensor permissions still apply.
 
-## Start on this Mac
+## Start on macOS
 
-The upgrade and its isolated Python environment are already installed in this checkout. The checked-in master flag is off so the existing route remains available until you enable Ultra. The review server at `http://127.0.0.1:4701/?mute=1` enables Ultra separately.
+The checked-in master flag is off so the existing route remains available until you enable Ultra. From a fresh clone, install the optional dependencies into the project-local environment, enable the feature and start the launcher:
 
 ```sh
-cd '/Users/fwnivaen/.codex/.chatgpt-projects/g-p-6ac83442ec1c8191b488a8adf6db36db/jarvis'
+git clone https://github.com/fwnivaen/Jarvis.git
+cd Jarvis
 python3 tools/setup_ultra.py
 python3 tools/ultra_settings.py enable
-.local/ultra-full-venv/bin/python server.py
+./start.sh
 ```
 
 Open `http://127.0.0.1:4700`. If that port is already occupied, stop the existing Jarvis process in its own Terminal before starting the upgraded server. Codex uses its existing ChatGPT sign-in; no API key is added or printed. If Codex is not signed in on another Mac, use its normal `codex login` flow.
 
-Setup requires Python 3.11 or newer. It can use this Mac's bundled Codex Python and never installs packages globally. Elsewhere, pass `python3 tools/setup_ultra.py --python /absolute/path/to/python3.12`. The first setup downloads a public embedding model; search after setup uses the local cache. `--no-model` skips that download, retaining keyword fallback.
+Setup requires Python 3.11 or newer. It can also locate an available bundled Codex Python and never installs packages globally. To choose explicitly, pass `python3 tools/setup_ultra.py --python /absolute/path/to/python3.12`. The first setup downloads a public embedding model; search after setup uses the local cache. `--no-model` skips that download, retaining keyword fallback. The launcher needs Apple's command-line tools to compile the Focus helper. You can instead run `.local/ultra-full-venv/bin/python build.py` followed by `.local/ultra-full-venv/bin/python server.py` and build native helpers separately.
 
 To return to the existing route:
 

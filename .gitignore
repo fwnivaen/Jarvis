@@ -1,7 +1,10 @@
 # Local secrets
 config.json
 .env
+.env.*
 *.key
+*.pem
+*.p12
 # Generated viewer data
 viewer/graph-data.js
 # Logs and ledgers
@@ -10,9 +13,18 @@ ledger*.json
 # Python caches
 __pycache__/
 *.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 # macOS metadata
 .DS_Store
 # Node dependencies
 node_modules/
 # Locally compiled Mac voice helper
 .local/
+# Personal captures and imported documents; the curated demo vault stays tracked.
+notes/captures/
+notes/imports/

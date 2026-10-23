@@ -1,6 +1,6 @@
 # Ultra Jarvis verification — October 22, 2026
 
-Both stages extend the existing server and viewer. The checked-in master flag remains off, with an independently enabled review server at `http://127.0.0.1:4701/?mute=1`. Enable and run commands, feature flags and complete dependency details are in [ULTRA-JARVIS.md](../ULTRA-JARVIS.md). The earlier Stage 1 record is retained in [ultra-stage-1-verification.md](ultra-stage-1-verification.md).
+Both stages extend the existing server and viewer. The checked-in master flag remains off; these observations used an independently enabled review server on port 4701. Enable and run commands, feature flags and complete dependency details are in [ULTRA-JARVIS.md](../ULTRA-JARVIS.md). The earlier Stage 1 record is retained in [the historical archive](archive/ultra-stage-1-verification.md).
 
 ## Automated and live checks
 
