@@ -1,7 +1,8 @@
-:root{--agents-width:510px;--agents-collapsed-width:260px;--agents-orb-gap:264px;--agents-height:310px;--agents-top:150px;--crew-width:244px;--crew-top:96px;--crew-left:24px;--crew-gap:12px;--crew-compact-height:184px;--crew-header-height:34px;--crew-avatar:52px;--crew-cycle:7s;--crew-pulse:2.4s;--crew-flow-cycle:1.8s;--crew-cyan:#79e4d5;--crew-violet:#bba6fa;--crew-amber:#efbb81}
+:root{--agents-width:510px;--agents-collapsed-width:260px;--agents-orb-gap:264px;--agents-height:310px;--agents-top:150px;--crew-width:244px;--crew-top:96px;--crew-left:24px;--crew-gap:12px;--crew-compact-height:184px;--crew-header-height:34px;--crew-avatar:52px;--crew-cycle:7s;--crew-pulse:2.4s;--crew-flow-cycle:1.8s;--crew-enter-duration:680ms;--crew-enter-delay:140ms;--crew-enter-x:-12px;--crew-enter-y:6px;--crew-cyan:#79e4d5;--crew-violet:#bba6fa;--crew-amber:#efbb81}
 /* Three peers, with a tiny shared constellation instead of a command hierarchy. */
 #agent-crew{position:absolute;z-index:14;left:var(--crew-left);top:var(--crew-top);width:var(--crew-width);max-width:calc(100% - 32px);border:1px solid var(--deck-stroke);border-radius:16px;background:linear-gradient(140deg,rgba(14,24,32,.88),rgba(7,14,21,.72));backdrop-filter:blur(16px);box-shadow:inset 0 1px 0 #ffffff05,0 10px 32px #0002;color:var(--text-primary);overflow:hidden}
 #agent-crew[hidden]{display:none}
+#agent-crew:not([hidden]){animation:crew-enter var(--crew-enter-duration) var(--deck-ease) var(--crew-enter-delay) both}
 #agent-crew summary{height:var(--crew-header-height);display:flex;align-items:center;gap:8px;padding:0 12px;cursor:pointer;list-style:none}
 #agent-crew summary::-webkit-details-marker{display:none}
 .crew-heading{display:flex;align-items:center;gap:6px;font:500 8px var(--mono);letter-spacing:.15em;white-space:nowrap;color:var(--text-secondary)}
@@ -45,6 +46,7 @@
 @keyframes crew-orbit{to{transform:rotate(360deg)}}
 @keyframes crew-breathe{50%{opacity:.55;transform:scale(.92)}}
 @keyframes crew-flow{to{stroke-dashoffset:-36}}
+@keyframes crew-enter{from{opacity:0;transform:translate(var(--crew-enter-x),var(--crew-enter-y))}to{opacity:1;transform:none}}
 body[data-workspace]:not([data-workspace=galaxy]) #agent-crew,.is-full-view #agent-crew{display:none}
 body[data-workspace]:not([data-workspace=galaxy]) #agent-crew *,#agent-crew:not([open]) *,.is-full-view #agent-crew *{animation-play-state:paused!important}
 .stage:has(#agent-crew:not([hidden])) #selected-note{top:calc(var(--crew-top) + var(--crew-header-height) + var(--crew-gap))}
@@ -92,7 +94,7 @@ body[data-workspace]:not([data-workspace="galaxy"]) #agent-monitor,.is-full-view
  .stage:has(#agent-monitor[open]:not([hidden])) #selected-note{visibility:hidden}
  .stage:has(#agent-monitor[open]:not([hidden])) .chat-top,.stage:has(#agent-monitor[open]:not([hidden])) .detail{top:calc(var(--crew-top) + var(--crew-header-height) + var(--agents-height) + 24px);bottom:var(--deck-mobile-panel-bottom)}
 }
-@media(prefers-reduced-motion:reduce){#agent-crew *,#agent-crew *::before{animation:none!important;transition:none!important}.crew-flow{stroke-dasharray:3 6}}
-:root[data-motion=reduced] #agent-crew *{animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){#agent-crew,#agent-crew *,#agent-crew *::before{animation:none!important;transition:none!important}.crew-flow{stroke-dasharray:3 6}}
+:root[data-motion=reduced] #agent-crew,:root[data-motion=reduced] #agent-crew *{animation:none!important;transition:none!important}
 .ultra-settings{margin-top:20px;padding:20px;border:1px solid var(--deck-stroke);border-radius:14px;background:var(--deck-bg,rgba(12,20,28,.5));backdrop-filter:blur(18px)}
 .ultra-settings h2{font-size:16px;margin:0 0 14px}.ultra-settings h3{font-size:13px;margin-top:18px}.ultra-settings p{font-size:12px;line-height:1.6;overflow-wrap:anywhere}.ultra-settings form{display:flex;gap:8px;flex-wrap:wrap}.ultra-settings input,.ultra-settings select{min-width:0;max-width:100%;padding:9px;border:1px solid var(--deck-stroke);border-radius:8px;background:transparent;color:inherit}.ultra-settings button{padding:8px 12px;border:1px solid var(--deck-stroke);border-radius:8px;background:transparent;color:inherit;cursor:pointer}

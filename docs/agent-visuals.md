@@ -14,6 +14,14 @@ Thin flowing curves connect agents contributing to the same active workflow. Two
 
 The desktop panel measures approximately **244 × 178 CSS pixels**, with a **224 × 173** mobile layout. It collapses to its header, hides in full view and other workspaces, pauses animations while collapsed, and respects reduced motion. Light mode has its own colors. The arrow opens the existing Work controls and detailed activity.
 
+### Refresh entrance
+
+The panel fades in and glides from 12 px left and 6 px below its final position, over 680 ms after a 140 ms delay. The animation starts when the panel becomes visible after refresh and also plays when returning to Galaxy. Polling does not restart it. It changes opacity and transform only, preserving panel dimensions and layout. Both the operating-system reduced-motion preference and JARVIS's Reduced motion option disable the entrance, showing the panel immediately. This follow-up changes CSS only; agent logic is untouched.
+
+On October 23, the loaded browser reported `crew-enter`, `0.68s` duration and `0.14s` delay after refresh. The visible transition was sampled at opacity `0.446856` and translation `(-6.63773px, 3.31886px)`, then settled at opacity 1 with zero translation. Reduced motion reported `animation: none`, opacity 1 and no transform; the original Follow system preference was restored. Both agent JavaScript regression suites passed. The required full preflight reported **13 pass, 1 fail, 2 warn**: the running-server foreground-read instrument failed, matching its pre-edit `front_readable: false` diagnostic. The two warnings skip API-key/model checks for Codex sign-in. The visible Focus probe again passed **16 pass, 0 fail | 1440x900**, with every per-case PASS in the title below. The viewport override was reset. Browser window count remained unavailable; ledger counts remained five session entries and six legacy aggregate keys, and the controlled host was `127.0.0.1:4700`.
+
+One browser refresh temporarily lacked layout and graph assets (`GRAPH is not defined`); a subsequent complete reload restored the page. Served CSS and UI files matched disk. No asset-loading or Focus code was changed.
+
 ## Runtime boundary
 
 `viewer/agents.js` reads the existing `/agents`, `/workflows` and `/workflows/run` public snapshots. The existing Work view dispatches its received run snapshot as a browser event for immediate visual updates. Active activity is polled every 750 ms; workflow discovery occurs every four seconds when idle. Requests have timeouts and slower polling in hidden tabs. Stable avatar elements avoid rebuilding the symbols on each poll.
