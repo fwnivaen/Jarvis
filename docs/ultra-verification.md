@@ -1,14 +1,33 @@
-# Ultra Jarvis verification — October 22, 2026
+# Ultra Jarvis verification
 
 Both stages extend the existing server and viewer. The checked-in master flag remains off; these observations used an independently enabled review server on port 4701. Enable and run commands, feature flags and complete dependency details are in [ULTRA-JARVIS.md](../ULTRA-JARVIS.md). The earlier Stage 1 record is retained in [the historical archive](archive/ultra-stage-1-verification.md).
 
-## Automated and live checks
+## Repository release check — October 23, 2026
+
+The repository now has a concise project overview, architecture and usage guides, current screenshots, an indexed historical archive and automated GitHub checks. Private settings, personal captures/imports, environments, downloaded models and runtime state remain ignored. A credential-pattern scan found no matches in 381 historical blobs; the tracked-file and documentation check reports **164 files, 100 local links, 0 failures**.
+
+| Check | Observed result |
+| --- | --- |
+| Local Python suite with real embeddings | **163 tests passed** |
+| JavaScript regressions | **14 suites passed** |
+| Clean clone without private configuration or credentials | **163 tests run, 162 passed, 1 optional embedding test skipped**; all **14 JavaScript suites passed** |
+| GitHub CI | [Python/viewer regressions and native macOS helper builds passed](https://github.com/fwnivaen/Jarvis/actions/runs/39911589688) |
+| Latest full live preflight | **14 pass, 0 fail, 2 warn** |
+| Fresh visible Focus probe | **FOCUS PROBE: 16 pass, 0 fail \| 1440x900**; the full title was read and the temporary viewport override was reset |
+
+The clean-clone check exposed three HTTP tests that relied on the developer's private settings. Their fixtures now supply in-memory test settings; the application behavior is unchanged. The optional embedding test is skipped in a fresh clone without the downloaded model and passes separately in the local environment. Both preflight warnings are API-key/model checks skipped because this installation uses Codex sign-in.
+
+The latest preflight passed the running server's Focus instruments as well as real model switching, chat, image recognition, capture/recall/cleanup, served-file integrity and browser restrictions. The earlier foreground-tab failures below remain relevant: a successful run does not establish reliable physical foreground tracking across every window or permission state. No Focus implementation or macOS permission changes were made during repository cleanup.
+
+## Upgrade validation — October 22, 2026
+
+The following measurements retain the original upgrade review and its limitations.
 
 | Check | Observed result |
 | --- | --- |
 | Python suite in the local virtual environment | **163 tests passed**, including the real local embedding, persistent vector search, PDF/DOCX/XLSX imports and MCP stdio checks |
 | JavaScript regressions | **14 suites passed**, covering the existing galaxy, orb, voice, Focus, camera, screen watch, capture/source behavior and both crew suites |
-| Final full live preflight | **13 pass, 1 fail, 2 warn**; the failure is the running server's foreground-tab read |
+| October 22 final full live preflight | **13 pass, 1 fail, 2 warn**; the failure is the running server's foreground-tab read |
 | Visible Focus probe | **FOCUS PROBE: 16 pass, 0 fail \| 1440x900** |
 | Real dynamic tool call | `preferences_get` completed through the warm Codex connection in **8.7 seconds** end to end; one registry call, zero workers and zero escalations |
 | Real image request | Full preflight correctly identified the red JPEG through the cheap Luna vision route |
@@ -17,7 +36,7 @@ Both stages extend the existing server and viewer. The checked-in master flag re
 | MCP protocol | A real stdio client negotiated **2026-07-28**, discovered all **12 tools** and called the local registry |
 | Source hygiene | No secrets, notes, generated graph data, models, virtual environments or private runtime journals are included in the upgrade archive |
 
-The two preflight warnings are the existing API-key/model checks skipped because this installation uses Codex sign-in. The live preflight also passed note retrieval, capture followed by immediate recall and cleanup, model switching/reset, served-file integrity and browser access restrictions. An earlier full run passed **14 pass, 0 fail, 2 warn**, but full runs after the last server restart failed the foreground check, first on activity and then on the front tab. The final run is the current result; the earlier pass is not substituted for it.
+The two preflight warnings are the existing API-key/model checks skipped because this installation uses Codex sign-in. That live preflight also passed note retrieval, capture followed by immediate recall and cleanup, model switching/reset, served-file integrity and browser access restrictions. An earlier full run passed **14 pass, 0 fail, 2 warn**, but subsequent October 22 runs failed the foreground check, first on activity and then on the front tab. The October 22 final result is retained here; the latest release check appears above.
 
 Field diagnostics were fetched from the actual running review server. Its Focus tick was alive and fresh, with no active session or armed target. A subsequent diagnostic could read the foreground application but reported browser-tab access unavailable. The session ledger had five entries and the legacy ledger had six counter keys. Chrome's Window menu listed **five windows**. The controlled tab host was `127.0.0.1:4701`, while the physical foreground window differed and changed during inspection. UI control was then left alone. No identities were added to diagnostics, and no Focus implementation or permission changes were made. The simulated probe below does not establish reliable physical foreground tracking.
 

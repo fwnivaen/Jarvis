@@ -67,7 +67,7 @@ python3 preflight.py
 
 The first two commands check repository hygiene and the regression suite. Full preflight requires the running Mac server, performs real model calls and cleans up its own temporary capture. CI runs the automated suite without account credentials or physical sensor access and builds the native helpers on macOS.
 
-The latest local upgrade verification contains **163 passing Python tests** and **14 passing JavaScript suites**. The visible Focus fixture passed **16/16 cases at 1440×900**. The last live preflight recorded **13 pass, 1 fail, 2 warn**: foreground-tab access was inconsistent on the development Mac, and the API-key checks were skipped for Codex sign-in. [Full evidence and limitations](docs/ultra-verification.md).
+The latest local verification contains **163 passing Python tests** and **14 passing JavaScript suites**. The visible Focus fixture passed **16/16 cases at 1440×900**. The latest full live preflight recorded **14 pass, 0 fail, 2 warn**; the two API-key checks were skipped for Codex sign-in. Fresh-clone regressions and the macOS helper builds also pass in CI. Earlier foreground-tab access failures remain documented as a permission-sensitive limitation. [Full evidence and limitations](docs/ultra-verification.md).
 
 Max-effort workers can reach the 45-second limit; the system returns an explicitly partial result. Document imports extract text rather than OCR or chart images. General computer control and email sending are not exposed by the tool registry. Physical audio, camera accuracy and macOS permissions require local acceptance testing.
 
