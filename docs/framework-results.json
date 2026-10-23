@@ -1,0 +1,209 @@
+{
+  "date": "2026-10-23",
+  "notes": "Live trials are single observations. Synthetic tests exercise real graph execution with a fake model boundary, and make zero model requests.",
+  "baseline": [
+    {
+      "workflow": "direct",
+      "elapsed_s": 3.958,
+      "cpu_s": 0.011,
+      "peak_rss_bytes": 29442048,
+      "error": false,
+      "partial": false,
+      "citations": 1,
+      "metrics": {
+        "status": "complete",
+        "partial": false,
+        "jobs": 1,
+        "workers": 0,
+        "completed_jobs": 1,
+        "failed_jobs": 0,
+        "retries": 0,
+        "escalations": 0,
+        "elapsed_s": 4.0,
+        "checks_passed": 0,
+        "checks_failed": 0,
+        "token_usage_complete": true,
+        "input_tokens": 7733,
+        "output_tokens": 128,
+        "total_tokens": 7861
+      }
+    },
+    {
+      "workflow": "research",
+      "elapsed_s": 240.026,
+      "cpu_s": 0.3,
+      "peak_rss_bytes": 29442048,
+      "error": true,
+      "partial": false,
+      "citations": 0,
+      "metrics": {
+        "status": "failed",
+        "partial": false,
+        "jobs": 1,
+        "workers": 0,
+        "completed_jobs": 0,
+        "failed_jobs": 1,
+        "retries": 0,
+        "escalations": 0,
+        "elapsed_s": 240.0,
+        "checks_passed": 0,
+        "checks_failed": 0,
+        "token_usage_complete": false,
+        "input_tokens": null,
+        "output_tokens": null,
+        "total_tokens": null
+      }
+    }
+  ],
+  "prototype": {
+    "graph_runs": 20,
+    "correct": 20,
+    "graph_median_ms": 15.960666467435658,
+    "graph_max_ms": 22.91466703172773,
+    "thread_pool_mean_ms": 12.951279146363959,
+    "resume_reexecuted_workers": [
+      2
+    ],
+    "peak_rss_bytes": 72351744,
+    "model_calls": 0
+  },
+  "stress": {
+    "synthetic_model": true,
+    "live_model_calls": 0,
+    "completed_runs": 20,
+    "median_ms": 58.115645428188145,
+    "p95_ms": 416.90774995367974,
+    "max_worker_concurrency": 3,
+    "busy_rejected": 20,
+    "cancellation_ms": 14.529915992170572,
+    "cpu_s": 0.8829990000000001,
+    "peak_rss_native_units": 73646080,
+    "rss_units": "bytes on macOS; KiB on Linux",
+    "sqlite_bytes": 1105920
+  },
+  "integrated_live": [
+    {
+      "workflow": "general",
+      "elapsed_s": 9.649,
+      "status": "complete",
+      "error": null,
+      "citations": 1,
+      "tokens": 15219,
+      "usage_complete": true,
+      "tool_calls": 1,
+      "agents": [
+        {
+          "slot": "worker-1",
+          "status": "complete",
+          "attempts": 1,
+          "elapsed_s": 4.337,
+          "tokens": 7697,
+          "error": null
+        },
+        {
+          "slot": "reviewer",
+          "status": "complete",
+          "attempts": 1,
+          "elapsed_s": 3.865,
+          "tokens": 7522,
+          "error": null
+        }
+      ],
+      "poll_p95_ms": 34.500124980695546
+    },
+    {
+      "workflow": "research",
+      "elapsed_s": 16.722,
+      "status": "complete",
+      "error": null,
+      "citations": 3,
+      "tokens": 32880,
+      "usage_complete": true,
+      "tool_calls": 1,
+      "agents": [
+        {
+          "slot": "worker-1",
+          "status": "complete",
+          "attempts": 1,
+          "elapsed_s": 6.445,
+          "tokens": 8013,
+          "error": null
+        },
+        {
+          "slot": "worker-2",
+          "status": "complete",
+          "attempts": 1,
+          "elapsed_s": 6.797,
+          "tokens": 8069,
+          "error": null
+        },
+        {
+          "slot": "worker-3",
+          "status": "complete",
+          "attempts": 1,
+          "elapsed_s": 5.535,
+          "tokens": 8026,
+          "error": null
+        },
+        {
+          "slot": "reviewer",
+          "status": "complete",
+          "attempts": 1,
+          "elapsed_s": 9.764,
+          "tokens": 8772,
+          "error": null
+        }
+      ],
+      "poll_p95_ms": 4.433708032593131
+    }
+  ],
+  "live_recovery": {
+    "status": "complete",
+    "elapsed_s": 36.563,
+    "tool_calls": 13,
+    "restarts": 1,
+    "total_tokens": 86957,
+    "usage_complete": false,
+    "error": null,
+    "cancellation_ms": 529.443,
+    "citations": 3,
+    "agents": [
+      {
+        "slot": "worker-1",
+        "status": "complete",
+        "attempts": 2,
+        "error": null,
+        "unreported_attempts": 1
+      },
+      {
+        "slot": "worker-2",
+        "status": "complete",
+        "attempts": 2,
+        "error": null,
+        "unreported_attempts": 1
+      },
+      {
+        "slot": "worker-3",
+        "status": "complete",
+        "attempts": 2,
+        "error": null,
+        "unreported_attempts": 1
+      },
+      {
+        "slot": "reviewer",
+        "status": "complete",
+        "attempts": 1,
+        "error": null,
+        "unreported_attempts": null
+      }
+    ]
+  },
+  "tool_handoff_live": {
+    "status": "complete",
+    "elapsed_s": 31.523,
+    "tool_calls": 2,
+    "total_tokens": 23788,
+    "usage_complete": true,
+    "tool_evidence_confirmed_in_final": true
+  }
+}

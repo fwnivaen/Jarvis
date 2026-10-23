@@ -23,7 +23,7 @@ The orchestration uses typed JSON contracts and local checks for source quotatio
 
 The viewer has no frontend build step. Its custom Three.js renderer batches note geometry, preserves cached layouts as the vault grows and pauses when hidden. Sensor permissions remain explicit, posture inference stays in the browser, and the server binds only to loopback.
 
-The core server and orchestration use Python's standard library. Optional search, document and MCP packages install inside a project-local virtual environment. CrewAI-style delegation and peer review are implemented directly rather than adding a second orchestration framework.
+The core server and legacy crew use Python's standard library. Explicit Work-tab workflows use optional LangGraph and SQLite checkpoint packages. Optional search, document and MCP packages install inside a project-local virtual environment. CrewAI-style delegation and peer review are implemented directly rather than adding a second orchestration framework.
 
 ## Run on macOS
 
@@ -47,6 +47,10 @@ python3 server.py
 ```
 
 This starts the original path. Cloud answers still require a configured, available backend. See the [complete setup guide](ULTRA-JARVIS.md) for Python selection, tools, flags and troubleshooting.
+
+## Visible agent workflows
+
+Run `./start-workflows.sh` after setup, open [localhost:4700](http://localhost:4700), and select **Work**. Launch a task, follow real parallel agents and tool activity, inspect verified findings, cancel work, or retry a saved checkpoint within its original budget. LangGraph runs locally through the existing signed-in model connection; no hosted Studio is required. [Setup and controls](docs/WORKFLOWS.md) · [Measured comparison](docs/framework-evaluation.md).
 
 ## Try it
 

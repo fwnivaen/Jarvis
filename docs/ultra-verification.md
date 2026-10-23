@@ -2,6 +2,44 @@
 
 Both stages extend the existing server and viewer. The checked-in master flag remains off; these observations used an independently enabled review server on port 4701. Enable and run commands, feature flags and complete dependency details are in [ULTRA-JARVIS.md](../ULTRA-JARVIS.md). The earlier Stage 1 record is retained in [the historical archive](archive/ultra-stage-1-verification.md).
 
+## LangGraph workflow integration — October 23, 2026
+
+The current workflow launcher runs on **http://127.0.0.1:4700**, with private local flags enabling Ultra, tools and workflows. The committed master flag remains off. See [setup and controls](WORKFLOWS.md), [framework evaluation](framework-evaluation.md) and [measurements](framework-results.json). The earlier port-4701 observations below are retained as history.
+
+| Check | Observed result |
+| --- | --- |
+| Full Python regression suite with real local embeddings | **184 tests passed**, including 21 new workflow/HTTP/transport tests |
+| Existing JavaScript regression suites | **14 suites passed**; new workflow JavaScript also passed syntax validation |
+| Full live preflight after final runtime changes | **14 pass, 0 fail, 2 warn** |
+| Visible Focus probe | **FOCUS PROBE: 16 pass, 0 fail \| 1440x900** |
+| Bounded synthetic stress | 20 completed research workflows, peak three workers, 20 excess launches rejected, cancellation and SQLite persistence verified |
+| Real model workflows | Focused answer and three-agent research completed with checked citations; research took 16.722 seconds in one trial |
+| Real model cancellation and recovery | Cancelled then resumed within the original budget; complete with three citations and thirteen tool calls |
+| Corrected tool-execution handoff | Browser-launched task completed with two real tool calls; final answer accurately reported successful note reading |
+| Visible UI | Launch, running agents, completion, cancel/retry, saved-run selection and source links into native Notes verified |
+
+The final UI-only refinement retained selected history controls and expanded findings across polls; its quick preflight recorded **9 pass, 0 fail, 7 warn** (model checks intentionally skipped). The complete runtime validation above used the full preflight.
+
+[Verified workflow screenshot](screenshots/workflows-complete.jpg)
+
+Full preflight summary:
+
+```text
+14 pass, 0 fail, 2 warn
+```
+
+Both warnings are API-key/model checks skipped because this installation uses Codex sign-in. An earlier validation had two failures: a missing scratch-directory fixture in a new transport test, and a transient live foreground-read failure. The fixture was corrected and the final full preflight passed. The workflow boundary was also corrected after a real answer incorrectly denied a successful tool call; the follow-up live answer was inspected against the opened note.
+
+The final visible 1440×900 probe title was read in full:
+
+```text
+FOCUS PROBE: 16 pass, 0 fail | 1440x900 | PASS viewport | PASS visible | PASS reload-read-only | PASS focused | PASS deferred | PASS unavailable | PASS paused | PASS drift | PASS excused | PASS home | PASS intent-window | PASS commands | PASS pixel-identical | PASS pixel-change | PASS disconnect | PASS visible-at-finish
+```
+
+The temporary viewport override was reset. Initial wrong-size probe runs failed and are not counted as passes. Diagnostics came from the running port-4700 service; the latest check reported `front_readable: true`. The session ledger had five entries and the legacy aggregate six keys. The current browser inventory did not expose a window count; that instrument is recorded as unavailable. The controlled browser host was `127.0.0.1:4700`. No Focus behavior or operating-system permissions were changed.
+
+Automated failure tests use isolated temporary data and a deterministic model boundary, while live workflow trials use the existing signed-in model transport. No claims of broad accuracy, dollar-cost savings or exactly-once remote inference are made. Workflow recovery is read-only, bounded by the original deadline and available attempts. Raw journals, sources and credentials remain untracked.
+
 ## Repository release check — October 23, 2026
 
 The repository now has a concise project overview, architecture and usage guides, current screenshots, an indexed historical archive and automated GitHub checks. Private settings, personal captures/imports, environments, downloaded models and runtime state remain ignored. A credential-pattern scan found no matches in 381 historical blobs; the tracked-file and documentation check reports **164 files, 100 local links, 0 failures**.

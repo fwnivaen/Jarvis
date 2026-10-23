@@ -66,3 +66,7 @@ Focus stores numeric/boolean session state and transiently compares foreground i
 ## Scope
 
 This is a personal local application, not a multi-tenant service. It accepts one user request at a time, with parallelism inside that request. Screen observation is implemented; unrestricted computer control, email sending, trading and unrelated business-service adapters are outside the connected tool set. Historical visual briefs and earlier measurements are retained in [archive/](archive/), separate from [current verification](ultra-verification.md).
+
+## Durable Work-tab workflows
+
+The Work workspace now has an explicit LangGraph route alongside ordinary chat. `workflow_graph.py` owns graph structure; `workflow_runtime.py` adapts the existing model connection, validators and read-only tool subset. The existing HTTP server exposes start/cancel/retry actions and bounded reconnectable event streams. SQLite saves graph state and per-agent budgets. Both routes share `BRAIN_SLOTS`, so a background workflow cannot add concurrent request-level model spending. The original chat crew and quick route remain available. See [workflow setup and boundaries](WORKFLOWS.md) and [measured selection](framework-evaluation.md).

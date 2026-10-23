@@ -84,6 +84,7 @@ import ultra
 import ultra_memory
 import ultra_documents
 import ultra_tools
+import workflow_runtime
 WATCH = watch.Watch()
 FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
@@ -135,6 +136,7 @@ LAUNCH_ID = secrets.token_hex(8)
 UI_ASSETS = {
     "ultra-ui.js": "text/javascript",
     "agents.js": "text/javascript", "agents.css": "text/css",
+    "workflows.js": "text/javascript", "workflows.css": "text/css",
     "theme.js": "text/javascript", "ui.js": "text/javascript",
     "tokens.css": "text/css", "app.css": "text/css", "open-deck.css": "text/css",
     "Inter.woff2": "font/woff2", "JetBrainsMono.woff2": "font/woff2",
@@ -863,6 +865,8 @@ TOOLS = ultra_tools.Registry(ultra_settings, {
     "screen_watch_status": WATCH.state, "screen_watch_control": tool_screen_control,
     "document_import": tool_document_import})
 ULTRA.tool_layer = TOOLS
+WORKFLOWS = workflow_runtime.WorkflowService(ultra_settings, TOOLS, ULTRA.bridge_factory,
+    BRAIN_SLOTS, SYSTEM_PROMPT)
 
 
 class GalaxyServer(ThreadingHTTPServer):
@@ -914,6 +918,21 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({"answer": "Local requests only.", "nodes": []}, 403)
             return
         path = urllib.parse.urlsplit(self.path).path
+        if path in ("/workflows", "/workflows/run", "/workflows/events"):
+            try:
+                if path == "/workflows":
+                    value = WORKFLOWS.catalog()
+                else:
+                    query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+                    run_id = query.get("id", [""])[0]
+                    value = WORKFLOWS.detail(run_id)
+                    if path == "/workflows/events" and not head:
+                        self.workflow_events(run_id, value)
+                        return
+                self.send_bytes(json.dumps(value).encode(), "application/json", head=head)
+            except workflow_runtime.WorkflowError as error:
+                self.send_json({"error": True, "answer": str(error)}, error.status)
+            return
         if path == "/agents":
             settings, notice = ultra.Settings.read(ULTRA_CONFIG_PATH)
             self.send_bytes(json.dumps(ULTRA.public_state(settings, notice)).encode(), "application/json", head=head)
@@ -1011,8 +1030,36 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_bytes(target.read_bytes(), mime, head=head)
 
+    def workflow_events(self, run_id, value):
+        if not WORKFLOWS.stream_slots.acquire(blocking=False):
+            self.send_json({"error": True, "answer": "Too many activity connections."}, 429)
+            return
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
+            end = time.monotonic() + workflow_runtime.STREAM_CONNECTION_S
+            while True:
+                # Full current snapshot makes reconnects and missed event IDs safe.
+                data = "id: " + str(value["sequence"]) + "\nevent: state\ndata: " + json.dumps(value) + "\n\n"
+                self.wfile.write(data.encode())
+                self.wfile.flush()
+                if value["status"] in workflow_runtime.TERMINAL or time.monotonic() >= end:
+                    break
+                with WORKFLOWS.condition:
+                    WORKFLOWS.condition.wait(timeout=workflow_runtime.STREAM_WAIT_S)
+                value = WORKFLOWS.detail(run_id)
+        except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+            pass
+        finally:
+            WORKFLOWS.stream_slots.release()
+
     def do_POST(self):
-        if self.path not in ("/tools/call", "/memory/import", "/memory/preferences", "/note", "/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop", "/voice/render", "/voice/release"):
+        if self.path not in ("/workflows/start", "/workflows/cancel", "/workflows/retry", "/tools/call", "/memory/import", "/memory/preferences", "/note", "/eyes", "/relief", "/attention", "/watch", "/look", "/focus", "/chat", "/remember", "/see", "/model", "/preflight/cleanup", "/voice/start", "/voice/poll", "/voice/stop", "/voice/render", "/voice/release"):
             self.send_json({"answer": "Not found.", "nodes": []}, 404)
             return
         if not self.local_request():
@@ -1026,6 +1073,26 @@ class Handler(BaseHTTPRequestHandler):
             if not 0 < length <= (MAX_IMPORT_REQUEST_BYTES if self.path == "/memory/import" else MAX_SEE_REQUEST_BYTES if self.path in ("/see", "/look") else note_store.MAX_NOTE_REQUEST_BYTES if self.path == "/note" else MAX_VOICE_REQUEST_BYTES if self.path == "/voice/render" else MAX_REQUEST_BYTES):
                 raise ValueError
             body = json.loads(self.rfile.read(length))
+            if self.path in ("/workflows/start", "/workflows/cancel", "/workflows/retry"):
+                if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
+                    self.send_json({"error": True, "answer": "Local viewer requests only."}, 403)
+                    return
+                try:
+                    if not isinstance(body, dict):
+                        raise workflow_runtime.WorkflowError("Send a workflow request.")
+                    allowed = {"question", "workflow"} if self.path == "/workflows/start" else {"id"}
+                    if set(body) - allowed:
+                        raise workflow_runtime.WorkflowError("Unknown workflow request field.")
+                    if self.path == "/workflows/start":
+                        result = WORKFLOWS.start(body.get("question"), body.get("workflow", "research"))
+                    elif self.path == "/workflows/retry":
+                        result = WORKFLOWS.start(resume=body.get("id"))
+                    else:
+                        result = WORKFLOWS.cancel(body.get("id"))
+                    self.send_json(result, 202)
+                except workflow_runtime.WorkflowError as error:
+                    self.send_json({"error": True, "answer": str(error)}, error.status)
+                return
             if self.path in ("/tools/call", "/memory/import", "/memory/preferences"):
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
                     self.send_json({"error": True, "answer": "Local viewer requests only."}, 403)
@@ -1222,6 +1289,7 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global NOTES, ACTIVE_BRAIN
     initialize_config()
+    WORKFLOWS.redactor = workflow_runtime.Redactor(value for key, value in load_config().items() if "key" in key.lower())
     ACTIVE_BRAIN = None
     refresh_router_catalog(load_config())
     try:
@@ -1244,6 +1312,7 @@ def main():
     except KeyboardInterrupt:
         print("\nJarvis stopped.")
     finally:
+        WORKFLOWS.close()
         ULTRA.close()
         MEMORY.close()
         FOCUS.close()

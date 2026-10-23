@@ -126,12 +126,14 @@
   $('detail-open').onclick=()=>{const node=binding?.selected();if(node)openNote(node);};
   function workspaceFrame(title,description){const view=$('workspace-view');view.replaceChildren();const body=create('div','workspace-body'),head=create('div','workspace-header'),titles=create('div');titles.append(create('h1',null,title),create('p',null,description));const back=create('button','control','Back to galaxy');back.onclick=()=>setWorkspace('galaxy');head.append(titles,back);body.append(head);view.append(body);return body;}
   function setWorkspace(name){
+    window.JarvisWorkflows?.dispose();
     currentWorkspace=name;document.body.dataset.workspace=name;window.JarvisGalaxy?.setVisible(name==='galaxy');hidePreview();hideInsight();clearInterval(workTimer);workTimer=null;
     for(const selector of ['.sidebar','#graph','.scene-controls','#jarvis-orb-host','#detail','#chat','#galaxy-tree']){const element=document.querySelector(selector);if(element){element.inert=name!=='galaxy';if(name==='galaxy')element.removeAttribute('aria-hidden');else element.setAttribute('aria-hidden','true');}}
     $('workspace-view').hidden=name==='galaxy';$('breadcrumb').textContent='/ '+({galaxy:'Knowledge Galaxy',brain:'Project Brain',work:'Mission Control',integrations:'Integrations'}[name]||name.charAt(0).toUpperCase()+name.slice(1));
     document.querySelectorAll('[data-workspace]').forEach(button=>button.setAttribute('aria-selected',String(button.dataset.workspace===name)));
     if(name==='galaxy'){window.JarvisGalaxy?.wake();return;}
     if(['notes','library','brain'].includes(name)){renderNotes(name);return;}
+    if(['agents','studio'].includes(name)){window.JarvisWorkflows?.mount(workspaceFrame('Agent workflows','Real execution, saved progress and verified findings.'));return;}
     if(name==='work'){renderWork();workTimer=setInterval(updateWork,SETTINGS.statusMs);return;}
     if(name==='settings'||name==='voice'){renderSettings(name);return;}
     if(name==='integrations'){renderIntegrations();return;}
@@ -192,7 +194,7 @@
     };
     actions.append(confirm,cancel);card.append(actions);$('stage').append(card);approval=card;$('jarvis-orb-host').inert=false;$('jarvis-orb-host').removeAttribute('aria-hidden');window.JarvisOrb?.setStatus('AWAITING APPROVAL',{target:'#approval-card'});confirm.focus();
   }
-  function renderWork(){const body=workspaceFrame('Mission Control','Live state from your local JARVIS services.');row(body,'Focus session','Server-owned timer and drift accounting',button('Open Focus',()=>{setWorkspace('galaxy');window.JarvisFocus?.expand?.();}));row(body,'Eyes','Local posture tracking; camera stays off until you enable it.',button('Toggle Eyes',()=>$('eyes').click()));row(body,'Screen watch','One Entire Screen share for watching and questions.',button('Toggle watch',()=>$('screen').click()));row(body,'Current activity','',create('output','service-state'));body.lastChild.lastChild.id='work-activity';row(body,'Focus state','',create('output','service-state'));body.lastChild.lastChild.id='work-focus';row(body,'Watch state','',create('output','service-state'));body.lastChild.lastChild.id='work-watch';row(body,'Agents and automations','No agent runner or automation service is connected.',button('Connection details',()=>setWorkspace('agents')));updateWork();}
+  function renderWork(){const body=workspaceFrame('Mission Control','Live state from your local JARVIS services.');window.JarvisWorkflows?.mount(body);row(body,'Focus session','Server-owned timer and drift accounting',button('Open Focus',()=>{setWorkspace('galaxy');window.JarvisFocus?.expand?.();}));row(body,'Eyes','Local posture tracking; camera stays off until you enable it.',button('Toggle Eyes',()=>$('eyes').click()));row(body,'Screen watch','One Entire Screen share for watching and questions.',button('Toggle watch',()=>$('screen').click()));row(body,'Current activity','',create('output','service-state'));body.lastChild.lastChild.id='work-activity';row(body,'Focus state','',create('output','service-state'));body.lastChild.lastChild.id='work-focus';row(body,'Watch state','',create('output','service-state'));body.lastChild.lastChild.id='work-watch';updateWork();}
   async function updateWork(){try{[focusState,watchState]=await Promise.all([request('/focus'),request('/watch')]);if($('work-focus'))$('work-focus').textContent=focusState.active?(focusState.paused?'Paused':focusState.lock_deferred?'Waiting to lock':focusState.drifting?'Drifting':'Focused'):'No active session';if($('work-watch'))$('work-watch').textContent=watchState.active?'Watching':'Off';if($('work-activity'))$('work-activity').textContent=$('voice-status').textContent||'Ready';}catch{if($('work-activity'))$('work-activity').textContent='Local server unavailable';}}
   function settingSelect(parent,title,description,key,options){const select=create('select');select.setAttribute('aria-label',title);options.forEach(([value,text])=>{const option=create('option',null,text);option.value=value;select.append(option);});select.value=preferences[key]||options[0][0];select.onchange=()=>{preferences[key]=select.value;applyPreferences();};row(parent,title,description,select);}
   function renderSettings(kind){
@@ -269,6 +271,8 @@
   window.JarvisUI={
     connect(api){binding=api;rebuildTree();applyPreferences();refreshSystem();},
     async refreshGraph(){const data=await request('/notes/graph');binding?.replaceGraph(data);rebuildTree();refreshSystem();},
+    sourceLabel(id){return notes().find(node=>node.id===id)?.label||'Note '+id;},
+    openSource(id){const node=notes().find(node=>node.id===id);if(!node)return false;openNote(node);return true;},
     isPinned(node){return Boolean(pins[noteKey(node)]);},
     openPalette,openMention,openNote,setWorkspace,insight,selectNote,setBriefing,toggleFullView,
     onBackend(available){backendAvailable=Boolean(available);connectionState();},

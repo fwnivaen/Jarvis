@@ -17,6 +17,7 @@ from pathlib import Path
 
 CLIENT_VERSION = "1.0.0"
 RPC_TIMEOUT_S = 10
+CANCEL_POLL_S = 0.1
 INTERRUPT_TIMEOUT_S = 2
 SHUTDOWN_TIMEOUT_S = 2
 MAX_MESSAGE_BYTES = 2_000_000
@@ -257,7 +258,22 @@ class CodexBridge:
                 raise BridgeError("unavailable") from None
 
     def complete(self, *, model, effort, system, payload, schema, deadline, observer, image=None,
-                 tools=None, tool_handler=None):
+                 tools=None, tool_handler=None, cancel_event=None):
+        def receive(channel):
+            while True:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise BridgeError("cancelled")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise BridgeError("timeout")
+                try:
+                    return channel.get(timeout=min(remaining, CANCEL_POLL_S) if cancel_event is not None else remaining)
+                except queue.Empty:
+                    if cancel_event is None:
+                        raise BridgeError("timeout") from None
+
+        if cancel_event is not None and cancel_event.is_set():
+            raise BridgeError("cancelled")
         self.start(deadline)
         catalog = self._models.get(model)
         if model not in VERIFIED_MODELS or not catalog:
@@ -278,7 +294,7 @@ class CodexBridge:
                  if tools and tool_handler else "No tools or actions are permitted."), "serviceName": "jarvis_ultra"}
             if tools and tool_handler:
                 params["dynamicTools"] = tools
-            started = self._rpc("thread/start", params, deadline)
+            started = self._rpc("thread/start", params, min(deadline, time.monotonic() + RPC_TIMEOUT_S))
             if started.get("model", model) != model:
                 raise BridgeError("model_mismatch")
             thread_id = started["thread"]["id"]
@@ -291,12 +307,12 @@ class CodexBridge:
                 import base64
                 inputs.append({"type": "image", "url": "data:image/jpeg;base64," + base64.b64encode(image).decode("ascii")})
             turn = self._rpc("turn/start", {"threadId": thread_id, "model": model, "effort": effort,
-                "summary": "none", "input": inputs, "outputSchema": schema}, deadline)
+                "summary": "none", "input": inputs, "outputSchema": schema}, min(deadline, time.monotonic() + RPC_TIMEOUT_S))
             turn_id = turn["turn"]["id"]
             answer = None
             while True:
                 try:
-                    kind, data = events.get(timeout=max(0, deadline - time.monotonic()))
+                    kind, data = receive(events)
                 except queue.Empty:
                     raise BridgeError("timeout") from None
                 if kind == "usage":
@@ -319,7 +335,7 @@ class CodexBridge:
                                 delivered.put((False, None))
                         threading.Thread(target=invoke_tool, daemon=True).start()
                         try:
-                            success, result = delivered.get(timeout=max(0, deadline - time.monotonic()))
+                            success, result = receive(delivered)
                         except queue.Empty:
                             raise BridgeError("timeout") from None
                         if not success:

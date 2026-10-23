@@ -14,3 +14,7 @@ Rendering libraries, fonts and posture assets are bundled for local use. Their u
 | Face Landmarker float16 v1 / Pose Landmarker Lite float16 v1 | Google model distributions; [face guide](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker), [pose guide](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker) | See the upstream model documentation and retained distribution notices |
 
 Optional Python integrations are pinned in [requirements-ultra.txt](requirements-ultra.txt) and installed into a local virtual environment. They are not vendored here. The optional `BAAI/bge-small-en-v1.5` embedding is downloaded during setup and excluded from Git. See the [Ultra guide](ULTRA-JARVIS.md) for official dependency documentation and verification details.
+
+## Workflow runtime
+
+LangGraph 1.2.16 and langgraph-checkpoint-sqlite 3.1.2 are installed dependencies, not vendored framework source. Both are Copyright (c) 2024 LangChain, Inc., MIT licensed: [LangGraph notice](docs/licenses/langgraph-MIT.txt), [SQLite saver notice](docs/licenses/langgraph-checkpoint-sqlite-MIT.txt). Transitive distributions retain their own license files. The JARVIS adapter and Work-tab console are project code. No AutoGen, Flowise, or hosted Studio code was copied. See the [upstream review](docs/framework-evaluation.md) for separate Studio and Flowise commercial licensing boundaries.
