@@ -7,6 +7,7 @@
 | [Agent workflows](WORKFLOWS.md) | Launch, monitor, cancel and recover LangGraph work inside JARVIS |
 | [Galaxy agent visuals](agent-visuals.md) | Compact three-agent signals, state mapping, screenshots and visual test instructions |
 | [Framework evaluation](framework-evaluation.md) | Source inspection, selection, baseline, live trials and bounded stress results |
+| [Remote execution investigation](remote-execution-recommendation.md) | Code-grounded feasibility, remote computers/live viewing, candidate comparison, costs and a proposed proof of concept |
 | [Architecture](ARCHITECTURE.md) | Request flow, module boundaries, validation and failure semantics |
 | [Usage](USAGE.md) | Notes, voice, Focus, Eyes and screen-watch controls |
 | [Current verification](ultra-verification.md) | Actual test results, live trials and known limits |
