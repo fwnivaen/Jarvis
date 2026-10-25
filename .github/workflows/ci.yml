@@ -49,8 +49,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - name: Build desktop, speech and screen-watch helpers
+      - name: Build speech and screen-watch helpers
         run: |
-          sh native/build_desktop.sh
           sh native/build_voice.sh
           sh native/build_watch.sh

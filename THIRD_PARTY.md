@@ -24,7 +24,3 @@ LangGraph 1.2.16 and langgraph-checkpoint-sqlite 3.1.2 are installed dependencie
 Deep Agents 0.7.32 and GEPA 0.1.4 are optional, separately installed distributions: [Deep Agents MIT notice](docs/licenses/deepagents-MIT.txt), [GEPA MIT notice](docs/licenses/gepa-MIT.txt). Their independent hash locks and transitive package provenance are in [the execution manifest](dependencies/execution-manifest.json) and [package inventory](dependencies/execution-packages.json). Existing requirements are unchanged. No optimizer/framework source is vendored.
 
 The prepared browser worker selects the official Selenium Chromium image by digest. The pinned docker-selenium source declares Apache 2.0: [license copy](docs/licenses/selenium-Apache-2.0.txt). Image components retain their respective notices. Webtop was reviewed but is not selected or installed. These references do not establish a deployed or validated browser service.
-
-## Atticus Mac feature reference
-
-[Atticus Mac](https://github.com/SaarthurR/atticus-mac), by SaarthurR, was reviewed at commit `c7ab0370c4832507d54a8f731d57dc023e34c8fa` as a feature reference for local fast commands, explicit routines, global push-to-talk and reviewed dictation. Jarvis implements these within its own Python/Swift architecture and retains its Codex / ChatGPT provider. Atticus's monolithic Claude-oriented runtime and installer are not dependencies. Its [MIT license](docs/licenses/atticus-mac-LICENSE.txt) is retained for attribution.

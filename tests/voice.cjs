@@ -242,9 +242,3 @@ const wakeStop=setup();wakeStop.click();wakeStop.speech[0].onend();wakeStop.voic
 wakeStop.voice.speak('A spoken response');const wakeCancels=wakeStop.cancels();
 wakeStop.current().result([['stop',false]]);assert.ok(wakeStop.cancels()>wakeCancels);wakeStop.tick(FINISH);assert.deepEqual(wakeStop.sent,[]);
 console.log('WAKE PASS: explicit-mic-only preference, ambient rejection, exact phrase, stripped/cumulative/interim commands, timeout, stop, hold-Space and local camera commands.');
-
-const commandHold=setup('?mute=1');commandHold.context.window.JarvisAssistant={matches:text=>/^open notes/i.test(text)};commandHold.mic();
-commandHold.current().result([['Open Notes',false]]);commandHold.voice.finishHold();assert.deepEqual(commandHold.sent,[]);assert.match(commandHold.el('voice-status').textContent,/Review/);
-const commandFinal=setup('?mute=1');commandFinal.context.window.JarvisAssistant={matches:text=>/^open notes/i.test(text)};commandFinal.mic();
-commandFinal.current().result([['Open Notes',true]]);commandFinal.tick(FINISH);assert.deepEqual(commandFinal.sent,['Open Notes']);assert.equal(commandFinal.voice.isEnabled(),false);
-console.log('VOICE COMMAND CONFIRMATION PASS: partial commands require review; only final text can run actions.');

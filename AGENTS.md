@@ -11,4 +11,4 @@
 
 ## Desktop acceptance checks
 
-Focus has been removed at the user's request. Do not restore its timer, foreground monitoring, tool endpoints, card, or probe. Verify `/focus` returns 404 and test the Mac assistant dashboard in a visible browser. Run full `python3 preflight.py` and report its summary. Native microphone and Accessibility permissions need user acceptance; report missing permissions honestly.
+Focus has been removed at the user's request. Do not restore its timer, foreground monitoring, tool endpoints, card, or probe. Verify `/focus` returns 404 and test the original Jarvis dashboard in a visible browser. Run full `python3 preflight.py` and report its summary. Native microphone and Accessibility permissions need user acceptance; report missing permissions honestly.

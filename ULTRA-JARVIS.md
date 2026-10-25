@@ -16,7 +16,7 @@ python3 tools/ultra_settings.py enable
 
 Open `http://127.0.0.1:4700`. If that port is already occupied, stop the existing Jarvis process in its own Terminal before starting the upgraded server. Codex uses its existing ChatGPT sign-in; no API key is added or printed. If Codex is not signed in on another Mac, use its normal `codex login` flow.
 
-Setup requires Python 3.11 or newer. It can also locate an available bundled Codex Python and never installs packages globally. To choose explicitly, pass `python3 tools/setup_ultra.py --python /absolute/path/to/python3.12`. The first setup downloads a public embedding model; search after setup uses the local cache. `--no-model` skips that download, retaining keyword fallback. The launchers use Apple's command-line tools to compile the Desktop and Voice helpers. You can instead run `.local/ultra-full-venv/bin/python build.py` followed by `.local/ultra-full-venv/bin/python server.py` and build native helpers separately.
+Setup requires Python 3.11 or newer. It can also locate an available bundled Codex Python and never installs packages globally. To choose explicitly, pass `python3 tools/setup_ultra.py --python /absolute/path/to/python3.12`. The first setup downloads a public embedding model; search after setup uses the local cache. `--no-model` skips that download, retaining keyword fallback. Native speech and screen-watch helpers can be built separately with Apple's command-line tools. You can instead run `.local/ultra-full-venv/bin/python build.py` followed by `.local/ultra-full-venv/bin/python server.py` and build native helpers separately.
 
 To return to the existing route:
 
@@ -127,7 +127,7 @@ python3 tools/check_ultra.py --embeddings
 python3 preflight.py
 ```
 
-Run the second command with the upgraded server active. For the review server use `python3 preflight.py --url http://127.0.0.1:4701`. Inspect the Mac assistant dashboard visibly, then test global hotkeys, microphone and Accessibility actions on an unlocked Mac. Focus and its probe are removed. Test evidence and the current summary lines are in `docs/ultra-verification.md`.
+Run the second command with the upgraded server active. For the review server use `python3 preflight.py --url http://127.0.0.1:4701`. Inspect the original Jarvis dashboard visibly. Focus and its probe are removed. Test evidence and the current summary lines are in `docs/ultra-verification.md`.
 
 ## Verified dependencies and APIs — October 22, 2026
 

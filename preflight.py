@@ -416,18 +416,19 @@ class Harness:
         require(result.returncode == 0, 'offline regression tests failed; run the README test command for details')
         return 'offline regression tests passed without network or real brain calls'
 
-    def assistant_services(self):
-        status, value = self.json_request('/assistant')
-        require(status == 200 and value.get('backend') == 'codex-chatgpt', 'Mac assistant unavailable')
-        require(isinstance(value.get('shortcuts'), list), 'Shortcut catalog unavailable')
-        require(self.request('/focus')[0] == 404, 'Retired Focus endpoint is still active')
-        return 'Mac assistant and shortcut catalog available; Focus removed'
+    def retired_features(self):
+        for path in ('/focus', '/focus/diag', '/assistant', '/assistant.js', '/assistant.css'):
+            require(self.request(path)[0] == 404, 'Removed feature is still served: ' + path)
+        status, value = self.json_request('/system')
+        require(status == 200 and value['capabilities']['notes'], 'Original Jarvis services unavailable')
+        require(not any(value['capabilities'].get(key) for key in ('focus', 'shortcuts', 'dictation')), 'Removed feature still advertised')
+        return 'Original Jarvis services available; Focus and Mac assistant removed'
 
     def execute(self):
         print('Jarvis preflight — ' + ('QUICK: live brain chains will be WARN' if self.quick else 'FULL LIVE RUN'), flush=True)
         self.run('Offline regressions', self.offline)
         self.run('Server and viewer', self.viewer)
-        self.run('Mac assistant services', self.assistant_services)
+        self.run('Removed features', self.retired_features)
         self.run('Graph data', self.load_graph)
         self.run('/model exact swaps and reset', self.model_swaps)
         self.run('/chat live answer', self.chat, brain=True)

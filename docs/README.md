@@ -14,11 +14,11 @@
 | [Execution contracts](upgrade-contracts.md) | Ownership, scoped tools, workspace isolation and learning boundaries |
 | [Evaluation protocol](upgrade-evaluation.md) | Topic-disjoint five-arm comparison, costs, validators and promotion criteria |
 | [Architecture](ARCHITECTURE.md) | Request flow, module boundaries, validation and failure semantics |
-| [Usage](USAGE.md) | Notes, voice, Mac commands, Eyes and screen-watch controls |
+| [Usage](USAGE.md) | Notes, voice, Eyes and screen-watch controls |
 | [Current verification](ultra-verification.md) | Actual test results, live trials and known limits |
 | [Third-party notices](../THIRD_PARTY.md) | Bundled libraries, fonts and vision assets |
 | [Historical records](archive/README.md) | Earlier implementation reports and measurements |
 
 The current verification record takes precedence over historical counts or acceptance claims. Private configuration, notes created during use, downloaded models and runtime traces do not belong in documentation or commits.
 
-[Mac assistant integration and acceptance checks](mac-assistant.md) · October 25 update: Focus is retired; older Focus evidence is historical.
+Focus is retired; older Focus evidence is historical.

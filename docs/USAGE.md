@@ -28,12 +28,6 @@ The orb reflects listening, model activity, actual speech, confirmations and con
 
 For native speech recognition, build `sh native/build_voice.sh`. The helper requires an available on-device English recognizer and macOS microphone/speech permissions. A Dictation-disabled error requires enabling Dictation in System Settings. Permission grants belong to the launcher or helper named by macOS. Browser recognition may use browser speech services. Audible output must be checked on the Mac itself.
 
-## Mac assistant
-
-Use the ⌘ rail button for quick commands, saved routines, dictation review and recent action results. Hold **Control + Option + Space** in any app to ask Jarvis through your existing Codex / ChatGPT connection. Hold **Control + Option + D** to dictate; review the text before Copy or Insert. The normal launchers build and open Jarvis Desktop. If running the Python server directly, build `sh native/build_desktop.sh` and `sh native/build_voice.sh`, then use **Open Jarvis Desktop** in the dashboard.
-
-Try “Open Safari”, “Move window left”, “Play music”, or “When I say writing time, open Notes and then open Safari”. Save routines without running them; say the saved phrase to run it. Start existing durable agent work with “Background task: compare the pricing notes” and follow it in **Work**. [All commands, permissions, and current verification](mac-assistant.md).
-
 Focus and its activity tracking are removed. Old numeric ledgers are not loaded or updated.
 
 ## Eyes and screen watch
@@ -50,6 +44,6 @@ Screen watch uses one Entire Screen share selected through the browser. Local th
 
 Run `python3 tools/check_repo.py` and `python3 tools/check_ultra.py --embeddings` for repository and regression checks. With the server active, run full `python3 preflight.py`. It makes real model calls and creates, recalls and removes a disposable capture. API-backend skips are warnings.
 
-Verify the Mac assistant dashboard visibly in Chrome. Native hotkeys, on-device microphone recognition, Accessibility insertion and audible output need an unlocked Mac and physical acceptance checks; automated fixtures do not establish those results.
+Verify the original Jarvis dashboard visibly in Chrome. On-device microphone recognition and audible output need physical acceptance checks; automated fixtures do not establish those results.
 
 If port 4700 is occupied, stop the existing Jarvis process in its own terminal. If an optional search dependency/model fails, inspect the fixed status notice and keyword fallback. Never paste credentials into an issue or commit local configuration, runtime journals or personal notes.
