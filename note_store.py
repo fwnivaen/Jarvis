@@ -19,6 +19,11 @@ def revision(text, identity=""):
     return hashlib.sha256(identity.encode("utf-8") + b"\0" + text.encode("utf-8")).hexdigest()
 
 
+def stable_id(identity):
+    """Opaque vault-relative identity survives numeric graph rebuilds."""
+    return hashlib.sha256(identity.encode('utf-8')).hexdigest()
+
+
 def locate(note, directory):
     root = Path(directory).resolve()
     relative = note.get("_path")
@@ -40,7 +45,7 @@ def read(note, directory):
     title = text.splitlines()[0][2:].strip() or path.stem if path.parent.name in ("captures", "imports") and text.startswith("# ") else path.stem
     identity = path.relative_to(Path(directory).resolve()).as_posix()
     return dict(id=note["id"], title=title, group=note["group"],
-                text=text, revision=revision(text, identity), edited_at=path.stat().st_mtime)
+                text=text, stable_id=stable_id(identity), revision=revision(text, identity), edited_at=path.stat().st_mtime)
 
 
 def save(note, directory, text, expected_revision):

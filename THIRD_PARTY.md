@@ -18,3 +18,9 @@ Optional Python integrations are pinned in [requirements-ultra.txt](requirements
 ## Workflow runtime
 
 LangGraph 1.2.16 and langgraph-checkpoint-sqlite 3.1.2 are installed dependencies, not vendored framework source. Both are Copyright (c) 2024 LangChain, Inc., MIT licensed: [LangGraph notice](docs/licenses/langgraph-MIT.txt), [SQLite saver notice](docs/licenses/langgraph-checkpoint-sqlite-MIT.txt). Transitive distributions retain their own license files. The JARVIS adapter and Work-tab console are project code. No AutoGen, Flowise, or hosted Studio code was copied. See the [upstream review](docs/framework-evaluation.md) for separate Studio and Flowise commercial licensing boundaries.
+
+## Gated execution helpers
+
+Deep Agents 0.7.32 and GEPA 0.1.4 are optional, separately installed distributions: [Deep Agents MIT notice](docs/licenses/deepagents-MIT.txt), [GEPA MIT notice](docs/licenses/gepa-MIT.txt). Their independent hash locks and transitive package provenance are in [the execution manifest](dependencies/execution-manifest.json) and [package inventory](dependencies/execution-packages.json). Existing requirements are unchanged. No optimizer/framework source is vendored.
+
+The prepared browser worker selects the official Selenium Chromium image by digest. The pinned docker-selenium source declares Apache 2.0: [license copy](docs/licenses/selenium-Apache-2.0.txt). Image components retain their respective notices. Webtop was reviewed but is not selected or installed. These references do not establish a deployed or validated browser service.

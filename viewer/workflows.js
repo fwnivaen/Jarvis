@@ -1,7 +1,7 @@
 /* Real LangGraph execution snapshots; no fabricated agent activity. */
 (() => {
   'use strict';
-  const SETTINGS=Object.freeze({refreshMs:4000,requestMs:10000,maxQuestion:2000,recentEvents:30,secondsDigits:1});
+  const SETTINGS=Object.freeze({refreshMs:4000,requestMs:10000,maxQuestion:2000,recentEvents:30,secondsDigits:1,requestBytes:12});
   const TERMINAL=new Set(['complete','failed','cancelled','interrupted']);
   const STEPS=['retrieve','assign','workers','review','complete'];
   const LABELS={retrieve:'Retrieve sources',assign:'Assign work',workers:'Analyze',review:'Verify & answer',complete:'Complete'};
@@ -24,6 +24,8 @@
     question.setAttribute('aria-label','Workflow task');question.placeholder='Compare Menu Pricing, Opening Checklist and Launch Campaign. Give three priorities with citations.';
     select.setAttribute('aria-label','Workflow type');start.type='submit';
     const controls=make('div','workflow-controls');controls.append(select,start);form.append(question,controls);
+    let submission=null;
+    const resetSubmission=()=>{submission=null;};question.addEventListener('input',resetSubmission);select.addEventListener('change',resetSubmission);
     const notice=make('p','workflow-notice');notice.setAttribute('role','status');
     const privacy=make('p','workflow-privacy','Read-only analysis of your notes. Activity and saved work stay local; model calls use your existing signed-in backend.');
     const layout=make('div','workflow-layout'),history=make('aside','workflow-history'),detail=make('div','workflow-detail');
@@ -49,10 +51,11 @@
         const li=make('li',null,LABELS[step]);li.dataset.state=run.phase===step?'current':index<STEPS.indexOf(run.phase)?'done':'pending';progress.append(li);
       }detail.append(progress);
       const actions=make('div','workflow-controls');
-      if(['running','cancelling'].includes(run.status)){const cancel=make('button','control','Cancel workflow');cancel.type='button';cancel.disabled=run.status==='cancelling';cancel.onclick=()=>act('cancel');actions.append(cancel);}
+      if(run.capabilities?.cancel!==false&&['running','cancelling'].includes(run.status)){const cancel=make('button','control','Cancel workflow');cancel.type='button';cancel.disabled=run.status==='cancelling';cancel.onclick=()=>act('cancel');actions.append(cancel);}
       if(run.can_retry){const retry=make('button','control','Retry saved work');retry.type='button';retry.onclick=()=>act('retry');actions.append(retry);}
-      if(TERMINAL.has(run.status)){const again=make('button','control','Use task again');again.type='button';again.onclick=()=>{question.value=run.question;select.value=run.workflow;question.focus();};actions.append(again);}
+      if(TERMINAL.has(run.status)){const again=make('button','control','Use task again');again.type='button';again.onclick=()=>{resetSubmission();question.value=run.question;select.value=run.workflow;question.focus();};actions.append(again);}
       detail.append(actions);
+      if(run.cleanup==='pending')detail.append(make('p','workflow-error','Cleanup pending · waiting for the underlying operation to settle.'));
       if(run.error)detail.append(make('p','workflow-error','Stopped: '+run.error.replaceAll('_',' ')+'.'+(run.can_retry?' Retry uses the remaining original budget.':' Start a new workflow for a fresh budget.')));
       const agents=make('div','workflow-agents');
       for(const agent of run.agents){
@@ -65,6 +68,7 @@
       }
       if(!run.agents.length)agents.append(make('p','workflow-empty','Waiting for the first agent assignment…'));
       detail.append(agents);
+      if(run.result?.sources_changed)detail.append(make('p','workflow-error','Source notes changed since this run. Its saved findings are historical.'));
       if(run.result){const output=make('section','workflow-answer');output.append(make('h3',null,'Completed answer'),make('p',null,run.result.answer));
         if(run.result.nodes.length){const sources=make('div','workflow-sources');sources.append(make('span',null,'Sources: '));for(const id of run.result.nodes){const link=make('a',null,window.JarvisUI?.sourceLabel(id)||'Note '+id);link.href='/note?id='+encodeURIComponent(id);link.onclick=event=>{if(window.JarvisUI?.openSource(id))event.preventDefault();};sources.append(link);}output.append(sources);}detail.append(output);}
       const activity=make('details','workflow-events');activity.open=true;activity.append(make('summary',null,'Execution activity'));
@@ -105,7 +109,7 @@
     }
     form.onsubmit=async event=>{
       event.preventDefault();start.disabled=true;message('Starting workflow…');
-      try{const run=await request('/workflows/start',{question:question.value,workflow:select.value});if(current!==generation)return;selected=run.id;render(run);connect(run.id);}
+      try{const fingerprint=JSON.stringify([question.value,select.value]);if(!submission||submission.fingerprint!==fingerprint){const bytes=new Uint8Array(SETTINGS.requestBytes);crypto.getRandomValues(bytes);submission={fingerprint,key:Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('')};}const run=await request('/workflows/start',{question:question.value,workflow:select.value,request_key:submission.key});if(current!==generation)return;selected=run.id;render(run);connect(run.id);}
       catch(error){message(error.message);}finally{if(current===generation)refresh();}
     };
     refresh();

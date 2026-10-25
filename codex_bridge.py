@@ -365,6 +365,22 @@ class CodexBridge:
                         if turn_id:
                             self._rpc("turn/interrupt", {"threadId": thread_id, "turnId": turn_id},
                                       time.monotonic() + INTERRUPT_TIMEOUT_S)
+                            # The RPC response acknowledges the request only.
+                            # Retain ownership until turn/completed, or terminate
+                            # the app-server process when confirmation is lost.
+                            if self._process is not None:
+                                settle_deadline = time.monotonic() + INTERRUPT_TIMEOUT_S
+                                while True:
+                                    try:
+                                        kind, _ = events.get(timeout=max(0, settle_deadline-time.monotonic()))
+                                    except queue.Empty:
+                                        self.close()
+                                        break
+                                    if kind == 'done':
+                                        break
+                                    if time.monotonic() >= settle_deadline:
+                                        self.close()
+                                        break
                         else:
                             # A lost turn/start reply can leave an unknown active turn.
                             self.close()

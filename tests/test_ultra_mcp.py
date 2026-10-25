@@ -39,17 +39,25 @@ class MCPTests(unittest.TestCase):
             async with Client(StdioServerParameters(command=sys.executable, args=[script, "--url", url])) as client:
                 tools = await client.list_tools()
                 self.assertEqual(len(tools.tools), 12)
+                self.assertTrue(all('ctx' not in item.input_schema.get('properties',{}) for item in tools.tools))
                 result = await client.call_tool("screen_watch_status", {})
                 self.assertFalse(result.is_error)
                 value = json.loads(next(item.text for item in result.content if item.type == "text"))
                 self.assertEqual(value, {"active": False, "card": False})
+                await client.call_tool("screen_watch_status", {})
         try:
             anyio.run(exercise)
         finally:
             http.shutdown()
             http.server_close()
             thread.join(timeout=2)
-        self.assertEqual(observed, [({"name": "screen_watch_status", "arguments": {}}, url, "1")])
+        self.assertEqual(len(observed),2)
+        session=observed[0][0]['operation_session']
+        self.assertRegex(session,r'^[a-f0-9]{24}$')
+        self.assertNotEqual(session,observed[1][0]['operation_session'])
+        for body,origin,mcp_header in observed:
+            self.assertRegex(body.pop('operation_session'),r'^[a-f0-9]{24}$')
+            self.assertEqual((body,origin,mcp_header),({"name":"screen_watch_status","arguments":{}},url,"1"))
 
 
 if __name__ == "__main__":

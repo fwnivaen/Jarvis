@@ -3,7 +3,7 @@
   'use strict';
   const SETTINGS=Object.freeze({preferenceKey:'jarvis.preferences.v2',pinKey:'jarvis.pins.v2',historyKey:'jarvis.notifications.v2',
     insightMs:8000,hoverMs:240,statusMs:5000,bootMs:2400,bootReducedMs:0,placementGap:16,placementStep:24,
-    paletteLimit:60,historyLimit:40,soundMs:90,soundGain:.018,soundHz:620,monoPlaces:0,sheetDismissPx:80,clockMs:1000,clockMinutes:1440,percent:100});
+    paletteLimit:60,historyLimit:40,soundMs:90,soundGain:.018,soundHz:620,monoPlaces:0,sheetDismissPx:80,clockMs:1000,clockMinutes:1440,percent:100,operationBytes:12});
   const $=id=>document.getElementById(id),create=(tag,className,text)=>{const e=document.createElement(tag);if(className)e.className=className;if(text!==undefined)e.textContent=text;return e;};
   const load=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key)||'null')||fallback;}catch{return fallback;}};
   const store=(key,value)=>{try{localStorage.setItem(key,JSON.stringify(value));}catch{}};
@@ -20,6 +20,7 @@
   const color=node=>window.JarvisGalaxy?.categoryColor(node.group)||getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   const announce=text=>{$('live-region').textContent=text;};
   const request=async(path,body)=>{const response=await fetch(path,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await response.json();if(!response.ok)throw Error(data.answer||data.text||'The local service is unavailable.');return data;};
+  function operationKey(){const bytes=new Uint8Array(SETTINGS.operationBytes);crypto.getRandomValues(bytes);return Array.from(bytes,value=>value.toString(16).padStart(2,'0')).join('');}
   function sound(){if(!preferences.sounds)return;try{const Audio=window.AudioContext||window.webkitAudioContext,ctx=new Audio(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=SETTINGS.soundHz;gain.gain.setValueAtTime(SETTINGS.soundGain,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+SETTINGS.soundMs/1000);osc.connect(gain).connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+SETTINGS.soundMs/1000);osc.onended=()=>ctx.close();}catch{}}
   function applyPreferences(){
     const light=preferences.theme==='light'||(preferences.theme==='system'&&matchMedia('(prefers-color-scheme: light)').matches);
@@ -184,11 +185,11 @@
   }
   function approveEdit(node,data,text,done){
     if(approval?.dataset.executing==='true'){announce('The approved save is still being verified.');return;}
-    if(approval)approval.remove();const card=create('section','approval-card material');card.id='approval-card';card.setAttribute('role','dialog');card.setAttribute('aria-label','Approve note edit');
+    if(approval)approval.remove();const operation_session=operationKey(),card=create('section','approval-card material');card.id='approval-card';card.setAttribute('role','dialog');card.setAttribute('aria-label','Approve note edit');
     card.append(create('div','eyebrow','Confirm'),create('h2',null,'Save changes?'),create('p',null,node.label+' · This replaces the current Markdown content. The file revision is checked before writing.'));
     const actions=create('div','card-actions'),confirm=create('button','primary-button','Save changes'),cancel=button('Not now',()=>{card.remove();approval=null;window.JarvisOrb?.setStatus(null);done?.();});
     confirm.onclick=async()=>{confirm.disabled=true;cancel.disabled=true;card.dataset.executing='true';window.JarvisOrb?.setStatus('EXECUTING',{progress:null,message:'Saving note'});
-      try{const result=await request('/note',{id:node.id,text,revision:data.revision,approved:true});if(result.verified!==true)throw Error('The saved result was not verified.');
+      try{const result=await request('/note',{id:node.id,text,revision:data.revision,approved:true,operation_session});if(result.verified!==true)throw Error('The saved result was not verified.');
         binding?.replaceGraph(result.graph);card.dataset.executing='false';window.JarvisOrb?.setStatus(null);card.replaceChildren(create('div','eyebrow','Verified'),create('h2',null,'Changes saved'),create('p',null,'Saved to your existing Markdown file and indexed for recall.'),button('Done',()=>{card.remove();approval=null;window.JarvisOrb?.setStatus(null);done?.();}));sound();announce('Saved and verified '+node.label);
       }catch(error){card.dataset.executing='false';card.append(create('p','answer-meta',error.message));confirm.disabled=false;cancel.disabled=false;window.JarvisOrb?.setStatus('ERROR',{message:error.message});}
     };
@@ -269,6 +270,7 @@
   }
   new MutationObserver(()=>{const text=$('brain-chip').textContent.replace(/\s*▾$/,'');$('command-model').textContent=text.replace(/^.*?·\s*/,'');window.JarvisOrb?.setModel(text);}).observe($('brain-chip'),{childList:true,characterData:true,subtree:true});
   window.JarvisUI={
+    operationKey,
     connect(api){binding=api;rebuildTree();applyPreferences();refreshSystem();},
     async refreshGraph(){const data=await request('/notes/graph');binding?.replaceGraph(data);rebuildTree();refreshSystem();},
     sourceLabel(id){return notes().find(node=>node.id===id)?.label||'Note '+id;},

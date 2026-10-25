@@ -815,6 +815,8 @@ class UltraJarvis:
                         "budget_exhausted": "The saved run has exhausted its original time budget. Start a fresh request."}
                     return self._result({"answer": messages.get(code, SAFE_ERROR), "about_notes": False, "nodes": [], "error": True})
                 finally:
+                    if self._tool_session:
+                        self._tool_session.close()
                     self.monitor.finish()
 
     def _result(self, value):

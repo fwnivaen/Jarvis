@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "checked": "2026-10-24",
+  "selection": "pinned PyPI releases; reference snapshots independently verified",
+  "sources": [
+    {
+      "repository": "https://github.com/langchain-ai/deepagents",
+      "reference_revision": "56b5db25ccb7be6c217ddd5575895af5c608b404",
+      "archived": false,
+      "maintenance_pushed_at": "2026-10-24T19:30:47Z",
+      "license": "MIT",
+      "selected": true,
+      "selected_package": "deepagents",
+      "selected_version": "0.7.32",
+      "reference_commit_verified": true,
+      "compatibility": "Real library fixture tests passed; reference source is not assumed identical to PyPI wheel"
+    },
+    {
+      "repository": "https://github.com/gepa-ai/gepa",
+      "reference_revision": "7af5f0c5c79fcc16b2d5248b187d0864683edd4d",
+      "archived": false,
+      "maintenance_pushed_at": "2026-10-22T22:25:09Z",
+      "license": "MIT",
+      "selected": true,
+      "selected_package": "gepa",
+      "selected_version": "0.1.4",
+      "reference_commit_verified": true,
+      "compatibility": "Real library fixture tests passed; reference source is not assumed identical to PyPI wheel"
+    },
+    {
+      "repository": "https://github.com/SeleniumHQ/docker-selenium",
+      "reference_revision": "7d9aaf4cd13f119dce64eb258d665149131de011",
+      "archived": false,
+      "maintenance_pushed_at": "2026-10-20T19:10:49Z",
+      "license": "Apache-2.0",
+      "selected": true,
+      "license_evidence": "LICENSE.md at pinned source revision links to the Apache License 2.0"
+    },
+    {
+      "repository": "https://github.com/linuxserver/docker-webtop",
+      "reference_revision": "4a9aa1e06f08717234680e81becfdc198baf2dab",
+      "archived": false,
+      "maintenance_pushed_at": "2026-10-22T18:36:50Z",
+      "license": "GPL-3.0",
+      "selected": false
+    }
+  ],
+  "images": [
+    {
+      "repository": "selenium/standalone-chromium",
+      "tag": "4.51.0-20261010",
+      "digest": "sha256:c7c17cd79c62819a8329df00e610dbc4073c279da034a6f37135d454eb0d8870",
+      "platforms": [
+        {
+          "architecture": "amd64",
+          "digest": "sha256:ba9dde71436cd1ffdae5ec783d0786742208b13211857e9ab52a4f695ba28e2b"
+        },
+        {
+          "architecture": "arm64",
+          "digest": "sha256:42ce9ea56fa20549d629fc5ecc65c0bc6e5b1fd2b342e5a0a6d2bab8cee1d440"
+        }
+      ],
+      "evidence": "Docker Hub API manifest metadata only; no local Docker runtime"
+    }
+  ],
+  "platforms": {
+    "core": "stdlib CPython 3.9+; Linux runtime/model not live-tested",
+    "helpers": "CPython 3.12 hash locks; macOS arm64 installed/tested; Linux arm64/amd64 binary-only hash resolution passed (dry-run only)",
+    "legacy": "requirements-ultra.txt unchanged; FastEmbed/Qdrant Linux/ARM runtime not verified"
+  },
+  "activation": {
+    "deepagents": false,
+    "remote_workspaces": false,
+    "outcome_collection": false,
+    "learning_promotion": false
+  }
+}

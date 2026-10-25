@@ -1,0 +1,24 @@
+[Unit]
+Description=Private JARVIS fixture browser worker
+After=docker.service network-online.target
+Requires=docker.service
+[Service]
+Type=simple
+# Trusted worker service owns Docker and systemd expiry timers. Agents do not.
+User=root
+WorkingDirectory=/opt/jarvis
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/jarvis/tools/run_remote_worker.py --config /etc/jarvis-worker/worker.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/jarvis-worker /run
+MemoryMax=256M
+TasksMax=64
+[Install]
+WantedBy=multi-user.target

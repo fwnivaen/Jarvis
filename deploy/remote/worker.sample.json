@@ -1,0 +1,10 @@
+{
+  "fixture_only": true,
+  "state_path": "/var/lib/jarvis-worker/workspaces.sqlite",
+  "bind": "127.0.0.1",
+  "port": 7443,
+  "worker_key": "OPERATOR_MUST_GENERATE_NEW_PRIVATE_32_BYTE_OR_LONGER_KEY",
+  "cert_file": "/etc/jarvis-worker/server.crt",
+  "key_file": "/etc/jarvis-worker/server.key",
+  "ca_file": "/etc/jarvis-worker/controller-ca.crt"
+}

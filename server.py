@@ -80,6 +80,7 @@ import focus
 
 import watch
 import note_store
+import native_tool_routes
 import ultra
 import ultra_memory
 import ultra_documents
@@ -802,7 +803,9 @@ def tool_notes_search(query):
     with INDEX_LOCK:
         for item in found:
             note = next(n for n in NOTES if n["id"] == item["id"])
-            item["revision"] = note_store.read(note, build.NOTES_DIR)["revision"]
+            current = note_store.read(note, build.NOTES_DIR)
+            item["revision"] = current["revision"]
+            item["stable_id"] = current["stable_id"]
             item["text"] = item["text"][:TOOL_NOTE_CHARS]
     return {"notes": found}
 
@@ -825,6 +828,41 @@ def tool_note_write(id, text, revision, _deadline=None):
     return {"saved": True, "note": tool_note_read(id)}
 
 
+def native_note_write(id, text, revision, _deadline=None):
+    with INDEX_LOCK:
+        if _deadline is not None and time.monotonic() >= _deadline:
+            raise ultra_tools.ToolError("Edit time budget exhausted.")
+        note = next(n for n in NOTES if n["id"] == id)
+        try:
+            result = note_store.save(note, build.NOTES_DIR, text, revision)
+        except note_store.NoteError as error:
+            raise ultra_tools.ToolError(str(error)) from None
+        note.update(label=result["title"], text=result["text"], excerpt=result["text"][:build.EXCERPT_CHARS], edited_at=result["edited_at"])
+        graph = build.make_graph(NOTES)
+        build.write_graph(graph)
+        return {"verified": True, "note": result, "graph": graph}
+
+
+def current_native_result(result, capture=False):
+    """A replay receipt cannot replace the UI with stale graph IDs/content."""
+    source = result.get("_source") if capture else result.get("note")
+    with INDEX_LOCK:
+        note = next((n for n in NOTES if n.get("_path") and note_store.stable_id(n["_path"]) == source["stable_id"]), None)
+        if note is None:
+            raise ultra_tools.ToolError("The earlier save completed, but its source is no longer indexed. Refresh your notes.")
+        current = note_store.read(note, build.NOTES_DIR)
+        if current["revision"] != source["revision"]:
+            raise ultra_tools.ToolError("The earlier save completed, but the note changed afterward. Reopen it before another edit.")
+        result = dict(result, graph=build.make_graph(NOTES))
+        if capture:
+            result.pop("_source", None)
+            parent = result.pop("_parent", None)
+            result.update(captured=note["id"], nodes=[note["id"]], parent=next((n["id"] for n in NOTES if (n.get("_path") and note_store.stable_id(n["_path"]) == parent) or (parent is None and n.get("capture_hub"))), None))
+        else:
+            result["note"] = current
+        return result
+
+
 def import_into_vault(path, deadline=None):
     with INDEX_LOCK:
         result = ultra_documents.import_document(path, build.NOTES_DIR, deadline=deadline)
@@ -843,6 +881,19 @@ def tool_document_import(filename, _deadline=None):
     if INBOX.is_symlink():
         raise ValueError
     return import_into_vault(INBOX / filename, deadline=_deadline)
+
+
+def native_document_import(filename, data, _deadline=None):
+    name = ultra_documents.filename(filename)
+    content = base64.b64decode(data, validate=True)
+    if not 0 < len(content) <= ultra_documents.MAX_DOCUMENT_BYTES or INBOX.is_symlink():
+        raise ValueError
+    INBOX.mkdir(parents=True, exist_ok=True, mode=PRIVATE_DIRECTORY_MODE)
+    with tempfile.TemporaryDirectory(prefix="upload-", dir=INBOX) as folder:
+        target = Path(folder) / name
+        target.write_bytes(content)
+        os.chmod(target, PRIVATE_FILE_MODE)
+        return import_into_vault(target, deadline=_deadline)
 
 
 def tool_focus_control(action, seconds=None):
@@ -865,9 +916,24 @@ TOOLS = ultra_tools.Registry(ultra_settings, {
     "screen_watch_status": WATCH.state, "screen_watch_control": tool_screen_control,
     "document_import": tool_document_import})
 ULTRA.tool_layer = TOOLS
+def resolve_workflow_source(stable):
+    if not isinstance(stable, str) or len(stable) != 64:
+        return None
+    with INDEX_LOCK:
+        note = next((n for n in NOTES if n.get('_path') and note_store.stable_id(n['_path']) == stable), None)
+        if note is None:
+            return None
+        try:
+            current = note_store.read(note, build.NOTES_DIR)
+            return {'id': current['id'], 'revision': current['revision']}
+        except (ValueError, OSError):
+            return None
+
+
 WORKFLOWS = workflow_runtime.WorkflowService(ultra_settings, TOOLS, ULTRA.bridge_factory,
     BRAIN_SLOTS, SYSTEM_PROMPT)
 
+WORKFLOWS.source_resolver = resolve_workflow_source
 
 class GalaxyServer(ThreadingHTTPServer):
     daemon_threads = True
@@ -982,7 +1048,8 @@ class Handler(BaseHTTPRequestHandler):
                 query = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
                 identifier = int(query.get("id", ["-1"])[0])
                 with INDEX_LOCK:
-                    note = next(n for n in NOTES if n["id"] == identifier)
+                    stable = query.get("stable", [None])[0]
+                    note = next(n for n in NOTES if ((n.get("_path") and note_store.stable_id(n["_path"]) == stable) if stable else n["id"] == identifier))
                     result = note_store.read(note, build.NOTES_DIR)
                 self.send_bytes(json.dumps(result).encode(), "application/json", head=head)
             except (ValueError, StopIteration, OSError):
@@ -1080,11 +1147,11 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     if not isinstance(body, dict):
                         raise workflow_runtime.WorkflowError("Send a workflow request.")
-                    allowed = {"question", "workflow"} if self.path == "/workflows/start" else {"id"}
+                    allowed = {"question", "workflow", "request_key"} if self.path == "/workflows/start" else {"id"}
                     if set(body) - allowed:
                         raise workflow_runtime.WorkflowError("Unknown workflow request field.")
                     if self.path == "/workflows/start":
-                        result = WORKFLOWS.start(body.get("question"), body.get("workflow", "research"))
+                        result = WORKFLOWS.start(body.get("question"), body.get("workflow", "research"), request_key=body.get("request_key"))
                     elif self.path == "/workflows/retry":
                         result = WORKFLOWS.start(resume=body.get("id"))
                     else:
@@ -1102,26 +1169,32 @@ class Handler(BaseHTTPRequestHandler):
                     if self.path == "/tools/call":
                         if self.headers.get("X-Jarvis-MCP") == "1" and not settings.mcp_enabled:
                             raise ultra_tools.ToolError("MCP tools are disabled.")
-                        result = TOOLS.call(body.get("name"), body.get("arguments"))
+                        # Same authenticated, budgeted and journaled boundary as executors.
+                        # A stable UI request key deduplicates reconnect/replay writes.
+                        session_id = body.get("operation_session")
+                        session = ultra_tools.ToolSession(TOOLS, session_id,
+                            request_fingerprint=ultra_tools.digest([body.get("name"),body.get("arguments")]) if session_id else None)
+                        try:
+                            result = session.call(body.get("name"), body.get("arguments"),
+                                time.monotonic() + BRAIN_TIMEOUT_S)
+                        finally:
+                            session.close()
                     elif self.path == "/memory/preferences":
                         if not settings.enabled or not settings.memory_enabled or not settings.preferences_enabled:
                             raise ultra_tools.ToolError("Preference memory is disabled.")
-                        result = PREFERENCES.forget(body.get("key")) if body.get("forget") is True else PREFERENCES.set(body.get("key"), body.get("value"))
+                        forgetting = body.get("forget") is True
+                        arguments = {"key": body.get("key")}
+                        if not forgetting:
+                            arguments["value"] = body.get("value")
+                        result = native_tool_routes.invoke("preferences_forget" if forgetting else "preferences_set", arguments,
+                            PREFERENCES.forget if forgetting else PREFERENCES.set,
+                            properties={name: ultra_tools.STRING for name in arguments}, body=body, duration_s=BRAIN_TIMEOUT_S)
                     else:
                         if not settings.enabled or not settings.document_import_enabled:
                             raise ultra_tools.ToolError("Document import is disabled.")
-                        name = ultra_documents.filename(body.get("filename"))
-                        content = base64.b64decode(body.get("data", ""), validate=True)
-                        if not 0 < len(content) <= ultra_documents.MAX_DOCUMENT_BYTES:
-                            raise ValueError
-                        if INBOX.is_symlink():
-                            raise ValueError
-                        INBOX.mkdir(parents=True, exist_ok=True, mode=PRIVATE_DIRECTORY_MODE)
-                        with tempfile.TemporaryDirectory(prefix="upload-", dir=INBOX) as folder:
-                            target = Path(folder) / name
-                            target.write_bytes(content)
-                            os.chmod(target, PRIVATE_FILE_MODE)
-                            result = import_into_vault(target)
+                        result = native_tool_routes.invoke("document_import", {"filename": body.get("filename"), "data": body.get("data", "")},
+                            native_document_import, properties={"filename": ultra_tools.STRING, "data": ultra_tools.STRING},
+                            body=body, duration_s=BRAIN_TIMEOUT_S)
                     self.send_json(result)
                 except (ValueError, OSError, TypeError, binascii.Error) as error:
                     message = str(error) if isinstance(error, (ultra_tools.ToolError, ultra_documents.DocumentError)) else "The local operation could not be completed. Check the input and current state."
@@ -1135,15 +1208,11 @@ class Handler(BaseHTTPRequestHandler):
                 if type(identifier) is not int:
                     raise ValueError
                 try:
-                    with INDEX_LOCK:
-                        note = next(n for n in NOTES if n["id"] == identifier)
-                        result = note_store.save(note, build.NOTES_DIR, body.get("text"), body.get("revision"))
-                        note.update(label=result["title"], text=result["text"], excerpt=result["text"][:build.EXCERPT_CHARS], edited_at=result["edited_at"])
-                        graph = build.make_graph(NOTES)
-                        build.write_graph(graph)
-                    self.send_json({"verified": True, "note": result, "graph": graph})
-                except (note_store.NoteError, StopIteration, OSError) as error:
-                    self.send_json({"error": True, "answer": str(error) if isinstance(error, note_store.NoteError) else "The edit could not be confirmed. Reopen the note before retrying."}, 409)
+                    self.send_json(current_native_result(native_tool_routes.invoke("note_write", {"id": identifier, "text": body.get("text"), "revision": body.get("revision")},
+                        native_note_write, properties={"id": ultra_tools.INTEGER, "text": ultra_tools.STRING, "revision": ultra_tools.STRING},
+                        body=body, duration_s=BRAIN_TIMEOUT_S)))
+                except (ValueError, OSError) as error:
+                    self.send_json({"error": True, "answer": str(error) if isinstance(error, ultra_tools.ToolError) else "The edit could not be confirmed. Reopen the note before retrying."}, 409)
                 return
             if self.path in ("/eyes", "/relief", "/attention", "/watch"):
                 if self.headers.get("Origin") != "http://" + self.headers.get("Host", ""):
@@ -1229,8 +1298,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         if self.path == "/remember":
             try:
-                self.send_json(remember(question, body.get("preflight_token")))
-            except BrainError as error:
+                def capture(text, _deadline=None):
+                    try:
+                        with INDEX_LOCK:
+                            result = remember(text, body.get("preflight_token"), operation_deadline=_deadline)
+                            note = next(n for n in NOTES if n["id"] == result["captured"])
+                            source = note_store.read(note, build.NOTES_DIR)
+                            result["_source"] = {name: source[name] for name in ("stable_id", "revision")}
+                            parent = next((n for n in NOTES if n["id"] == result["parent"]), {})
+                            result["_parent"] = note_store.stable_id(parent["_path"]) if parent.get("_path") else None
+                            return result
+                    except BrainError as error:
+                        raise ultra_tools.ToolError(str(error)) from None
+                self.send_json(current_native_result(native_tool_routes.invoke("notes_capture", {"text": question}, capture,
+                    properties={"text": ultra_tools.STRING}, body=body, duration_s=BRAIN_TIMEOUT_S), capture=True))
+            except (BrainError, ValueError) as error:
                 self.send_json({"answer": str(error), "nodes": [], "error": True}, 400)
             except Exception:
                 self.send_json({"answer": "I couldn't complete that capture, sir. Please check your notes before retrying.",

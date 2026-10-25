@@ -1,0 +1,9 @@
+{
+  "linux_model_gate_passed": false,
+  "state_dir": "/var/lib/jarvis",
+  "approved_notes_dir": "/var/lib/jarvis/approved-notes",
+  "flags_file": "/etc/jarvis/flags.json",
+  "codex_runtime_version": "OPERATOR_MUST_RECORD_VERIFIED_LINUX_VERSION",
+  "quick_model": "gpt-6-luna",
+  "brain_model": "gpt-6.1-sol"
+}

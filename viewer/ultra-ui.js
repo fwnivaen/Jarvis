@@ -3,10 +3,13 @@
   'use strict';
   const SETTINGS=Object.freeze({pollMs:1500,maxFileBytes:16*1024*1024,recentRuns:5,requestMs:50000,preferenceKeyChars:80,preferenceValueChars:2000});
   let workflow='',screenGeneration=0,stopped=false,timer=null;
+  const pendingWrites=new Map();
   const make=(tag,text)=>{const element=document.createElement(tag);if(text!==undefined)element.textContent=text;return element;};
   async function request(path,body){
+    let pending;
+    if(body!==undefined){const fingerprint=JSON.stringify(body);pending=pendingWrites.get(path);if(!pending||pending.fingerprint!==fingerprint){pending={fingerprint,key:window.JarvisUI.operationKey()};pendingWrites.set(path,pending);}body={...body,operation_session:pending.key};}
     const response=await fetch(path,{...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),signal:AbortSignal.timeout(SETTINGS.requestMs)});
-    const data=await response.json();if(!response.ok)throw Error(data.answer||'The local operation could not be confirmed.');return data;
+    const data=await response.json();if(!response.ok)throw Error(data.answer||'The local operation could not be confirmed.');if(pendingWrites.get(path)===pending)pendingWrites.delete(path);return data;
   }
   function section(parent,title){const block=make('section');block.className='ultra-settings material';block.append(make('h2',title));parent.append(block);return block;}
   function fileControl(parent){

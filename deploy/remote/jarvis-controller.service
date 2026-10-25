@@ -1,0 +1,29 @@
+[Unit]
+Description=Private JARVIS durable controller
+After=network-online.target
+Wants=network-online.target
+[Service]
+Type=simple
+User=jarvis
+Group=jarvis
+WorkingDirectory=/opt/jarvis
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=LANGSMITH_TRACING=false
+Environment=LANGCHAIN_TRACING_V2=false
+ExecStart=/opt/jarvis/.local/ultra-full-venv/bin/python /opt/jarvis/tools/run_remote_controller.py --config /etc/jarvis/controller.json
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/jarvis
+Environment=CODEX_HOME=/var/lib/jarvis/codex
+MemoryMax=3G
+TasksMax=128
+LimitNOFILE=1024
+[Install]
+WantedBy=multi-user.target
