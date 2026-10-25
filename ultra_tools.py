@@ -22,7 +22,7 @@ JOURNAL_DIR = ROOT / ".local" / "ultra-tools"
 STRING = {"type": "string"}
 INTEGER = {"type": "integer"}
 TOOL_NAMES = frozenset({"notes_search", "note_read", "notes_capture", "note_write", "preferences_get",
-    "preferences_set", "preferences_forget", "focus_status", "focus_control", "screen_watch_status",
+    "preferences_set", "preferences_forget", "screen_watch_status",
     "screen_watch_control", "document_import"})
 
 
@@ -46,10 +46,6 @@ SPECS = (
     spec("preferences_set", "Remember a preference explicitly supplied by the user. Never save credentials.",
         {"key": STRING, "value": STRING}, ("key", "value"), True, "preferences_enabled"),
     spec("preferences_forget", "Forget one preference at the user's request.", {"key": STRING}, ("key",), True, "preferences_enabled"),
-    spec("focus_status", "Read the current Focus status."),
-    spec("focus_control", "Control existing Focus at the user's request. Target locking follows the existing Focus rules.",
-        {"action": {"type": "string", "enum": ["start", "pause", "resume", "end", "abort", "retarget"]},
-         "seconds": INTEGER}, ("action",), True),
     spec("screen_watch_status", "Read whether screen watch is active; this does not capture a screen."),
     spec("screen_watch_control", "Request screen watch start or stop. Starting still needs the browser's display-sharing permission.",
         {"action": {"type": "string", "enum": ["start", "stop"]}}, ("action",), True),

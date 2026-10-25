@@ -81,21 +81,6 @@ def preferences_forget(key: str, ctx: Context) -> dict:
 
 
 @mcp.tool()
-def focus_status(ctx: Context) -> dict:
-    """Read the existing Focus session status."""
-    return call("focus_status", {}, ctx)
-
-
-@mcp.tool()
-def focus_control(action: str, ctx: Context, seconds: int | None = None) -> dict:
-    """Start, pause, resume, end, abort or retarget Focus at the user's request."""
-    arguments = {"action": action}
-    if seconds is not None:
-        arguments["seconds"] = seconds
-    return call("focus_control", arguments, ctx)
-
-
-@mcp.tool()
 def screen_watch_status(ctx: Context) -> dict:
     """Read screen watch state without capturing a frame."""
     return call("screen_watch_status", {}, ctx)

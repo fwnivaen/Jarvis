@@ -1,4 +1,4 @@
-/* JARVIS V2 chrome. Existing graph, voice, model, Focus and Eyes controllers own their state. */
+/* JARVIS V2 chrome. Existing graph, voice, model and Eyes controllers own their state. */
 (() => {
   'use strict';
   const SETTINGS=Object.freeze({preferenceKey:'jarvis.preferences.v2',pinKey:'jarvis.pins.v2',historyKey:'jarvis.notifications.v2',
@@ -10,7 +10,7 @@
   const preferences=load(SETTINGS.preferenceKey,{theme:'dark',motion:'system',sounds:false,wake:false});
   const pins=load(SETTINGS.pinKey,{}),history=load(SETTINGS.historyKey,[]);
   let binding=null,currentWorkspace='galaxy',currentNote=null,previewNote=null,lastAnswer=null,lastQuestion='',selectedPalette=0,paletteItems=[],hoverTimer=null,insightTimer=null,insightText='',noteRequest=0,approval=null,workTimer=null;
-  let systemState=null,focusState=null,watchState=null,lastFocusElement=null,serverAvailable=true,backendAvailable=true;
+  let systemState=null,watchState=null,lastFocusElement=null,serverAvailable=true,backendAvailable=true;
   const noteKey=node=>node.group+'/'+node.label;
   const notes=()=>binding?.graph.nodes||[];
   const endpoint=value=>typeof value==='object'?value.id:value;
@@ -43,7 +43,7 @@
     if(!previewNote||$('preview').hidden)return;
     const point=window.JarvisGalaxy?.project(previewNote);if(!point)return;
     const stage=$('stage').getBoundingClientRect(),card=$('preview'),r=card.getBoundingClientRect(),gap=SETTINGS.placementGap;
-    const obstacles=['#chat-form','#jarvis-orb-host','#groups','#detail','.focus-widget','#answer-card'].map(q=>document.querySelector(q)).filter(e=>e&&!e.hidden&&e.getBoundingClientRect().width).map(e=>e.getBoundingClientRect());
+    const obstacles=['#chat-form','#jarvis-orb-host','#groups','#detail','#answer-card'].map(q=>document.querySelector(q)).filter(e=>e&&!e.hidden&&e.getBoundingClientRect().width).map(e=>e.getBoundingClientRect());
     const candidates=[[point.x+gap,point.y-r.height/2],[point.x-r.width-gap,point.y-r.height/2],[point.x-r.width/2,point.y-r.height-gap],[point.x-r.width/2,point.y+gap]];
     for(let y=gap;y<stage.height-r.height;y+=SETTINGS.placementStep)candidates.push([stage.width-r.width-gap,y]);
     let best=null,bestScore=Infinity;
@@ -95,8 +95,7 @@
     ['JARVIS Vault','Workspace',()=>setWorkspace('vault')],['Models and integrations','Workspace',()=>setWorkspace('integrations')],['Voice','Workspace',()=>setWorkspace('voice')],
     ['Agents','Connection required',()=>setWorkspace('agents')],['Automations','Connection required',()=>setWorkspace('automations')],['Trading','Connection required',()=>setWorkspace('trading')],
     ['Agency','Connection required',()=>setWorkspace('agency')],['Studio','Connection required',()=>setWorkspace('studio')],
-    ['Toggle Focus','Action',()=>window.JarvisFocus?.toggle?.()],['Start focus session','Action',()=>$('focus').click()],['Pause focus','Action',()=>window.JarvisFocus?.command({action:'pause'})],
-    ['Resume focus','Action',()=>window.JarvisFocus?.command({action:'resume'})],['End focus session','Action',()=>window.JarvisFocus?.command({action:'end'})],
+    ['Mac assistant','Workspace',()=>setWorkspace('computer')],
     ['Toggle Eyes','Camera permission',()=>$('eyes').click()],['Watch screen / Stop watching','Screen permission',()=>$('screen').click()],
     ['Use notes instead of screen','Action',()=>$('screen-notes').click()],['Toggle microphone','Microphone permission',()=>$('mic').click()],
     ['Stop speaking','Action',()=>$('stop-speech').click()],['Choose model','Action',()=>$('brain-chip').click()],['Fit galaxy','Action',()=>binding?.fit()],
@@ -128,6 +127,7 @@
   function workspaceFrame(title,description){const view=$('workspace-view');view.replaceChildren();const body=create('div','workspace-body'),head=create('div','workspace-header'),titles=create('div');titles.append(create('h1',null,title),create('p',null,description));const back=create('button','control','Back to galaxy');back.onclick=()=>setWorkspace('galaxy');head.append(titles,back);body.append(head);view.append(body);return body;}
   function setWorkspace(name){
     window.JarvisWorkflows?.dispose();
+    window.JarvisAssistant?.dispose();
     currentWorkspace=name;document.body.dataset.workspace=name;window.JarvisGalaxy?.setVisible(name==='galaxy');hidePreview();hideInsight();clearInterval(workTimer);workTimer=null;
     for(const selector of ['.sidebar','#graph','.scene-controls','#jarvis-orb-host','#detail','#chat','#galaxy-tree']){const element=document.querySelector(selector);if(element){element.inert=name!=='galaxy';if(name==='galaxy')element.removeAttribute('aria-hidden');else element.setAttribute('aria-hidden','true');}}
     $('workspace-view').hidden=name==='galaxy';$('breadcrumb').textContent='/ '+({galaxy:'Knowledge Galaxy',brain:'Project Brain',work:'Mission Control',integrations:'Integrations'}[name]||name.charAt(0).toUpperCase()+name.slice(1));
@@ -141,6 +141,7 @@
     if(name==='vault'){renderVault();return;}
     if(name==='history'){renderHistory();return;}
     if(name==='help'){renderHelp();return;}
+    if(name==='computer'){window.JarvisAssistant?.mount(workspaceFrame('Mac assistant','Fast local commands. Your existing Codex / ChatGPT brain.'));return;}
     renderUnavailable(name);
   }
   function row(parent,title,description,control){const r=create('div','list-row'),copy=create('div');copy.append(create('strong',null,title));if(description)copy.append(create('p',null,description));r.append(copy);if(control)r.append(control);parent.append(r);return r;}
@@ -195,8 +196,8 @@
     };
     actions.append(confirm,cancel);card.append(actions);$('stage').append(card);approval=card;$('jarvis-orb-host').inert=false;$('jarvis-orb-host').removeAttribute('aria-hidden');window.JarvisOrb?.setStatus('AWAITING APPROVAL',{target:'#approval-card'});confirm.focus();
   }
-  function renderWork(){const body=workspaceFrame('Mission Control','Live state from your local JARVIS services.');window.JarvisWorkflows?.mount(body);row(body,'Focus session','Server-owned timer and drift accounting',button('Open Focus',()=>{setWorkspace('galaxy');window.JarvisFocus?.expand?.();}));row(body,'Eyes','Local posture tracking; camera stays off until you enable it.',button('Toggle Eyes',()=>$('eyes').click()));row(body,'Screen watch','One Entire Screen share for watching and questions.',button('Toggle watch',()=>$('screen').click()));row(body,'Current activity','',create('output','service-state'));body.lastChild.lastChild.id='work-activity';row(body,'Focus state','',create('output','service-state'));body.lastChild.lastChild.id='work-focus';row(body,'Watch state','',create('output','service-state'));body.lastChild.lastChild.id='work-watch';updateWork();}
-  async function updateWork(){try{[focusState,watchState]=await Promise.all([request('/focus'),request('/watch')]);if($('work-focus'))$('work-focus').textContent=focusState.active?(focusState.paused?'Paused':focusState.lock_deferred?'Waiting to lock':focusState.drifting?'Drifting':'Focused'):'No active session';if($('work-watch'))$('work-watch').textContent=watchState.active?'Watching':'Off';if($('work-activity'))$('work-activity').textContent=$('voice-status').textContent||'Ready';}catch{if($('work-activity'))$('work-activity').textContent='Local server unavailable';}}
+  function renderWork(){const body=workspaceFrame('Mission Control','Background tasks continue while you use other apps.');window.JarvisWorkflows?.mount(body);window.JarvisAssistant?.mountSummary(body);row(body,'Eyes','Optional local camera and posture reminders.',button('Toggle Eyes',()=>$('eyes').click()));row(body,'Screen watch','Use your existing screen share for questions.',button('Toggle watch',()=>$('screen').click()));row(body,'Watch state','',create('output','service-state'));body.lastChild.lastChild.id='work-watch';updateWork();}
+  async function updateWork(){try{watchState=await request('/watch');if($('work-watch'))$('work-watch').textContent=watchState.active?'Watching':'Off';}catch{if($('work-watch'))$('work-watch').textContent='Local server unavailable';}}
   function settingSelect(parent,title,description,key,options){const select=create('select');select.setAttribute('aria-label',title);options.forEach(([value,text])=>{const option=create('option',null,text);option.value=value;select.append(option);});select.value=preferences[key]||options[0][0];select.onchange=()=>{preferences[key]=select.value;applyPreferences();};row(parent,title,description,select);}
   function renderSettings(kind){
     const body=workspaceFrame(kind==='voice'?'Voice':'Settings','Preferences apply immediately and stay on this device.');
@@ -208,12 +209,12 @@
     }
     row(body,'Microphone','Only the explicit microphone control enables listening.',button($('mic').getAttribute('aria-pressed')==='true'?'Turn off':'Enable',()=>$('mic').click()));
     const wake=button(preferences.wake?'On':'Off',()=>{preferences.wake=!preferences.wake;applyPreferences();wake.textContent=preferences.wake?'On':'Off';});
-    row(body,'Wake phrase · Jarvis','Optional, off by default. Applies only after you enable Mic. Hold Space, stop, relief, and Focus answers remain immediate.',wake);
+    row(body,'Wake phrase · Jarvis','Optional, off by default. Applies only after you enable Mic. Hold Space, stop, and relief remain immediate.',wake);
     row(body,'Speech output','Daniel · British English. Real audio spectrum is available during local WAV playback.',button('Stop speaking',()=>$('stop-speech').click()));
     const devices=create('select');devices.setAttribute('aria-label','Microphone device');devices.append(new Option('System default',''));devices.onchange=()=>window.JarvisVoice?.setInputDevice?.(devices.value);row(body,'Input device','Native speech uses the selected device when available.',devices);
     request('/voice/devices').then(data=>{for(const device of data.devices||[])devices.append(new Option(device.name,device.id));devices.value=window.JarvisVoice?.inputDevice?.()||'';}).catch(()=>{});
     row(body,'Model',$('brain-chip').textContent,button('Choose model',()=>$('brain-chip').click()));
-    row(body,'Focus and camera tools','Existing permission and calibration controls remain in their controllers.',button('Open Mission Control',()=>setWorkspace('work')));
+    row(body,'Camera and desktop tools','Existing permission and calibration controls remain in their controllers.',button('Open Mission Control',()=>setWorkspace('work')));
   }
   function renderIntegrations(){const body=workspaceFrame('Integrations','The same inference backends and runtime model chooser.');request('/model').then(data=>{for(const choice of data.choices||[]){const control=button(choice.available?'Choose':'Details',()=>binding?.ask('switch to '+choice.name));control.setAttribute('aria-label','Choose '+choice.label);row(body,choice.label,choice.reason||choice.backend,control);}}).catch(error=>body.append(create('p',null,error.message)));}
   function renderVault(){const body=workspaceFrame('JARVIS Vault','Your current knowledge is stored as local Markdown.');row(body,'Local note collection',notes().filter(n=>!n.capture_hub).length+' indexed files. Browser access stays on this Mac.',button('Browse notes',()=>setWorkspace('notes')));row(body,'Dedicated Vault service','No encrypted Vault service is present in V1.',create('span','service-state','Not connected'));row(body,'Keys and configuration','Credentials remain outside the browser. Enter keys only in the existing local configuration file.',button('Model integrations',()=>setWorkspace('integrations')));}
@@ -222,7 +223,7 @@
     const body=workspaceFrame(title,'Connection required');
     body.append(create('p','note-content','Your current V1 does not include a '+title.toLowerCase()+' service. This workspace is reserved for that connection; no remote action or execution is available.'));
     row(body,'Connection','Supply the existing service module and its real state/action contract to wire this workspace.',create('span','service-state','Not connected'));
-    row(body,'Available now','Notes, Focus, Eyes, screen watch, and model integrations remain usable.',button('Open Mission Control',()=>setWorkspace('work')));
+    row(body,'Available now','Notes, Mac commands, Eyes, screen watch, and model integrations remain usable.',button('Open Mission Control',()=>setWorkspace('work')));
   }
   function renderHistory(){const body=workspaceFrame('Notification history','Insights from this browser, saved locally.');if(!history.length)body.append(create('p','note-content','No archived insights yet.'));history.forEach(item=>row(body,item.text,new Date(item.time).toLocaleString()));}
   function renderHelp(){const body=workspaceFrame('Keyboard shortcuts','Operate JARVIS without leaving the keyboard.');[['⌘ K / Ctrl K','Search notes, workspaces and actions'],['F','Toggle full view'],['Shift + F','Fit the galaxy'],['Esc','Close the current surface or selection'],['Arrow keys','Walk a selected note’s links'],['Tab','Cycle constellations when the galaxy has focus'],['Space, held','Push to talk outside text fields'],['Shift + drag / right drag','Pan the galaxy'],['Scroll / pinch','Zoom toward the pointer']].forEach(([key,text])=>row(body,key,text));}
@@ -293,11 +294,9 @@
   $('selected-note').onclick=()=>{const node=binding?.selected();if(!node)return;const expand=$('detail').hidden;$('detail').hidden=!expand;selectNote(node,expand);};
   $('briefing-toggle').onclick=()=>setBriefing($('answer-card').dataset.idle==='true');
   $('attach-note').onclick=openMention;
-  $('rail-focus').onclick=$('clock-focus').onclick=()=>{setWorkspace('galaxy');if(window.JarvisFocus?.state?.active)window.JarvisFocus.expand();else $('focus').click();};
+  $('rail-assistant').onclick=()=>setWorkspace('computer');
   $('rail-eyes').onclick=()=>$('eyes').click();$('rail-screen').onclick=()=>$('screen').click();
-  let clockFocus=null;
-  function updateClock(){const date=new Date();$('deck-clock').textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});$('deck-clock').dateTime=date.toISOString();const fraction=clockFocus?.active?Math.min(1,Math.max(0,clockFocus.elapsed_s/Math.max(1,clockFocus.planned_s))):(date.getHours()*60+date.getMinutes())/SETTINGS.clockMinutes;$('clock-progress').style.strokeDashoffset=String(SETTINGS.percent*(1-fraction));}
-  window.addEventListener('jarvis:focus-state',event=>{clockFocus=event.detail;$('rail-focus').setAttribute('aria-pressed',String(Boolean(clockFocus?.active)));updateClock();});
+  function updateClock(){const date=new Date();$('deck-clock').textContent=date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',hour12:false});$('deck-clock').dateTime=date.toISOString();const fraction=(date.getHours()*60+date.getMinutes())/SETTINGS.clockMinutes;$('clock-progress').style.strokeDashoffset=String(SETTINGS.percent*(1-fraction));}
   for(const [tool,rail]of [['eyes','rail-eyes'],['screen','rail-screen']])new MutationObserver(()=>$(rail).setAttribute('aria-pressed',$(tool).getAttribute('aria-pressed')||'false')).observe($(tool),{attributes:true,attributeFilter:['aria-pressed']});
   updateClock();setInterval(updateClock,SETTINGS.clockMs);document.body.dataset.workspace='galaxy';
   refreshSystem();setInterval(refreshSystem,SETTINGS.statusMs);applyPreferences();

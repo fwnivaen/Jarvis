@@ -416,28 +416,18 @@ class Harness:
         require(result.returncode == 0, 'offline regression tests failed; run the README test command for details')
         return 'offline regression tests passed without network or real brain calls'
 
-    def focus_instruments(self):
-        status, _, body = self.request('/focus/diag')
-        require(status == 200, 'Running server lacks /focus/diag; restart the actual server')
-        diag = json.loads(body)
-        expected = {'front_readable','is_browser','tab_status','front_is_jarvis','hash_present',
-                    'app_on_target','tab_on_target','settle_ticks','app_target','tab_target',
-                    'lock_deferred','session_on','tick_thread_alive','tick_status'}
-        require(set(diag) == expected, 'Unexpected diagnostic schema')
-        require(all(type(v) is bool for k,v in diag.items() if k not in {'settle_ticks','tab_status','tick_status'}),
-                'Diagnostic contains non-boolean flags')
-        require(type(diag['settle_ticks']) is int and diag['settle_ticks'] >= 0, 'Invalid settle counter')
-        require(diag['tab_status'] in {'readable','unavailable','not_applicable','foreground_changed'}, 'Invalid tab status')
-        require(diag['tick_thread_alive'] and diag['tick_status'] == 'fresh', 'Running server focus tick is dead or stalled')
-        require(diag['front_readable'], 'Running server cannot read foreground activity')
-        require(diag['tab_status'] not in {'unavailable','foreground_changed'}, 'Running server cannot reliably read the front tab')
-        return 'running server diagnostic whitelist and live tick verified'
+    def assistant_services(self):
+        status, value = self.json_request('/assistant')
+        require(status == 200 and value.get('backend') == 'codex-chatgpt', 'Mac assistant unavailable')
+        require(isinstance(value.get('shortcuts'), list), 'Shortcut catalog unavailable')
+        require(self.request('/focus')[0] == 404, 'Retired Focus endpoint is still active')
+        return 'Mac assistant and shortcut catalog available; Focus removed'
 
     def execute(self):
         print('Jarvis preflight — ' + ('QUICK: live brain chains will be WARN' if self.quick else 'FULL LIVE RUN'), flush=True)
         self.run('Offline regressions', self.offline)
         self.run('Server and viewer', self.viewer)
-        self.run('Focus instruments (running server)', self.focus_instruments)
+        self.run('Mac assistant services', self.assistant_services)
         self.run('Graph data', self.load_graph)
         self.run('/model exact swaps and reset', self.model_swaps)
         self.run('/chat live answer', self.chat, brain=True)

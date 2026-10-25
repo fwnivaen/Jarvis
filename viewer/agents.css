@@ -53,8 +53,6 @@ body[data-workspace]:not([data-workspace=galaxy]) #agent-crew *,#agent-crew:not(
 .stage:has(#agent-crew:not([hidden])) .detail{top:calc(var(--crew-top) + var(--crew-header-height) + 76px);max-height:calc(100dvh - var(--crew-top) - var(--crew-header-height) - 180px)}
 .stage:has(#agent-crew[open]:not([hidden])) #selected-note{top:calc(var(--crew-top) + var(--crew-compact-height) + var(--crew-gap))}
 .stage:has(#agent-crew[open]:not([hidden])) .detail{top:calc(var(--crew-top) + var(--crew-compact-height) + 76px);max-height:calc(100dvh - var(--crew-top) - var(--crew-compact-height) - 180px)}
-.stage:has(.focus-widget:not([hidden]):not([data-state=complete])) #agent-crew .crew-body{display:none}
-.stage:has(#agent-crew:not([hidden])) .focus-widget{top:calc(var(--crew-top) + var(--crew-header-height) + var(--crew-gap))}
 :root[data-theme=light] #agent-crew{background:linear-gradient(140deg,rgba(250,252,250,.94),rgba(240,246,244,.86));--crew-cyan:#187e6d;--crew-violet:#7956b2;--crew-amber:#96651f}
 :root[data-theme=light] #agent-crew .crew-halo{fill:color-mix(in srgb,var(--crew-color) 5%,#f5f8f7)}
 #agent-monitor{position:absolute;z-index:24;right:var(--agents-orb-gap);top:var(--agents-top);width:min(var(--agents-width),calc(100% - 300px));max-height:var(--agents-height);border:1px solid var(--deck-stroke,var(--border));border-radius:16px;background:var(--deck-glass,var(--bg-panel));backdrop-filter:blur(22px);color:var(--text-primary);font:11px var(--mono);box-shadow:0 12px 40px #0003;overflow:hidden}

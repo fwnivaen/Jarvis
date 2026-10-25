@@ -11,7 +11,7 @@ button:disabled{cursor:not-allowed;opacity:var(--disabled-alpha)}
 button,a{transition:color var(--fast),background var(--fast),opacity var(--fast),transform var(--fast) var(--ease-out)}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .eyebrow{font:500 var(--type-eyebrow)/var(--line-height) var(--mono);letter-spacing:var(--tracking-small);text-transform:uppercase;color:var(--text-tertiary)}
-.material,.detail,.preview,.chat-top,dialog,.focus-widget,.insight-pill{background:var(--glass);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturation));border:var(--hairline) solid var(--stroke-default);box-shadow:var(--material-shadow)}
+.material,.detail,.preview,.chat-top,dialog,.insight-pill{background:var(--glass);backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturation));border:var(--hairline) solid var(--stroke-default);box-shadow:var(--material-shadow)}
 .app-header{position:absolute;inset:0 0 auto;height:var(--header);z-index:20;border-bottom:var(--hairline) solid var(--stroke-subtle);background:var(--bg-void)}
 .header-inner{max-width:var(--safe-width);height:100%;margin:auto;padding:0 var(--space-7);display:flex;align-items:center;justify-content:space-between;gap:var(--space-5)}
 .brand{display:flex;align-items:center;gap:var(--space-3);font-weight:500;font-size:var(--type-brand);letter-spacing:var(--tracking-brand);white-space:nowrap}

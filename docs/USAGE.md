@@ -28,23 +28,13 @@ The orb reflects listening, model activity, actual speech, confirmations and con
 
 For native speech recognition, build `sh native/build_voice.sh`. The helper requires an available on-device English recognizer and macOS microphone/speech permissions. A Dictation-disabled error requires enabling Dictation in System Settings. Permission grants belong to the launcher or helper named by macOS. Browser recognition may use browser speech services. Audible output must be checked on the Mac itself.
 
-## Focus
+## Mac assistant
 
-Build `sh native/build_focus.sh` if using the server directly; the launcher builds it automatically. Say “thirty minutes on this” or use the Focus control. Starting from the Jarvis home tab arms the next stable app/tab as the target. To retarget, go to the desired tab and say “lock on this tab”; from Jarvis, that command re-arms the next target.
+Use the ⌘ rail button for quick commands, saved routines, dictation review and recent action results. Hold **Control + Option + Space** in any app to ask Jarvis through your existing Codex / ChatGPT connection. Hold **Control + Option + D** to dictate; review the text before Copy or Insert. The normal launchers build and open Jarvis Desktop. If running the Python server directly, build `sh native/build_desktop.sh` and `sh native/build_voice.sh`, then use **Open Jarvis Desktop** in the dashboard.
 
-| Command | Effect |
-| --- | --- |
-| pause / resume | Freeze or resume the session |
-| call me out every thirty seconds | Change the callout interval |
-| give me fifteen seconds | Suppress speech temporarily |
-| it's okay, I'm doing research | Excuse the current excursion |
-| extend by five minutes | Extend the plan |
-| end the session / abort | Finish or abort and report |
-| drill sergeant mode / normal mode | Change callout tone |
+Try “Open Safari”, “Move window left”, “Play music”, or “When I say writing time, open Notes and then open Safari”. Save routines without running them; say the saved phrase to run it. Start existing durable agent work with “Background task: compare the pricing notes” and follow it in **Work**. [All commands, permissions, and current verification](mac-assistant.md).
 
-The native card stays across Spaces without taking keyboard focus. The server owns elapsed time and preserves numeric session state across restarts. Unreadable activity freezes accounting. Jarvis home on port 4700 is exempt. The reader distinguishes browser tabs/windows while keeping identities out of the public state and ledgers.
-
-Focus needs macOS Automation access to System Events and the browser, and Accessibility access if requested for the server's launcher. A process started from Terminal and one started from Codex can have different permission grants. If foreground detection fails, inspect the running server's `/focus/diag` or open `/?focusdebug=1`; a fresh Python object is not evidence about that server. The latest known live limitation is documented in [verification](ultra-verification.md).
+Focus and its activity tracking are removed. Old numeric ledgers are not loaded or updated.
 
 ## Eyes and screen watch
 
@@ -54,12 +44,12 @@ An explicit “look at me” sends one current webcam image to the configured vi
 
 Screen watch uses one Entire Screen share selected through the browser. Local thumbnail comparisons gate cloud checks; unchanged automatic frames are skipped when that feature is enabled. Screen questions reuse the same share. “Stop watching” ends the watch and share. Build `sh native/build_watch.sh` for the native watch indicator.
 
-“Give me three minutes” silences nudges across Focus, Eyes and screen watch. A model-issued watch start is a request, not proof of an active share: the open viewer must confirm the browser share. No screen pixels are retained in the heartbeat or activity monitor.
+“Give me three minutes” silences nudges across Eyes and screen watch. A model-issued watch start is a request, not proof of an active share: the open viewer must confirm the browser share. No screen pixels are retained in the heartbeat or activity monitor.
 
 ## Checks and troubleshooting
 
 Run `python3 tools/check_repo.py` and `python3 tools/check_ultra.py --embeddings` for repository and regression checks. With the server active, run full `python3 preflight.py`. It makes real model calls and creates, recalls and removes a disposable capture. API-backend skips are warnings.
 
-The visible `/?focusprobe=1` fixture must run at an actual 1440×900 viewport. Its full title reports each case. It mocks the physical devices, model and timer queue; it does not establish physical camera, audio or foreground-read acceptance.
+Verify the Mac assistant dashboard visibly in Chrome. Native hotkeys, on-device microphone recognition, Accessibility insertion and audible output need an unlocked Mac and physical acceptance checks; automated fixtures do not establish those results.
 
 If port 4700 is occupied, stop the existing Jarvis process in its own terminal. If an optional search dependency/model fails, inspect the fixed status notice and keyword fallback. Never paste credentials into an issue or commit local configuration, runtime journals or personal notes.

@@ -14,6 +14,8 @@ SESSION_TOKEN_BYTES = 24
 SESSION_LEASE_S = 10
 REAPER_INTERVAL_S = 2
 STOP_WAIT_S = 3
+FINAL_WAIT_S = 4
+FINAL_POLL_S = 0.05
 AUDIO_LEASE_S = 15
 AUDIO_RENDER_TIMEOUT_S = 15
 AUDIO_TEXT_CHARS = 8000
@@ -156,6 +158,24 @@ def handle(action, token=None, device_id=None):
             return {'token': token, 'status': 'starting'}
         if not SESSION or not isinstance(token, str) or not secrets.compare_digest(token, SESSION['token']):
             return {'status': 'error', 'text': 'The microphone session ended. Click Mic to retry.'}
+        if action == 'finish':
+            folder = Path(SESSION['scratch'].name)
+            (folder / 'finish').touch()
+            deadline = time.monotonic() + FINAL_WAIT_S
+            state = {}
+            while time.monotonic() < deadline:
+                (folder / 'heartbeat').touch()
+                try:
+                    state = json.loads((folder / 'state.json').read_text())
+                except (OSError, ValueError):
+                    pass
+                if state.get('status') in ('final', 'error'):
+                    break
+                time.sleep(FINAL_POLL_S)
+            confirmed = state.get('status') == 'final'
+            text = state.get('text', '')
+            stop()
+            return {'status': 'final' if confirmed else 'review', 'text': text, 'confirmed': confirmed}
         if action == 'stop':
             stop()
             return {'status': 'stopped'}

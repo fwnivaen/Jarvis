@@ -15,7 +15,8 @@ Jarvis runs on a local Python server with a plain JavaScript viewer and native m
 - **Live activity:** compact Scout, Weave and Prism signals glow as agents work and connect around shared findings. The existing drawer and Work view show tools, timing, retries and reported tokens. Private reasoning is never displayed.
 - **Hybrid memory:** local semantic and keyword search, PDF/DOCX/XLSX text imports, and preferences that persist across sessions.
 - **Voice and vision:** an animated orb, browser/native speech, local posture landmarks, explicit camera questions and screen watch with local frame comparisons.
-- **Focus and tools:** native macOS focus controls and a shared registry of 12 tools available to the crew and an MCP stdio client.
+- **Mac assistant:** global hold-to-talk, reviewed dictation, instant app/web/window/Music commands, explicit saved routines, and a dashboard with recent action results.
+- **Shared tools:** 10 note, preference, document and screen-watch tools available to the crew and an MCP stdio client.
 
 ## Engineering highlights
 
@@ -37,7 +38,7 @@ python3 tools/ultra_settings.py enable
 ./start.sh
 ```
 
-Open [localhost:4700](http://localhost:4700). Setup downloads the optional local embedding model. The server creates its private configuration when missing; no API key is required for the Codex backend. Ultra is opt-in in the committed configuration, and disabling it restores the original route.
+Open [localhost:4700](http://localhost:4700). The launcher builds and opens **Jarvis Desktop** on macOS; hold **Control + Option + Space** to talk or **Control + Option + D** to dictate. The ⌘ rail button opens the Mac assistant dashboard. [Desktop features and setup](docs/mac-assistant.md). Setup downloads the optional local embedding model. The server creates its private configuration when missing; no API key is required for the Codex backend. Ultra is opt-in in the committed configuration, and disabling it restores the original route.
 
 To inspect the galaxy without installing the optional packages or compiling native helpers:
 
@@ -71,7 +72,7 @@ python3 preflight.py
 
 The first two commands check repository hygiene and the regression suite. Full preflight requires the running Mac server, performs real model calls and cleans up its own temporary capture. CI runs the automated suite without account credentials or physical sensor access and builds the native helpers on macOS.
 
-The execution upgrade's latest local regression run contains **257 passing Python tests with zero skips** in the optional CPython 3.12 environment and **14 passing JavaScript suites**. System Python runs 257 tests with 28 optional skips. Full live preflight reports **14 pass, 0 fail, 2 warn**; earlier transient failures remain in the ledger. The required visible Focus probe reports **15 pass, 1 fail at 1600×1000**: the viewport override did not produce the required 1440×900, so this gate has not passed. Historical visual results remain in [the agent visuals record](docs/agent-visuals.md).
+The October 25 Mac assistant integration passes **280 Python tests with zero skips** in the optional CPython 3.12 environment with local embeddings enabled, plus **13 JavaScript suites**. Full live preflight reports **14 pass, 0 fail, 2 warn**; both warnings skip separate API-provider checks because Codex sign-in is active. Focus, its tracking loop, native card, commands, tools, assets, and probe are removed. The visible dashboard was checked in Chrome; physical hotkeys, microphone, insertion, window control and audible playback still need an unlocked Mac and the required permissions. [Integration scope and evidence](docs/mac-assistant.md).
 
 The official Deep Agents helper, durable execution controls, browser-worker preparation, offline GEPA/evaluation and reviewed promotion boundaries are implemented and fixture tested. New optional features stay off. **No remote deployment, live Deep Agents provider comparison, learning benefit, 24-hour soak or Mac-off independence is verified.** Oracle provisioning is blocked by the unavailable verified account. [Capability status and measurements](docs/upgrade-results.md) · [Persistent checklist](docs/upgrade-checklist.md) · [Evidence ledger](docs/upgrade-evidence.md) · [Contracts](docs/upgrade-contracts.md) · [Deployment instructions](deploy/remote/README.md).
 
@@ -86,7 +87,7 @@ Max-effort workers can reach the 45-second limit; the system returns an explicit
 | Memory and document conversion | [ultra_memory.py](ultra_memory.py), [ultra_documents.py](ultra_documents.py) |
 | Shared tools and checkpoint recovery | [ultra_tools.py](ultra_tools.py), [ultra_workflows.py](ultra_workflows.py) |
 | Galaxy, orb and live crew | [viewer/](viewer/) |
-| Focus, voice and desktop helpers | [focus.py](focus.py), [voice_bridge.py](voice_bridge.py), [native/](native/) |
+| Mac assistant, voice and desktop helpers | [assistant_actions.py](assistant_actions.py), [voice_bridge.py](voice_bridge.py), [native/](native/) |
 | Regression checks | [tests/](tests/), [CI workflow](.github/workflows/ci.yml) |
 
 [Architecture](docs/ARCHITECTURE.md) · [Usage](docs/USAGE.md) · [Documentation index](docs/README.md) · [Third-party notices](THIRD_PARTY.md)

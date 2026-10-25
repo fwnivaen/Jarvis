@@ -61,7 +61,7 @@ class WorkflowHttpTests(unittest.TestCase):
         posture = dict(eyes_active=False, present=False, head_down=False, slouched=False)
         with patch.object(server.build, "NOTES_DIR", Path(__file__).parent), \
                 patch.object(server, "retrieve", return_value=[]), \
-                patch.object(server.FOCUS, "state", return_value=posture), \
+                patch.object(server.SENSORS, "state", return_value=posture), \
                 patch.object(server, "answer_request", return_value=ANSWER) as answer:
             status, _, _ = request("/chat", "POST", dict(question=QUESTION, workflow="research", resume_run=RUN_ID))
             self.assertEqual(status, 200)

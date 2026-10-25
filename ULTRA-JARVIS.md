@@ -1,6 +1,6 @@
 # Ultra Jarvis — complete upgrade
 
-This extends the existing Python server, Markdown vault, galaxy, orb, Focus, vision and native voice. The lightweight runtime incorporates CrewAI-style manager delegation, named roles, shared reports, peer review, structured evidence, reusable workflows, checkpoints, recovery and measured evaluations. It does not install the CrewAI framework. Agent tools perform requested operations without an additional per-action approval drawer; existing editor confirmations and sensor permissions still apply.
+This extends the existing Python server, Markdown vault, galaxy, orb, vision and native voice. The lightweight runtime incorporates CrewAI-style manager delegation, named roles, shared reports, peer review, structured evidence, reusable workflows, checkpoints, recovery and measured evaluations. It does not install the CrewAI framework. Agent tools perform requested operations without an additional per-action approval drawer; existing editor confirmations and sensor permissions still apply.
 
 ## Start on macOS
 
@@ -16,7 +16,7 @@ python3 tools/ultra_settings.py enable
 
 Open `http://127.0.0.1:4700`. If that port is already occupied, stop the existing Jarvis process in its own Terminal before starting the upgraded server. Codex uses its existing ChatGPT sign-in; no API key is added or printed. If Codex is not signed in on another Mac, use its normal `codex login` flow.
 
-Setup requires Python 3.11 or newer. It can also locate an available bundled Codex Python and never installs packages globally. To choose explicitly, pass `python3 tools/setup_ultra.py --python /absolute/path/to/python3.12`. The first setup downloads a public embedding model; search after setup uses the local cache. `--no-model` skips that download, retaining keyword fallback. The launcher needs Apple's command-line tools to compile the Focus helper. You can instead run `.local/ultra-full-venv/bin/python build.py` followed by `.local/ultra-full-venv/bin/python server.py` and build native helpers separately.
+Setup requires Python 3.11 or newer. It can also locate an available bundled Codex Python and never installs packages globally. To choose explicitly, pass `python3 tools/setup_ultra.py --python /absolute/path/to/python3.12`. The first setup downloads a public embedding model; search after setup uses the local cache. `--no-model` skips that download, retaining keyword fallback. The launchers use Apple's command-line tools to compile the Desktop and Voice helpers. You can instead run `.local/ultra-full-venv/bin/python build.py` followed by `.local/ultra-full-venv/bin/python server.py` and build native helpers separately.
 
 To return to the existing route:
 
@@ -71,7 +71,6 @@ The same validated registry backs the crew, loopback HTTP and the standard MCP s
 
 - `notes_search`, `note_read`, `notes_capture`, `note_write`
 - `preferences_get`, `preferences_set`, `preferences_forget`
-- `focus_status`, `focus_control`
 - `screen_watch_status`, `screen_watch_control`
 - `document_import`
 
@@ -128,7 +127,7 @@ python3 tools/check_ultra.py --embeddings
 python3 preflight.py
 ```
 
-Run the second command with the upgraded server active. For the review server use `python3 preflight.py --url http://127.0.0.1:4701`. Open `http://127.0.0.1:4700/?focusprobe=1` visibly at an actual 1440×900 viewport and read its complete title. Test evidence and the current summary lines are in `docs/ultra-verification.md`.
+Run the second command with the upgraded server active. For the review server use `python3 preflight.py --url http://127.0.0.1:4701`. Inspect the Mac assistant dashboard visibly, then test global hotkeys, microphone and Accessibility actions on an unlocked Mac. Focus and its probe are removed. Test evidence and the current summary lines are in `docs/ultra-verification.md`.
 
 ## Verified dependencies and APIs — October 22, 2026
 

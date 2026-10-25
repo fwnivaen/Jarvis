@@ -5,10 +5,10 @@ import time
 from execution_control import ControlError, digest, identifier
 
 CLASSIFICATIONS = {'notes_search': 'observation', 'note_read': 'observation',
-    'preferences_get': 'observation', 'focus_status': 'observation', 'screen_watch_status': 'observation',
+    'preferences_get': 'observation', 'screen_watch_status': 'observation',
     'notes_capture': 'reversible', 'note_write': 'reversible', 'preferences_set': 'reversible',
     'preferences_forget': 'reversible', 'document_import': 'reversible',
-    'focus_control': 'reversible', 'screen_watch_control': 'reversible'}
+    'screen_watch_control': 'reversible'}
 
 
 class ToolGateway:

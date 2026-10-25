@@ -38,7 +38,7 @@ class MCPTests(unittest.TestCase):
             script = str(Path(__file__).resolve().parents[1] / "tools/ultra_mcp.py")
             async with Client(StdioServerParameters(command=sys.executable, args=[script, "--url", url])) as client:
                 tools = await client.list_tools()
-                self.assertEqual(len(tools.tools), 12)
+                self.assertEqual(len(tools.tools), 10)
                 self.assertTrue(all('ctx' not in item.input_schema.get('properties',{}) for item in tools.tools))
                 result = await client.call_tool("screen_watch_status", {})
                 self.assertFalse(result.is_error)

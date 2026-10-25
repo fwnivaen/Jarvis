@@ -59,6 +59,7 @@ var sequence = 0
 var engine: AVAudioEngine?
 var task: SFSpeechRecognitionTask?
 var request: SFSpeechAudioBufferRecognitionRequest?
+var finalizing = false
 var lastStatus = "starting"
 var lastText = ""
 var audioMetadata: [String: Any]?
@@ -181,6 +182,12 @@ func authorizeSpeech() {
     }
 }
 let watchdog = Timer.scheduledTimer(withTimeInterval: pollSeconds, repeats: true) { _ in
+    if !finalizing && FileManager.default.fileExists(atPath: directory.appendingPathComponent("finish").path) {
+        finalizing = true
+        engine?.stop()
+        engine?.inputNode.removeTap(onBus: 0)
+        request?.endAudio()
+    }
     let stopped = FileManager.default.fileExists(atPath: directory.appendingPathComponent("stop").path)
     let attributes = try? FileManager.default.attributesOfItem(atPath: heartbeat.path)
     let date = attributes?[.modificationDate] as? Date ?? .distantPast

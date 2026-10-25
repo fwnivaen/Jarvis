@@ -11,7 +11,8 @@ import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from focus import Speaker, SPEECH_VOICE
+import subprocess
+SPEECH_VOICE = "Daniel"
 
 SERVER = 'http://127.0.0.1:4700'
 READY_TIMEOUT_S = 12
@@ -36,7 +37,7 @@ def main():
     if not token:
         print(json.dumps({'passed': False, 'reason': state.get('text', 'Microphone unavailable')}))
         return 1
-    speaker = Speaker()
+    speaker = None
     result = {'voice': SPEECH_VOICE, 'microphone_ready': False,
               'sample_detected': False, 'speech_completed': False}
     try:
@@ -51,13 +52,13 @@ def main():
             time.sleep(POLL_S)
         if not result['microphone_ready']:
             raise RuntimeError('Microphone did not become ready')
-        speaker(SAMPLE)
+        speaker = subprocess.Popen(['/usr/bin/say', '-v', SPEECH_VOICE, SAMPLE], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         deadline = time.monotonic()+AUDIO_TIMEOUT_S
         while time.monotonic() < deadline:
             state = request('poll', token)
             words = set(state.get('text', '').lower().replace('.', '').replace(',', '').split())
             result['sample_detected'] |= EXPECTED_WORDS <= words
-            result['speech_completed'] = not speaker.busy()
+            result['speech_completed'] = speaker.poll() is not None
             if result['sample_detected'] and result['speech_completed']:
                 break
             if state['status'] == 'error':
