@@ -159,7 +159,7 @@ class Preflight(unittest.TestCase):
                 self.assertIsNone(server.ACTIVE_BRAIN)
             result = server.swap_model('try on Claude Fable 5.1')
             self.assertTrue(result['error'])
-            self.assertTrue(result['answer'].startswith('That brain needs an OpenRouter key, sir. I can offer:'))
+            self.assertEqual(result['answer'], server.usage_policy.ERROR_MESSAGES['subscription_required'])
             self.assertFalse(server.swap_model('switch to Luna')['error'])
             self.assertEqual(server.active_settings()['model'], 'gpt-6-luna')
             self.assertEqual(server.load_config(), config)
@@ -215,7 +215,9 @@ class Preflight(unittest.TestCase):
             {'id': 'openai/gpt-6-astra', 'architecture': {'input_modalities': ['text', 'image']}},
             {'id': 'invented/model'}]}).encode()
         config = {'brain': 'codex-cli', 'model': 'gpt-6-astra', 'openrouter_api_key': 'test-only'}
-        with patch.object(server, 'OPENROUTER_AVAILABLE', frozenset()), patch.object(server, 'OPENROUTER_IMAGES', frozenset()), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'load_config', return_value=config):
+        # Preserve legacy catalog/schema assertions under an explicit test-only
+        # policy override. Separate usage-policy tests enforce the shipped lock.
+        with patch.object(server.usage_policy, 'ALLOWED_BACKENDS', {'codex-cli','openrouter'}), patch.object(server, 'OPENROUTER_AVAILABLE', frozenset()), patch.object(server, 'OPENROUTER_IMAGES', frozenset()), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'load_config', return_value=config):
             with patch.object(server.urllib.request, 'urlopen', return_value=response):
                 server.refresh_router_catalog(config)
             self.assertEqual(server.OPENROUTER_AVAILABLE, {'openai/gpt-6-astra'})
@@ -232,7 +234,7 @@ class Preflight(unittest.TestCase):
         response = MagicMock()
         value = {'model': model, 'choices': [{'message': {'content': json.dumps({'answer':'Ready.', 'nodes':[], 'about_notes':False})}}]}
         response.__enter__.return_value.read.return_value = json.dumps(value).encode()
-        with patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'OPENROUTER_AVAILABLE', {model}), patch.object(server, 'OPENROUTER_IMAGES', {model}), patch.object(server.urllib.request, 'urlopen', return_value=response) as send, contextlib.redirect_stdout(io.StringIO()):
+        with patch.object(server.usage_policy, 'ALLOWED_BACKENDS', {'codex-cli','openrouter'}), patch.object(server, 'load_config', return_value=config), patch.object(server, 'ACTIVE_BRAIN', None), patch.object(server, 'OPENROUTER_AVAILABLE', {model}), patch.object(server, 'OPENROUTER_IMAGES', {model}), patch.object(server.urllib.request, 'urlopen', return_value=response) as send, contextlib.redirect_stdout(io.StringIO()):
             for image in (None, b'jpeg'):
                 self.assertFalse(server.ask_brain('system', [], [], 'question', image=image).get('error', False))
                 body = json.loads(send.call_args.args[0].data)
@@ -359,7 +361,7 @@ class Preflight(unittest.TestCase):
                     self.first = False
                     raise subprocess.TimeoutExpired("codex", server.BRAIN_TIMEOUT_S)
                 return None, ""
-        with patch.object(server, "load_config", return_value=safe_config), patch.object(server, "find_codex", return_value="codex"), patch.object(server.subprocess, "Popen", TimedOut), patch.object(server.os, "killpg"), contextlib.redirect_stdout(io.StringIO()):
+        with patch.object(server.CODEX_USAGE, 'require_included_usage'), patch.object(server, "load_config", return_value=safe_config), patch.object(server, "find_codex", return_value="codex"), patch.object(server.subprocess, "Popen", TimedOut), patch.object(server.os, "killpg"), contextlib.redirect_stdout(io.StringIO()):
             result = server.ask_brain("system", [], [], "test")
             self.assertTrue(result["error"])
             self.assertIn("too long", result["answer"])

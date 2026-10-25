@@ -24,6 +24,7 @@ BRAIN = "gpt-6.1-sol"
 ASTRA = "gpt-6-astra"
 WORKERS = 3
 TEST_WAIT_S = 2
+PROTOCOL_WAIT_S = .1
 NOTES = [{"id": 7, "title": "Budget", "text": "The budget is 120 pounds. Revenue is 200 pounds."}]
 SECRET = "PRIVATE_PROMPT_AND_REASONING_SENTINEL"
 
@@ -364,6 +365,8 @@ class MonitorAndProtocolTests(unittest.TestCase):
         methods = []
         def rpc(method, _params, _deadline):
             methods.append(method)
+            if method == 'account/read':return {'account':{'type':'chatgpt'}}
+            if method == 'account/rateLimits/read':return {'ordinaryUsageAllowed':True,'rateLimits':{'primary':{'usedPercent':0}}}
             if method == "thread/start":
                 return {"thread": {"id": "test-thread"}, "model": QUICK}
             if method == "turn/start":
@@ -372,8 +375,8 @@ class MonitorAndProtocolTests(unittest.TestCase):
         with patch.object(bridge, "start"), patch.object(bridge, "_rpc", side_effect=rpc):
             with self.assertRaisesRegex(BridgeError, "timeout"):
                 bridge.complete(model=QUICK, effort="high", system="Synthetic test", payload={},
-                    schema=ultra.CHECKED_SCHEMA, deadline=time.monotonic(), observer=lambda _: None)
-        self.assertEqual(methods, ["thread/start", "turn/start", "turn/interrupt", "thread/unsubscribe"])
+                    schema=ultra.CHECKED_SCHEMA, deadline=time.monotonic()+PROTOCOL_WAIT_S, observer=lambda _: None)
+        self.assertEqual(methods, ['account/read','account/rateLimits/read',"thread/start", "turn/start", "turn/interrupt", "thread/unsubscribe"])
         self.assertEqual(bridge._calls, {})
         bridge._scratch = None
 
@@ -382,6 +385,8 @@ class MonitorAndProtocolTests(unittest.TestCase):
         bridge._scratch = SimpleNamespace(name="/temporary-empty-workspace")
         bridge._models = {QUICK: {"supportedReasoningEfforts": [{"reasoningEffort": "high"}]}}
         def rpc(method, _params, _deadline):
+            if method == 'account/read':return {'account':{'type':'chatgpt'}}
+            if method == 'account/rateLimits/read':return {'ordinaryUsageAllowed':True,'rateLimits':{'primary':{'usedPercent':0}}}
             if method == "thread/start":
                 return {"thread": {"id": "test-thread"}}
             if method == "turn/start":

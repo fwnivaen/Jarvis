@@ -84,11 +84,12 @@ class SDKTests(unittest.TestCase):
         self.assertIsNotNone(self.adapter.process.poll())
         with self.assertRaises(ControlError):self.store.authenticate(self.token,self.run['id'])
 
-    def test_separate_credentials_required_without_changing_codex(self):
+    def test_separate_credentials_cannot_enable_paid_model(self):
         from unittest.mock import patch
-        with patch.dict('os.environ',{},clear=True):
-            with self.assertRaisesRegex(ControlError,'Separate authorized'):
-                self.adapter.start('Research',model='fixture')
+        for environment in ({}, {'JARVIS_DEEPAGENTS_API_KEY':'test-only'}):
+            with patch.dict('os.environ',environment,clear=True):
+                with self.assertRaisesRegex(ControlError,'paid API providers are disabled'):
+                    self.adapter.start('Research',model='fixture')
         self.assertIsNone(self.adapter.process)
 
     def test_cancel_kills_helper_but_retains_owner_while_read_callback_settles(self):

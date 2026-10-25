@@ -6,7 +6,7 @@ A personal AI assistant that connects a Markdown knowledge vault, a 3D galaxy, v
 
 ![Jarvis galaxy with three real working agent signals and their shared constellation](docs/screenshots/agents-live.jpg)
 
-Jarvis runs on a local Python server with a plain JavaScript viewer and native macOS helpers. Notes, search indexes and runtime state live on your machine. Model requests use the configured cloud backend; selected note excerpts and explicit vision frames can leave the machine. The included 30-note café vault is fictional demonstration data.
+Jarvis runs on a local Python server with a plain JavaScript viewer and native macOS helpers. Notes, search indexes and runtime state live on your machine. Model requests use the signed-in ChatGPT/Codex account and require a verified included allowance; separately billed API providers are disabled. Selected note excerpts and explicit vision frames can leave the machine. The included 30-note café vault is fictional demonstration data. See the [usage policy and its limits](docs/usage-policy.md).
 
 ## What it does
 

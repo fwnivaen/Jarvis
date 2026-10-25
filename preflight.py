@@ -210,7 +210,12 @@ class Harness:
         require(executable is not None, 'Codex CLI was not found in PATH or its installed app location')
         result = subprocess.run([executable, 'login', 'status'], capture_output=True, text=True, timeout=LOCAL_TIMEOUT_S)
         require(result.returncode == 0, 'Codex is not logged in; run codex login locally')
-        return 'installed Codex CLI found and login status succeeded'
+        server.CODEX_USAGE.executable = executable
+        try:
+            server.CODEX_USAGE.require_included_usage(time.monotonic()+LOCAL_TIMEOUT_S)
+        except server.ultra.BridgeError:
+            raise CheckFailure('ChatGPT sign-in and included Codex allowance could not be verified; no paid fallback') from None
+        return 'ChatGPT authentication and included Codex allowance verified; paid API providers disabled'
 
     def minimal_brain(self):
         config = self.settings()
@@ -225,6 +230,8 @@ class Harness:
 
     def key_check(self):
         config = self.settings()
+        if config.get('brain', 'codex-cli') not in server.usage_policy.ALLOWED_BACKENDS:
+            raise CheckFailure('Paid API brain blocked by the included-usage policy; select a Codex model')
         if config.get('brain', 'codex-cli') == 'codex-cli':
             raise CheckWarning('skipped: codex-cli brain active')
         if self.quick:
@@ -258,11 +265,10 @@ class Harness:
             status, value = self.json_request('/model', {'question': 'try on opus 5'})
             require(status == 400 and value.get('error') is True, 'fake version was not refused')
             require(value.get('brain') == before.get('brain'), 'refusal changed the active brain')
-            if not server.has_router_key(config):
-                status, value = self.json_request('/model', {'question': 'try on Claude Fable 5.1'})
-                require(status == 400 and value.get('error') is True and value.get('answer', '').startswith(
-                    'That brain needs an OpenRouter key, sir. I can offer:'), 'placeholder key was not honestly refused')
-                require(value.get('brain') == before.get('brain'), 'key refusal changed the active brain')
+            status, value = self.json_request('/model', {'question': 'try on Claude Fable 5.1'})
+            require(status == 400 and value.get('error') is True and value.get('answer') ==
+                    server.usage_policy.ERROR_MESSAGES['subscription_required'], 'paid provider was not honestly refused')
+            require(value.get('brain') == before.get('brain'), 'billing refusal changed the active brain')
             status, value = self.json_request('/model', {'question': 'switch to Luna'})
             require(status == 200 and value.get('brain', {}).get('backend') == 'codex-cli'
                     and value['brain']['model'] == 'gpt-6-luna', 'exact Codex swap failed')
@@ -280,7 +286,7 @@ class Harness:
                     and value['brain']['model'] == expected_model, 'reset did not restore the normal route')
         if self.quick:
             raise CheckWarning('exact refusals, swap and reset passed; swapped inference skipped: --quick')
-        return 'fake version/key refusals, real Codex swap and answer, reset to config passed'
+        return 'fake version/paid-provider refusals, real Codex swap and answer, reset to config passed'
 
     def capture(self):
         # Refuse to write a probe to a stale server without guaranteed cleanup support.

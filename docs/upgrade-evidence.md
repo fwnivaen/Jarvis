@@ -63,3 +63,28 @@ No full five-arm model comparison, comparable live p95, 90% supported-task succe
 ## Commit and cleanup record
 
 Implementation commit `f9dc6634b11fb036dd0d84aed3cef39240f394ae` was pushed successfully to `origin/main`. The 67 reviewed staged files had zero forbidden paths and zero credential-pattern matches. Private evidence/archive/configuration stayed untracked. The agent-owned loopback test server was stopped after verification; no listener remains on its test port. No cloud deployment exists. Checklist and ledger completion metadata are recorded in a following documentation-only commit.
+
+## Included-usage continuation — 2026-10-24
+
+User constraint: continue using free resources/the existing ChatGPT CLI account. Base revision `7e5ee804b8a97861316128d757421d3ccd4eb357`. The tested source is identified in the follow-up commit record. Source-only policy changes do not activate Deep Agents, cloud workspaces, collection or learned behavior. Original private configuration and Codex credential stores remain in place.
+
+| Gate | Environment / procedure | Actual result | Private evidence and limits |
+| --- | --- | --- | --- |
+| Usage authentication/routing | Installed Codex CLI 0.162.0-alpha.17.2, existing private sign-in; account/read, effective config/read and fresh account/rateLimits/read | ChatGPT authentication; OpenAI provider; standard tier; explicit ordinary included usage allowed | Only fixed route/permission fields inspected/reported, no identity/credentials or credit balance logged. No API key authentication probe, credit purchase, reset redemption or billing change. |
+| Usage regression | Optional CPython 3.12, actual SDK/GEPA fixtures and local embeddings; `python3 tools/check_ultra.py --embeddings` | **269 Python tests OK, zero skips; 14 browser suites pass** | `included-usage-final-checks.txt`. 12 new usage tests cover keys/config/aliases, unknown/exhausted and multibucket quotas, provider/tier, revoked auth/queued tools, terminal failures and cancellation/expiry during admission. Original timeout/cancellation assertions retained; their fixtures now include account/usage RPCs. Legacy API transport assertions retained under explicit test-only policy override. |
+| Intermediate failures | Earlier fixture/preflight attempts | First suite: 3 failures/1 error from old RPC fixtures lacking account/allowance responses. First preflight: **11 pass, 3 fail, 2 warn** (old fixtures, foreground reader, old key-refusal wording) | `included-usage-regressions.txt`, `included-usage-preflight.txt`; retained. RPC fixtures and refusal assertions updated for the actual new contract; original behavioral assertions retained. Subsequent complete regression/preflight runs passed. |
+| Actual app-server gateway call | Live signed-in Luna/high, synthetic note only, ToolSession gateway and structured output schema | One `note_read`; correct answer/source; valid token accounting; 5.219 s, 11,903 cumulative reported tokens | `included-usage-live-tool.json`. No API key/provider substitution; cost unknown. This sample precedes the final cancellation-during-admission guard; that guard is covered in the final full tests/preflight. Not a benchmark or Linux evidence. |
+| Live paid-provider refusal and UI | Running loopback server GET /model, full preflight swap/refusal; existing browser model chooser | Only Codex models available; both OpenRouter buttons disabled with included-usage explanation. Galaxy restored, 30 notes/95 links, devices off | `included-usage-live-model-policy.json`, `included-usage-model-chooser.jpg`. No model/provider change, new tab or optional feature activation. |
+| Full preflight, final serving source | Primary server in optional environment on loopback 4700; `python3 preflight.py` | **14 pass, 0 fail, 2 warn** | `included-usage-serving-preflight.txt`. Warnings are the two API checks skipped for the Codex route. Actual ChatGPT model swap/chat/recall/image and synthetic capture/save/recall/cleanup passed. |
+| Required Focus probe | Existing Chrome tab, supported 1440×900 viewport override | **15 pass, 1 fail at 1600×1000 — FAIL viewport** | Full title below. Browser reports visible; native inventory reports the Mac locked, so physical visibility/window count could not be established. Required gate stays failed. Override reset; original tab returned to primary JARVIS. |
+
+Latest required summaries:
+
+```text
+14 pass, 0 fail, 2 warn
+FOCUS PROBE: 15 pass, 1 fail | 1600x1000 | FAIL viewport | PASS visible | PASS reload-read-only | PASS focused | PASS deferred | PASS unavailable | PASS paused | PASS drift | PASS excused | PASS home | PASS intent-window | PASS commands | PASS pixel-identical | PASS pixel-change | PASS disconnect | PASS visible-at-finish
+```
+
+Running Focus `/focus/diag` was queried; diagnostic fields and live tick passed the final preflight. Session ledger has five records; legacy numeric aggregate exists. Native browser-window count is **unavailable**, because the Mac was locked. The assistant-controlled tab's host was verified as the primary loopback server. A browser visibility bit does not establish physical unlocked visibility, and the wrong viewport alone fails acceptance.
+
+The installed protocol exposes no atomic included-only spending reservation or reliable free-versus-purchased credit classification. A fresh snapshot can race shared account usage or an in-flight turn. No provider-enforced zero-charge guarantee, free API credits, Linux readiness, remote operation or learned improvement is claimed. See [usage policy](usage-policy.md) for enforcement and recovery. Oracle verification, unfinished ownership/browser/learning implementation and every other open acceptance gate remain in [the checklist](upgrade-checklist.md).

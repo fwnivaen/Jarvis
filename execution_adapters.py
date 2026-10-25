@@ -9,8 +9,9 @@ import subprocess
 import threading
 import time
 
-from execution_control import ControlError,digest
+from execution_control import ControlError
 from helper_protocol import frame, parse, MAX_FRAME_BYTES
+import usage_policy
 
 ROOT = Path(__file__).resolve().parent
 POLL_S = .05
@@ -22,7 +23,6 @@ MAX_CHILD_CALLS = 8
 MAX_QUESTION_CHARS = 2000
 PROTOCOL_KEY_BYTES = 32
 READ_TOOLS = frozenset({'notes_search','note_read','preferences_get'})
-PROCEDURE=ROOT/'optional/deepagents/procedure.json'
 
 
 class LangGraphAdapter:
@@ -51,8 +51,8 @@ class LangGraphAdapter:
 class DeepAgentsAdapter:
     """One SDK process per run; no CodexBridge-as-BaseChatModel conversion.
 
-    Operator supplies a separately authorized model/key. Live selection is gated
-    outside this adapter; it is not in default server routing. Token goes only to
+    Live inference is blocked by the included-usage policy, even if a key exists.
+    Fixtures use a scripted model, never CodexBridge as a raw model. Token goes only to
     the helper, never the model. Whole process group termination is confirmed.
     """
     def __init__(self, python, gateway, store, run_id, token, validator):
@@ -82,18 +82,14 @@ class DeepAgentsAdapter:
         if not isinstance(question,str) or not 0<len(question)<=MAX_QUESTION_CHARS:
             raise ControlError('Supply a bounded research question.')
         actor=self.store.authenticate(self.token,self.run_id)
-        if not fixture and (not model or not os.environ.get('JARVIS_DEEPAGENTS_API_KEY')):
-            raise ControlError('Separate authorized model and JARVIS_DEEPAGENTS_API_KEY required; Codex login is not an API key.')
-        if model and not fixture and model != run['versions']['model']:
-            raise ControlError('Model differs from pinned run.')
-        if not fixture and run['versions']['behavior'] != digest(json.loads(PROCEDURE.read_text())):
-            raise ControlError('Approved procedure differs from pinned run.')
+        if fixture is not True:
+            raise ControlError(usage_policy.ERROR_MESSAGES['subscription_required'] +
+                ' Live Deep Agents has no verified included-usage model adapter and remains disabled.')
         self.child_token=self.store.issue(self.run_id,parent_token=self.token,
             permissions=READ_TOOLS & set(actor['permissions']),max_calls=min(MAX_CHILD_CALLS,actor['max_calls']))
         env={k:os.environ[k] for k in ('PATH','TMPDIR','SYSTEMROOT') if k in os.environ}
         env.update(JARVIS_HELPER_TOKEN=self.key, LANGSMITH_TRACING='false', LANGCHAIN_TRACING_V2='false',
                    PYTHONUNBUFFERED='1', PYTHONDONTWRITEBYTECODE='1')
-        if not fixture:env['JARVIS_DEEPAGENTS_API_KEY']=os.environ['JARVIS_DEEPAGENTS_API_KEY']
         self.deadline=time.monotonic()+min(duration_s,max(0,run['expires_at']-time.time()))
         self.process=subprocess.Popen([str(self.python),'-I',str(ROOT/'optional/deepagents/helper.py')],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,

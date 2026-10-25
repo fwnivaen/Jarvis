@@ -91,6 +91,8 @@ class ToolTests(unittest.TestCase):
         bridge._models = {QUICK: {"supportedReasoningEfforts": [{"reasoningEffort": "high"}]}}
         sent, calls = [], []
         def rpc(method, params, deadline):
+            if method == 'account/read':return {'account':{'type':'chatgpt'}}
+            if method == 'account/rateLimits/read':return {'ordinaryUsageAllowed':True,'rateLimits':{'primary':{'usedPercent':0}}}
             if method == "thread/start":
                 self.assertEqual(params["dynamicTools"], self.registry.dynamic_specs())
                 return {"thread": {"id": "thread"}}
@@ -127,6 +129,8 @@ class ToolTests(unittest.TestCase):
         bridge._models = {QUICK: {"supportedReasoningEfforts": [{"reasoningEffort": "high"}]}}
         release = threading.Event()
         def rpc(method, params, deadline):
+            if method == 'account/read':return {'account':{'type':'chatgpt'}}
+            if method == 'account/rateLimits/read':return {'ordinaryUsageAllowed':True,'rateLimits':{'primary':{'usedPercent':0}}}
             if method == "thread/start":
                 return {"thread": {"id": "thread"}}
             if method == "turn/start":

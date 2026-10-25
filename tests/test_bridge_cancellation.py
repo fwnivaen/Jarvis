@@ -20,6 +20,8 @@ class CancellationTests(unittest.TestCase):
                 bridge._models={MODEL:{'supportedReasoningEfforts':[{'reasoningEffort':'high'}]}}
                 cancelled=threading.Event()
                 def rpc(method,params,deadline):
+                    if method=='account/read':return {'account':{'type':'chatgpt'}}
+                    if method=='account/rateLimits/read':return {'ordinaryUsageAllowed':True,'rateLimits':{'primary':{'usedPercent':0}}}
                     if method=='thread/start':return {'thread':{'id':'test-thread'}}
                     if method=='turn/start':cancelled.set();return {'turn':{'id':'test-turn'}}
                     if method=='turn/interrupt' and confirmed:bridge._calls['test-thread'].put(('done','interrupted'))
@@ -39,6 +41,8 @@ class CancellationTests(unittest.TestCase):
         cancelled=threading.Event();methods=[]
         def rpc(method,params,deadline):
             methods.append(method)
+            if method=='account/read':return {'account':{'type':'chatgpt'}}
+            if method=='account/rateLimits/read':return {'ordinaryUsageAllowed':True,'rateLimits':{'primary':{'usedPercent':0}}}
             if method=='thread/start':return {'thread':{'id':'test-thread'},'model':MODEL}
             if method=='turn/start':
                 cancelled.set()
@@ -49,7 +53,7 @@ class CancellationTests(unittest.TestCase):
                 bridge.complete(model=MODEL,effort='high',system='test',payload={},schema={},
                     deadline=time.monotonic()+1,observer=lambda _:None,cancel_event=cancelled)
         self.assertEqual(failure.exception.code,'cancelled')
-        self.assertEqual(methods,['thread/start','turn/start','turn/interrupt','thread/unsubscribe'])
+        self.assertEqual(methods,['account/read','account/rateLimits/read','thread/start','turn/start','turn/interrupt','thread/unsubscribe'])
         self.assertFalse(bridge._calls)
 
     def test_precancelled_turn_never_starts(self):

@@ -9,6 +9,7 @@ import time
 # -I prevents ambient PYTHONPATH/package injection. Only reviewed repo modules.
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
 from helper_protocol import frame,parse,MAX_FRAME_BYTES
+from usage_policy import require_backend
 
 PROCEDURE=json.loads((Path(__file__).resolve().parent/'procedure.json').read_text())
 
@@ -160,11 +161,9 @@ def main():
     if initial['kind']!='start':raise ValueError('Start required')
     config=initial['data']
     from langsmith import tracing_context
-    if config['fixture']:model=fixture_model(config['scenario'])
+    if config['fixture'] is True:model=fixture_model(config['scenario'])
     else:
-        from langchain_openai import ChatOpenAI
-        model=ChatOpenAI(model=config['model'],api_key=os.environ.pop('JARVIS_DEEPAGENTS_API_KEY'),
-            max_tokens=MAX_OUTPUT_TOKENS,max_retries=0,timeout=config['duration_s'])
+        require_backend('deepagents-api')
     budget={'lock':threading.RLock(),'deadline':time.monotonic()+config['duration_s'],
         'models':0,'tokens':0,'tools':0,'delegations':0,'scratch':{}}
     with tracing_context(enabled=False):

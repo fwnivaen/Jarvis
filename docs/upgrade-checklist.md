@@ -6,6 +6,9 @@ Implementation is distinct from acceptance. An unchecked gate stays off. Existin
 
 ## Gates and outstanding work
 
+- [x] Usage constraint (user continuation), implemented and locally verified: enforce the existing ChatGPT/Codex subscription route; block separately billed API providers even when keys or model aliases exist. Check authentication/allowances without logging identity or credentials. No credit purchases, automatic resets, paid fallback, or unverified free-provider claims. See [policy and limits](usage-policy.md).
+- [x] Usage local verification: 12 new provider/auth/quota/cancellation boundary tests; 269 Python tests with zero optional-environment skips and 14 browser suites; real signed-in CLI/preflight and app-server gateway tool/schema/usage checks. Full preflight **14 pass, 0 fail, 2 warn**. A usage snapshot is not a provider-side hard spending cap. The required visual gate below remains open.
+
 - [x] A: Locate actual repository and read applicable instructions; inspect baseline and prior pilot.
 - [x] A: Standard Python baseline: 184 tests, 25 skipped; full live preflight: **14 pass, 0 fail, 2 warn**. Raw evidence: `.local/upgrade-evidence/baseline-{python,preflight}.txt` (private, untracked).
 - [x] A: Optional baseline: 184 tests OK, one skipped; all 14 browser suites pass. Galaxy/probe references saved privately.
@@ -15,7 +18,7 @@ Implementation is distinct from acceptance. An unchecked gate stays off. Existin
 - [x] B local compatibility: graph reads, Ultra, HTTP tool calls, native note/capture/preference/import writes and MCP use ToolSession/gateway. Work UI request keys deduplicate admission. A cancelled read retains admission until its callback settles. Interrupt acknowledgment requires terminal turn confirmation or process termination.
 - [ ] B: Authenticated per-task ownership across all legacy HTTP/MCP and local capability boundaries, including MCP process restart; full compatibility acceptance.
 - [x] C implementation/fixtures: actual pinned SDK graph/helper, isolated CPython 3.12, authenticated protocol, note tools, virtual scratch, compiled child, reviewed procedure declaration, schema/error/cancellation tests.
-- [ ] C: Actual model endpoint compatibility and paired benefit comparison; activation OFF pending evidence and authorized model credentials.
+- [ ] C: Actual model endpoint compatibility and paired benefit comparison; activation OFF. The included-usage-only constraint now rejects live API calls even when a key exists. A supported included-usage raw-model integration requires implementation and validation; never wrap CodexBridge as a raw model.
 - [x] D preparation/fixtures: durable scheduler, private operator spool, systemd supervision, source-only packaging, SQLite backup/restore and operator teardown instructions. Malformed/insecure spool requests quarantine without cancelling other work. No deployment or remote viewer integration.
 - [x] D dependency metadata: official revisions/licenses and image digests verified; hash-lock binary resolution passes for Linux arm64/amd64. This is not a Linux installation.
 - [ ] D live: **BLOCKED: user confirmed no verified Oracle account.** No Docker/OCI CLI/config exists locally. Next: private account verification, actual free allowances/capacity, selected Linux runtime and fresh login. No paid fallback authorized.
@@ -37,6 +40,7 @@ Implementation is distinct from acceptance. An unchecked gate stays off. Existin
 | Files | Purpose | Depends on / activation gate |
 | --- | --- | --- |
 | `execution_control.py`, `execution_gateway.py` | stdlib durable identities, leases, lifecycle, journal, admission and scoped tools | B fixtures; no larger concurrency |
+| `usage_policy.py`, `codex_bridge.py`, `server.py`, `preflight.py`, `tests/test_usage_policy.py` | enforce included ChatGPT usage, reject API selection/unknown quotas, preserve cancellation and terminal errors | live local sign-in/allowance/protocol evidence; Linux compatibility remains gated |
 | `execution_adapters.py`, `workflow_runtime.py`, `ultra_tools.py`, `server.py`, `tools/ultra_mcp.py` | explicit existing-executor adapter and gateway migration | preserve validators, bounded deadlines, legacy behavior |
 | `optional/deepagents/`, `tools/setup_execution.py` | pinned SDK helper with virtual scratch and declared tools | SDK fixture tests then actual model endpoint |
 | `remote_workspaces.py`, `deploy/remote/` | browser ownership, worker protocol, network policy, supervision, backup and cleanup | Linux/Docker + isolation + authentication; no paid provisioning |
@@ -47,7 +51,7 @@ Implementation is distinct from acceptance. An unchecked gate stays off. Existin
 
 ## Migration and rollback
 
-New optional features default off independently: Deep Agents, remote workspaces, outcome collection, promotion. Do not change model/provider/billing. New private stores use separate versioned paths; do not rewrite existing notes or graph IDs. Back up SQLite using its backup API, restore into a fresh private directory, validate before use. Rollback: stop controller/workers, fence leases, confirm workspace destruction (otherwise cleanup pending), disable the affected feature, restore prior executable revision and retain the private journal for uncertainty reconciliation. Never delete a pending write and replay it. Running tasks pin their initial engine/model/tools/approved bundle. Candidate instructions cannot change enforcement.
+New optional features default off independently: Deep Agents, remote workspaces, outcome collection, promotion. Do not change model/provider/billing. New private stores use separate versioned paths; do not rewrite existing notes or graph IDs. Back up SQLite using its backup API, restore into a fresh private directory, validate before use. Rollback: stop controller/workers, fence leases, confirm workspace destruction (otherwise cleanup pending), disable the affected feature, restore prior executable revision and retain the private journal for uncertainty reconciliation. Preserve the included-usage restriction in any rollback; never restore paid API selection as a workaround. Never delete a pending write and replay it. Running tasks pin their initial engine/model/tools/approved bundle. Candidate instructions cannot change enforcement.
 
 ## Evidence rules
 

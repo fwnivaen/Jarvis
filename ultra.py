@@ -11,6 +11,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from codex_bridge import BridgeError, CodexBridge, VERIFIED_MODELS
+import usage_policy
 from ultra_monitor import Monitor, terminal
 
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("ultra.json")
@@ -44,7 +45,7 @@ EXTRA_WORKER_PROFILE = ("gpt-6-luna", "high")
 EXPLICIT_WORKERS = re.compile(r"\b(?:use|run|spawn|assign)\b[^.!?]{0,60}\b(?:workers|agents)\b", re.I)
 NO_WORKERS = re.compile(r"\b(?:do not|don't|never|without|no)\s+(?:(?:use|run|spawn|assign)\s+)?(?:parallel\s+)?(?:workers|agents)\b", re.I)
 OBJECTIVE_FAILURES = frozenset({"invalid_output", "missing_sources", "math_check"})
-NO_RETRY = frozenset({"blocked_action", "model_mismatch", "model_unavailable", "effort_unavailable", "image_unavailable"})
+NO_RETRY = frozenset({"blocked_action", "model_mismatch", "model_unavailable", "effort_unavailable", "image_unavailable"}) | usage_policy.ERROR_MESSAGES.keys()
 SAFE_ERROR = "Ultra could not verify this answer. Please retry, or turn Ultra off to use your previous brain."
 STAGE_ONE_BOUNDARY = (
     " Stage 1 is read-only: no tools, file changes, sends, screen actions or test execution are available. "
@@ -813,6 +814,7 @@ class UltraJarvis:
                     messages = {"checkpoint_mismatch": "That saved run no longer matches this question, notes or settings. Start a fresh workflow.",
                         "checkpoint_unavailable": "Saved-run recovery is disabled.", "workflow_unavailable": "That workflow is unavailable or disabled.",
                         "budget_exhausted": "The saved run has exhausted its original time budget. Start a fresh request."}
+                    messages.update(usage_policy.ERROR_MESSAGES)
                     return self._result({"answer": messages.get(code, SAFE_ERROR), "about_notes": False, "nodes": [], "error": True})
                 finally:
                     if self._tool_session:

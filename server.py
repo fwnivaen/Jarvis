@@ -86,6 +86,7 @@ import ultra_memory
 import ultra_documents
 import ultra_tools
 import workflow_runtime
+import usage_policy
 WATCH = watch.Watch()
 FOCUS = focus.Focus()
 ROOT = Path(__file__).resolve().parent
@@ -97,7 +98,7 @@ BRAIN_TIMEOUT_S = 90
 SEE_TIMEOUT_S = 120
 MAX_SEE_REQUEST_BYTES = 5_000_000
 JPEG_MIME = "image/jpeg"
-SIGHT_UNSUPPORTED = "Sight needs an API brain, sir. Add an OpenAI key in config.json to enable it."
+SIGHT_UNSUPPORTED = "This Codex installation cannot inspect images. Update the CLI while keeping ChatGPT sign-in."
 PREFLIGHT_PROTOCOL = 1
 PREFLIGHT_TOKEN = re.compile(r"^[0-9a-f]{32}$")
 PREFLIGHT_CLOSED_TTL_S = 3600
@@ -248,6 +249,7 @@ PREFLIGHT_CLOSED = {}
 ULTRA_CONFIG_PATH = ROOT / "ultra.json"
 ULTRA = ultra.UltraJarvis(lambda: ultra.CodexBridge(find_codex(), DISABLED_FEATURES,
     tuple(value for value in CLI_OVERRIDES if not value.startswith("model_reasoning_effort="))))
+CODEX_USAGE = ultra.CodexBridge(None, DISABLED_FEATURES, CLI_OVERRIDES)
 
 
 class BrainError(Exception):
@@ -302,7 +304,7 @@ def has_router_key(config):
 def refresh_router_catalog(config):
     global OPENROUTER_AVAILABLE, OPENROUTER_IMAGES
     available, images = set(), set()
-    if has_router_key(config):
+    if 'openrouter' in usage_policy.ALLOWED_BACKENDS and has_router_key(config):
         try:
             with urllib.request.urlopen(OPENROUTER_MODELS_URL, timeout=MODEL_CATALOG_TIMEOUT_S) as response:
                 catalog = json.loads(response.read(MAX_CATALOG_BYTES))
@@ -341,7 +343,7 @@ def brain_status():
 
 def available_names(config, cli_only=False):
     ids = sorted(CODEX_KNOWN_MODELS)
-    if not cli_only and has_router_key(config):
+    if not cli_only and 'openrouter' in usage_policy.ALLOWED_BACKENDS and has_router_key(config):
         ids += sorted(OPENROUTER_AVAILABLE)
     return ", ".join(model_label(model) for model in ids)
 
@@ -409,7 +411,9 @@ def model_catalog():
             continue
         seen.add((backend, model))
         reason = ""
-        if backend == "openrouter":
+        if backend not in usage_policy.ALLOWED_BACKENDS:
+            reason = usage_policy.ERROR_MESSAGES['subscription_required']
+        elif backend == "openrouter":
             if not has_router_key(config):
                 reason = "Needs an OpenRouter key"
             elif model not in OPENROUTER_AVAILABLE:
@@ -419,6 +423,8 @@ def model_catalog():
         choices.append({"name": alias, "backend": backend, "model": model,
                         "label": model_label(model), "available": not reason, "reason": reason})
     return {"brain": brain_status(), "choices": choices, "aliases": list(spoken_models()),
+            "usage_policy": {"mode": "chatgpt-included-only", "paid_api_allowed": False,
+                             "automatic_credit_purchase": False},
             "command_pattern": MODEL_COMMAND_PATTERN, "version_pattern": MODEL_VERSION_PATTERN}
 
 
@@ -435,6 +441,8 @@ def swap_model(question):
             known = choice and choice[1] in (CODEX_KNOWN_MODELS if choice[0] == "codex-cli" else OPENROUTER_KNOWN_MODELS)
             if not known:
                 answer, refused = "I don't have that exact brain, sir. I can offer: " + available_names(config) + ".", True
+            elif choice[0] not in usage_policy.ALLOWED_BACKENDS:
+                answer, refused = usage_policy.ERROR_MESSAGES['subscription_required'], True
             elif choice[0] == "openrouter" and not has_router_key(config):
                 answer, refused = "That brain needs an OpenRouter key, sir. I can offer: " + available_names(config, cli_only=True) + ".", True
             elif choice[0] == "openrouter" and choice[1] not in OPENROUTER_AVAILABLE:
@@ -624,6 +632,8 @@ def cli_command(executable, model, workspace, schema_path, answer_path):
         args.extend(["--disable", feature])
     for override in CLI_OVERRIDES:
         args.extend(["-c", override])
+    for override in usage_policy.CODEX_OVERRIDES:
+        args.extend(['-c', override])
     args.append("-")
     return args
 
@@ -636,11 +646,18 @@ def ask_brain(system, notes, history, question, image=None, webcam=False):
     try:
         config = {"brain": "codex-cli", "model": "gpt-6-astra"} if webcam else active_settings()
         backend = config.get("brain", "codex-cli")
+        usage_policy.require_backend(backend)
         payload = json.dumps({"notes": notes, "history": history, "question": question}, ensure_ascii=True)
         if backend == "codex-cli":
             executable = find_codex()
             if not executable:
                 raise BrainError("I can't find Codex CLI. Install it and sign in with codex login, then try again.")
+            CODEX_USAGE.executable = executable
+            try:
+                CODEX_USAGE.require_included_usage(time.monotonic() + CLI_CHECK_TIMEOUT_S)
+            except ultra.BridgeError as error:
+                raise BrainError(usage_policy.ERROR_MESSAGES.get(error.code,
+                    usage_policy.ERROR_MESSAGES['usage_unavailable'])) from None
             if image is not None:
                 try:
                     help_result = subprocess.run([executable, "exec", "--help"], capture_output=True,
@@ -666,9 +683,7 @@ def ask_brain(system, notes, history, question, image=None, webcam=False):
                     frame_path.write_bytes(image)
                     frame_path.chmod(PRIVATE_FILE_MODE)
                     args[-1:-1] = ["--image", str(frame_path)]
-                env = os.environ.copy()
-                for name in ("OPENAI_API_KEY", "CODEX_API_KEY"):
-                    env.pop(name, None)
+                env = usage_policy.codex_environment(os.environ)
                 # Raw CLI diagnostics are never logged: they can contain sensitive context.
                 process = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                                            stderr=subprocess.PIPE, text=True, cwd=workspace,
@@ -681,6 +696,8 @@ def ask_brain(system, notes, history, question, image=None, webcam=False):
                     raise BrainError("My brain took too long to respond. Please try a shorter question.") from None
                 if process.returncode:
                     lowered = (diagnostic or "").casefold()
+                    if any(word in lowered for word in ('usage limit', 'rate limit', 'quota', 'credits depleted')):
+                        raise BrainError(usage_policy.ERROR_MESSAGES['quota_exhausted'])
                     if any(word in lowered for word in ("unauthorized", "not logged", "401", "authentication", "sign in", "refresh token")):
                         raise BrainError("Codex needs you to sign in again. Run codex login in Terminal, then retry.")
                     raise BrainError("I couldn't reach the Codex brain. Check your connection and Codex access in Terminal, then try again.")
@@ -738,7 +755,7 @@ def ask_brain(system, notes, history, question, image=None, webcam=False):
         else:
             raise BrainError("Choose codex-cli, openai-api or openrouter as the brain in your local configuration file.")
         return validate_answer(raw, notes)
-    except BrainError as error:
+    except (BrainError, usage_policy.UsagePolicyError) as error:
         return {"answer": str(error), "nodes": [], "about_notes": False, "error": True}
     except (OSError, ValueError, TypeError):
         return {"answer": "My brain couldn't start safely. Check your Codex installation and settings, then try again.", "nodes": [], "about_notes": False, "error": True}
@@ -1396,6 +1413,7 @@ def main():
     finally:
         WORKFLOWS.close()
         ULTRA.close()
+        CODEX_USAGE.close()
         MEMORY.close()
         FOCUS.close()
         server.server_close()

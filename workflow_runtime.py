@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from codex_bridge import BridgeError
+import usage_policy
 from ultra_tools import ToolSession
 from ultra import CHECKED_SCHEMA, REPORT_SCHEMA, STAGE_ONE_BOUNDARY, TOOLS_BOUNDARY, checked, checked_report, decode
 from ultra_workflows import workflow_template
@@ -48,7 +49,7 @@ REVIEW_BOUNDARY = STAGE_ONE_BOUNDARY.replace(
 TERMINAL = frozenset({'complete', 'failed', 'cancelled', 'interrupted'})
 RETRYABLE = frozenset({'invalid_output', 'missing_sources', 'math_check', 'disconnected', 'unavailable', 'protocol_failure'})
 SAFE_FAILURES = RETRYABLE | {'timeout', 'cancelled', 'budget_exhausted', 'tool_failed', 'inference_failed',
-    'model_unavailable', 'effort_unavailable', 'model_mismatch', 'blocked_action', 'storage_unavailable', 'source_changed'}
+    'model_unavailable', 'effort_unavailable', 'model_mismatch', 'blocked_action', 'storage_unavailable', 'source_changed'} | usage_policy.ERROR_MESSAGES.keys()
 WORKFLOW_LABELS = {'general': 'Focused answer', 'research': 'Evidence research', 'document': 'Document analysis', 'code': 'Code review'}
 WORKER_COUNTS = {'general': 1, 'research': 3, 'document': 2, 'code': 2}
 EVENT_KINDS = frozenset({'started', 'resumed', 'node_complete', 'agent_started', 'agent_complete',
