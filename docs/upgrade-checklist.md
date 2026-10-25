@@ -30,7 +30,7 @@ Implementation is distinct from acceptance. An unchecked gate stays off. Existin
 - [x] H deterministic boundary coverage: identity/escalation, duplicate/uncertain effects, cancellation/settlement, SDK, scheduler recovery, workspace cleanup, RPC replay, poisoned lessons, evaluation, backup/restore and stable citations. Existing assertions retained; MCP assertions strengthened for per-RPC replay keys and hidden Context; native Unicode/revision tests retained.
 - [ ] H acceptance: full preflight/probe and zero critical regression. Latest summaries are in [the evidence ledger](upgrade-evidence.md); the required viewport remains unverified.
 - [ ] H: Real 24-hour remote soak, restored backup and coordinated physical Mac-off test from a second client. BLOCKED by deployment and user coordination; never shut down this implementation host.
-- [ ] Commit verified changes and push `origin main` per repository instructions.
+- [x] Commit verified changes and push `origin main` per repository instructions: implementation `f9dc6634b11fb036dd0d84aed3cef39240f394ae`. Subsequent record-only commit preserves the tested source manifest. All unchecked gates above remain open.
 
 ## File-level plan / dependency matrix
 

@@ -1,6 +1,6 @@
 # Execution upgrade results — 2026-10-24
 
-This is a staged implementation with acceptance gates still open. No remote deployment exists. The existing executor and design remain the default; Deep Agents, remote workspaces, outcome collection and promotion default off independently. Admission remains one run with at most three internal workers.
+Implementation commit `f9dc6634b11fb036dd0d84aed3cef39240f394ae` is pushed to `origin/main`. This is a staged implementation with acceptance gates still open. No remote deployment exists. The existing executor and design remain the default; Deep Agents, remote workspaces, outcome collection and promotion default off independently. Admission remains one run with at most three internal workers.
 
 | Capability | Status | Evidence and next gate |
 | --- | --- | --- |

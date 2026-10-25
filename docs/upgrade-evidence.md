@@ -1,6 +1,6 @@
 # Upgrade evidence ledger
 
-Baseline: `77581c7b4c58aad67d5eca8fff465918cce019c8`, clean main. Candidate source manifest: `6a2d6dc838ba071d4b6ae341850623bda1d0cec9320c51307ec92bb45e9e942c`. This hash covers indexed executable/configuration/dependency/test inputs and is recorded privately in `.local/upgrade-evidence/reviewed-source-manifest-final.json`; documentation edits are excluded. The commit containing this ledger records the final reviewed tree. Evidence was collected on 2026-10-24 local time (some timestamps are 2026-10-25 UTC).
+Baseline: `77581c7b4c58aad67d5eca8fff465918cce019c8`, clean main. Candidate source manifest: `6a2d6dc838ba071d4b6ae341850623bda1d0cec9320c51307ec92bb45e9e942c`. This hash covers indexed executable/configuration/dependency/test inputs and is recorded privately in `.local/upgrade-evidence/reviewed-source-manifest-final.json`; documentation edits are excluded. Implementation commit: `f9dc6634b11fb036dd0d84aed3cef39240f394ae`, pushed to `origin/main`. The subsequent documentation-only record does not alter the tested executable tree. Evidence was collected on 2026-10-24 local time (some timestamps are 2026-10-25 UTC).
 
 Raw logs, screenshots, downloaded upstream material, private stores and reports remain under ignored `.local/`; they are deliberately excluded from Git and the source archive. The sanitized summaries below are persistent evidence. A fixture pass does not pass a live remote/model/soak gate.
 
@@ -59,3 +59,7 @@ No full five-arm model comparison, comparable live p95, 90% supported-task succe
 - `python3 tools/check_repo.py`: **Repository check: 240 files, 165 local links, 0 failures**.
 - Both working/indexed whitespace checks pass. Only reviewed source, tests, templates, locks, licenses and sanitized documentation are staged; private artifacts remain ignored.
 - Final review strengthened the 90% per-family promotion minimum and retained the explicit rejection test; it did not lower acceptance floors. The final full suite and preflight passed afterward.
+
+## Commit and cleanup record
+
+Implementation commit `f9dc6634b11fb036dd0d84aed3cef39240f394ae` was pushed successfully to `origin/main`. The 67 reviewed staged files had zero forbidden paths and zero credential-pattern matches. Private evidence/archive/configuration stayed untracked. The agent-owned loopback test server was stopped after verification; no listener remains on its test port. No cloud deployment exists. Checklist and ledger completion metadata are recorded in a following documentation-only commit.
