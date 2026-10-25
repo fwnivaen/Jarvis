@@ -2,6 +2,8 @@
 
 Implementation commit `f9dc6634b11fb036dd0d84aed3cef39240f394ae` is pushed to `origin/main`. This is a staged implementation with acceptance gates still open. No remote deployment exists. The existing executor and design remain the default; Deep Agents, remote workspaces, outcome collection and promotion default off independently. Admission remains one run with at most three internal workers.
 
+Included-usage enforcement is implemented and pushed in `9acd7abe1b1918c2e477935cfd5eb70cb5ce556b`. The 118 tested code inputs have SHA-256 `9b5b4cb9a6063600e2fad9f3b0f85065f8b25f07aac69394ebec5054a5f35c1d`. A following documentation-only record does not change that serving code.
+
 | Capability | Status | Evidence and next gate |
 | --- | --- | --- |
 | Included ChatGPT/Codex usage, paid-provider refusal and quota admission | **Implemented; Locally verified** | Real sign-in, effective provider/tier, fresh included-usage snapshot, CLI inference, actual app-server gateway tool call and structured result/usage. 12 new boundary tests. No API key, alias or credit balance enables paid inference; live Deep Agents API calls are blocked. Snapshot checks are not an atomic provider spending cap; see [usage policy](usage-policy.md). |

@@ -8,6 +8,7 @@ Implementation is distinct from acceptance. An unchecked gate stays off. Existin
 
 - [x] Usage constraint (user continuation), implemented and locally verified: enforce the existing ChatGPT/Codex subscription route; block separately billed API providers even when keys or model aliases exist. Check authentication/allowances without logging identity or credentials. No credit purchases, automatic resets, paid fallback, or unverified free-provider claims. See [policy and limits](usage-policy.md).
 - [x] Usage local verification: 12 new provider/auth/quota/cancellation boundary tests; 269 Python tests with zero optional-environment skips and 14 browser suites; real signed-in CLI/preflight and app-server gateway tool/schema/usage checks. Full preflight **14 pass, 0 fail, 2 warn**. A usage snapshot is not a provider-side hard spending cap. The required visual gate below remains open.
+- [x] Included-usage code committed/pushed: `9acd7abe1b1918c2e477935cfd5eb70cb5ce556b`; remote main hash checked. Source-only archive includes policy module/docs; 108 files, zero private entries, no upload. Primary local server runs the tested code with original settings. No deployment or optional feature enabled.
 
 - [x] A: Locate actual repository and read applicable instructions; inspect baseline and prior pilot.
 - [x] A: Standard Python baseline: 184 tests, 25 skipped; full live preflight: **14 pass, 0 fail, 2 warn**. Raw evidence: `.local/upgrade-evidence/baseline-{python,preflight}.txt` (private, untracked).
