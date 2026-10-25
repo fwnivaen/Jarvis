@@ -1,6 +1,6 @@
 # Adaptive routing verification
 
-Local macOS arm64, isolated optional CPython environment; 2026-10-25. Baseline source revision: `62593f5cf9ec1a546d6adc4dc505708de1c3e018`. Candidate files are recorded by SHA-256 in the private reports; the final source manifest and commit are recorded in the checklist. No remote deployment or learning promotion is implied.
+Local macOS arm64, isolated optional CPython environment; 2026-10-25. Baseline source revision: `62593f5cf9ec1a546d6adc4dc505708de1c3e018`. Verified implementation: `b892f033f4bef19af3747d593bfe40c02255aeab`, pushed to main. Candidate files are recorded by SHA-256 in the private reports; the final source manifest is recorded in the checklist. No remote deployment or learning promotion is implied.
 
 ## Deterministic verification
 
@@ -14,7 +14,7 @@ The required visible Chrome probe passed after selecting the actual probe tab an
 FOCUS PROBE: 16 pass, 0 fail | 1440x900 | PASS viewport | PASS visible | PASS reload-read-only | PASS focused | PASS deferred | PASS unavailable | PASS paused | PASS drift | PASS excused | PASS home | PASS intent-window | PASS commands | PASS pixel-identical | PASS pixel-change | PASS disconnect | PASS visible-at-finish
 ```
 
-The tab's host was `127.0.0.1:4700`, visibility was `visible`, dimensions were read from the real document, and a native Chrome screenshot confirmed the probe was selected. Temporary viewport overrides were reset. The viewer's galaxy/orb/chat design was inspected without frontend changes.
+The tab's host was `127.0.0.1:4700`, visibility was `visible`, dimensions were read from the real document, and a native Chrome screenshot confirmed the probe was selected. Temporary viewport overrides were reset and original 90% host zoom restored afterward. The native Window menu later established four browser windows. The viewer's galaxy/orb/chat design was inspected without frontend changes.
 
 ## Model-backed synthetic trials
 

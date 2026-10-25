@@ -11,9 +11,9 @@ Approved scope: implement the reviewed routing policy using the existing ChatGPT
 - [x] Add meaningful failure, quota, cancellation, context and routing coverage: 30 new tests; full suite 299 tests, zero skips; all 14 browser suites pass.
 - [x] Run bounded live comparison with all attempts counted: six exposed synthetic case pairs pass across two development trials. Initial quota refusal retained. This is smoke evidence; general quality/allowance savings are not proven.
 - [x] Verify settings/HTTP/UI behavior and full regression/preflight: final active service **14 pass, 0 fail, 2 warn**. Two API checks skipped for Codex sign-in. Separate live LangGraph/Codex/note-read check passed in one Luna call.
-- [x] Required visible 1440×900 Focus probe: **16 pass, 0 fail** after the user unlocked the Mac, the actual tab was selected, and Chrome page zoom was reset from 90% to 100%. Full per-case title read; native screenshot confirmed selected visible page. Override reset.
+- [x] Required visible 1440×900 Focus probe: **16 pass, 0 fail** after the user unlocked the Mac, the actual tab was selected, and Chrome page zoom was reset from 90% to 100%. Full per-case title read; native screenshot confirmed selected visible page. Override reset; original 90% host zoom restored after testing.
 - [x] Enable accepted local behavior: loopback service launched with `--adaptive-routing`; `/agents` confirms the flag and bounded limits, `/model` confirms included-only policy, and the viewer shows `ULTRA · LUNA / SOL`. Explicit teams work; implicit automatic team allocation is deferred after its larger/slower live result. Committed defaults remain off.
-- [ ] Commit and push verified work.
+- [x] Commit and push verified work: implementation `b892f033f4bef19af3747d593bfe40c02255aeab`; `origin/main` read back at that same hash. Final record-only follow-up does not alter tested executable inputs.
 
 ## File plan and dependencies
 
@@ -49,3 +49,5 @@ Routing and context/budget guards are **implemented and locally verified**. Synt
 Tested input manifest: **132 indexed executable/configuration/dependency inputs**, SHA-256 `e35a8b4d1c5c0fae5c1811e6524fc230e78239c80a71b727dc5d8c951ca9c404`; private report `routing-tested-source-manifest.json`. All inputs still matched after activation. Reviewed staging: **18 files, zero forbidden paths, zero credential-pattern matches**. Repository check: **249 files, 190 local links, 0 failures**; whitespace and syntax checks passed.
 
 Source-only archive: **112 files**, **15,396,841 bytes**, SHA-256 `df5c95c927bbd04766e9da0ea5140d399e78d7224b962b1af129a235af711253`. Includes adaptive/usage modules and routing guides; all embedded hashes match; zero private/symlink entries; no upload. Private artifact `.local/jarvis-remote-source-adaptive.tar.gz`, audit `routing-package-audit.json`. It predates only the final documentation records, which do not alter tested executable inputs. No deployment identifier exists.
+
+Final browser cleanup: native Chrome Window menu established **four browser windows** (window identities excluded from records). Required probe tab closed, remaining JARVIS tab returned to Galaxy, 30 notes/95 links, idle crew, original host zoom restored, temporary viewport override cleared. Local server remains active with private flags; no model task is running.
