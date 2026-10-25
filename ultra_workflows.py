@@ -33,7 +33,7 @@ PRIVATE_FILE_MODE = 0o600
 RUN_ID = re.compile(r"[a-f0-9]{24}\Z")
 FINGERPRINT = re.compile(r"[a-f0-9]{64}\Z")
 STATE_KEYS = frozenset({"saved_agents", "tool_session", "tool_notes", "phase", "workflow", "context", "plan", "reports", "reviews", "final", "budget",
-    "attempts", "elapsed_s", "status", "errors", "checks", "metrics", "decision", "worker_state"})
+    "attempts", "elapsed_s", "status", "errors", "checks", "metrics", "decision", "worker_state", "routing_budget"})
 FORBIDDEN_KEYS = frozenset({"reasoning", "chain_of_thought", "chainofthought", "raw_response",
     "raw_output", "api_key", "apikey", "authorization", "password", "secret", "system_prompt"})
 ENVELOPE_KEYS = frozenset({"version", "run_id", "fingerprint", "created_at", "updated_at", "state"})

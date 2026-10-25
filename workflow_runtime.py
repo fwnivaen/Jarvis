@@ -16,6 +16,7 @@ from pathlib import Path
 
 from codex_bridge import BridgeError
 import usage_policy
+import adaptive_routing as routing
 from ultra_tools import ToolSession
 from ultra import CHECKED_SCHEMA, REPORT_SCHEMA, STAGE_ONE_BOUNDARY, TOOLS_BOUNDARY, checked, checked_report, decode
 from ultra_workflows import workflow_template
@@ -49,7 +50,8 @@ REVIEW_BOUNDARY = STAGE_ONE_BOUNDARY.replace(
 TERMINAL = frozenset({'complete', 'failed', 'cancelled', 'interrupted'})
 RETRYABLE = frozenset({'invalid_output', 'missing_sources', 'math_check', 'disconnected', 'unavailable', 'protocol_failure'})
 SAFE_FAILURES = RETRYABLE | {'timeout', 'cancelled', 'budget_exhausted', 'tool_failed', 'inference_failed',
-    'model_unavailable', 'effort_unavailable', 'model_mismatch', 'blocked_action', 'storage_unavailable', 'source_changed'} | usage_policy.ERROR_MESSAGES.keys()
+    'model_unavailable', 'effort_unavailable', 'model_mismatch', 'blocked_action', 'storage_unavailable', 'source_changed',
+    'model_budget_exhausted', 'context_budget_exhausted', 'invalid_routing_profile'} | usage_policy.ERROR_MESSAGES.keys()
 WORKFLOW_LABELS = {'general': 'Focused answer', 'research': 'Evidence research', 'document': 'Document analysis', 'code': 'Code review'}
 WORKER_COUNTS = {'general': 1, 'research': 3, 'document': 2, 'code': 2}
 EVENT_KINDS = frozenset({'started', 'resumed', 'node_complete', 'agent_started', 'agent_complete',
@@ -160,16 +162,28 @@ class GraphJobs:
     def __init__(self, service, run_id, bridge, cancel):
         self.service, self.run_id, self.bridge, self.cancel = service, run_id, bridge, cancel
         self.settings = service.settings()
+        self.budget = routing.ModelBudget(self.settings.model_call_limit, self.settings.observed_token_limit,
+            service.store.get(run_id).get('routing_budget', [])) if self.settings.adaptive_routing_enabled else None
+        self.model_cancel = routing.CancellationSignal(cancel, self.budget.cancel) if self.budget is not None else cancel
         self.session = ToolSession(service.tools, run_id, root=service.root / "tool-journals",
             permissions=READ_TOOLS, cancel=cancel)
 
     def guard(self):
+        if self.budget is not None and self.budget.cancel.is_set():
+            raise BridgeError('model_budget_exhausted')
         if self.cancel.is_set():
             raise BridgeError('cancelled')
         run = self.service.store.get(self.run_id)
         if time.time() >= run['expires_at']:
             raise BridgeError('budget_exhausted')
         return run
+
+    def save_budget(self):
+        if self.budget is not None:
+            # Serialize the snapshot and write with attempt admission; an older
+            # observer must never overwrite a newer worker reservation on disk.
+            with self.service.lock:
+                self.service.change(self.run_id, routing_budget=self.budget.snapshot()['calls'])
 
     def retrieve(self, state):
         self.guard()
@@ -243,7 +257,7 @@ class GraphJobs:
         self.service.event(self.run_id, 'tool_complete', slot=slot, tool=name)
         return result
 
-    def invoke(self, slot, assignment, payload, schema, validator, model, tools=False):
+    def invoke(self, slot, assignment, payload, schema, validator, model, tools=False, effort=None):
         while True:
             run = self.guard()
             with self.service.lock:
@@ -251,10 +265,18 @@ class GraphJobs:
                 row = run['agents'].get(slot, {'slot': slot, 'task': assignment, 'attempts': 0,
                     'started_at': time.time(), 'expires_at': min(run['expires_at'], time.time() +
                     (self.settings.request_timeout_s if slot == 'reviewer' else self.settings.worker_timeout_s)),
-                    'tokens': 0, 'usage_reported': False, 'model': model, 'effort': self.settings.effort})
+                    'tokens': 0, 'usage_reported': False, 'model': model,
+                    'effort': (effort or (routing.STRONG_EFFORT if model == self.settings.brain_model else routing.QUICK_EFFORT))
+                        if self.budget is not None else self.settings.effort})
                 if row['attempts'] > self.settings.worker_retries or time.time() >= row['expires_at']:
                     raise BridgeError('budget_exhausted')
                 row.update(attempts=row['attempts'] + 1, status='running', error=None)
+                if self.budget is not None:
+                    try:
+                        reservation = self.budget.reserve(row['model'], row['effort'], slot)
+                    except routing.RoutingBudgetError as error:
+                        raise BridgeError(error.code) from None
+                    run['routing_budget'] = self.budget.snapshot()['calls']
                 row.pop('ended_at', None)
                 run['agents'][slot] = row
                 self.service.store.save(run)  # Reserve attempt BEFORE external inference.
@@ -263,6 +285,13 @@ class GraphJobs:
             usage = {}
             def observer(values):
                 usage.update(values)
+                if self.budget is not None:
+                    try:
+                        self.budget.observe(reservation, values)
+                    except routing.RoutingBudgetError as error:
+                        raise BridgeError(error.code) from None
+                    finally:
+                        self.save_budget()
                 self.service.agent(self.run_id, slot, current_tokens=usage.get('totalTokens'))
                 self.service.event(self.run_id, 'usage', slot=slot)
             options = {}
@@ -288,12 +317,18 @@ class GraphJobs:
                     return result
                 options.update(tools=specs, tool_handler=handle)
             try:
-                raw = self.bridge.complete(model=model, effort=self.settings.effort,
+                call_payload = dict(payload, assignment=assignment)
+                if self.budget is not None:
+                    try:
+                        call_payload = routing.compact_payload(call_payload)
+                    except routing.RoutingBudgetError as error:
+                        raise BridgeError(error.code) from None
+                raw = self.bridge.complete(model=row['model'], effort=row['effort'],
                     system=self.service.system.replace(LEGACY_TOOL_BOUNDARY, ANALYSIS_TOOL_BOUNDARY)
                         + (TOOLS_BOUNDARY if tools else REVIEW_BOUNDARY)
                         + ' Perform the assigned task. Return concise supported findings, never private reasoning.',
-                    payload=dict(payload, assignment=assignment), schema=schema,
-                    deadline=deadline, observer=observer, cancel_event=self.cancel, **options)
+                    payload=call_payload, schema=schema,
+                    deadline=deadline, observer=observer, cancel_event=self.model_cancel, **options)
                 self.guard()
                 decoded = decode(raw)
                 validator(decoded, sources)
@@ -302,12 +337,22 @@ class GraphJobs:
                 return dict(decoded, _sources=sources, _tools=confirmed_tools)
             except Exception as error:
                 code = getattr(error, 'code', 'inference_failed')
+                if self.budget is not None and self.budget.cancel.is_set():
+                    code = 'model_budget_exhausted'
                 code = code if code in SAFE_FAILURES else 'inference_failed'
                 self.service.agent(self.run_id, slot, status='cancelled' if self.cancel.is_set() else 'failed',
                     error=code, ended_at=time.time())
                 self.service.event(self.run_id, 'agent_failed', slot=slot, error=code)
                 if code not in RETRYABLE or row['attempts'] > self.settings.worker_retries:
                     raise BridgeError(code) from None
+                if self.budget is not None and code in ('invalid_output', 'missing_sources', 'math_check'):
+                    with self.service.lock:
+                        current = self.service.store.get(self.run_id)
+                        if (row['model'] == self.settings.quick_model and
+                                current.get('routing_escalations', 0) < self.settings.max_escalations):
+                            current['routing_escalations'] = current.get('routing_escalations', 0) + 1
+                            current['agents'][slot].update(model=self.settings.brain_model, effort=routing.STRONG_EFFORT)
+                            self.service.store.save(current)
             finally:
                 self.service.add_usage(self.run_id, slot, usage)
 
@@ -315,8 +360,11 @@ class GraphJobs:
         self.guard()
         self.service.phase(self.run_id, 'workers')
         slot = 'worker-' + str(state['index'] + 1)
+        route = routing.decide(state['question']) if self.budget is not None else None
+        strong = route is not None and route.mode == 'strong' and len(self.guard()['tasks']) == 1
         report = self.invoke(slot, state['task'], {'question': state['question'], 'notes': state['notes']},
-            REPORT_SCHEMA, checked_report, self.settings.quick_model, tools=True)
+            REPORT_SCHEMA, checked_report, self.settings.brain_model if strong else self.settings.quick_model,
+            tools=True, effort=route.effort if strong else None)
         return {'reports': {slot: report}}
 
     def review(self, state):
@@ -329,11 +377,22 @@ class GraphJobs:
             sources.update({note['id']: note for note in report['_sources']})
             reports.append({key: value for key, value in report.items() if not key.startswith('_')})
             confirmed_tools.extend({'agent': slot, 'tool': name} for name in report.get('_tools', []))
-        result = self.invoke('reviewer', 'Check the findings against the sources and arithmetic; answer the original request. '
-            'Disclose unresolved issues. Do not repeat completed tools.',
-            {'question': state['question'], 'notes': list(sources.values()), 'worker_results': reports,
-                'confirmed_tool_calls': confirmed_tools},
-            CHECKED_SCHEMA, checked, self.settings.brain_model)
+        single = reports[0] if len(reports) == 1 else None
+        if (self.budget is not None and single and not single.get('unresolved_issues')
+                and state.get('workflow') == 'general'):
+            # One checked finding needs no second model to restate it.
+            checked({key: single[key] for key in CHECKED_SCHEMA['required']}, list(sources.values()))
+            result = single
+        else:
+            route = routing.decide(state['question']) if self.budget is not None else None
+            deep_review = route is not None and (any(report.get('unresolved_issues') for report in reports)
+                or route.effort == routing.DEEP_EFFORT and route.mode == 'strong')
+            result = self.invoke('reviewer', 'Check the findings against the sources and arithmetic; answer the original request. '
+                'Disclose unresolved issues. Do not repeat completed tools.',
+                {'question': state['question'], 'notes': list(sources.values()), 'worker_results': reports,
+                    'confirmed_tool_calls': confirmed_tools},
+                CHECKED_SCHEMA, checked, self.settings.brain_model,
+                effort=routing.DEEP_EFFORT if deep_review else None)
         final = {key: result[key] for key in CHECKED_SCHEMA['required']}
         final['source_refs'] = [{'stable_id': sources[node]['stable_id'], 'revision': sources[node]['revision'],
             'original_id': node} for node in final['nodes'] if sources[node].get('stable_id') and sources[node].get('revision')]
@@ -458,13 +517,17 @@ class WorkflowService:
             'tasks': [self.redactor.text(task, MAX_TASK_CHARS) for task in run['tasks']], 'tool_calls': run['tool_calls'],
             'total_tokens': sum(row['tokens'] for row in rows) if any(row['usage_reported'] for row in rows) else None,
             'usage_complete': bool(rows) and all(row['usage_reported'] and not row.get('unreported_attempts') for row in rows),
+            'model_usage': routing.ModelBudget(run['settings'].get('model_call_limit', routing.DEFAULT_MODEL_CALLS),
+                run['settings'].get('observed_token_limit', routing.DEFAULT_TOKEN_BUDGET),
+                run.get('routing_budget', [])).snapshot() if run['settings'].get('adaptive_routing_enabled') else None,
             'sequence': run['sequence'], 'events': run['events'], 'restarts': run['restarts'],
             'can_retry': run['status'] in ('failed', 'cancelled', 'interrupted') and now < run['expires_at']
                 and run['restarts'] < MAX_RESTARTS and not self.active
                 and all(row['status'] == 'complete' or
                     (row['attempts'] <= self.settings().worker_retries and row['expires_at'] > now)
                     for row in run['agents'].values())
-                and run.get('error') != 'source_changed' and run.get('cleanup') != 'pending',
+                and run.get('error') not in ({'source_changed', 'model_budget_exhausted', 'context_budget_exhausted'} | usage_policy.ERROR_MESSAGES.keys())
+                and run.get('cleanup') != 'pending',
             'result': {'answer': self.redactor.text(result['answer']), 'nodes': resolved_nodes,
                 'source_refs': source_refs, 'sources_changed': bool(source_refs and len(resolved_nodes) != len(source_refs)),
                 'about_notes': result['about_notes']} if result else None}

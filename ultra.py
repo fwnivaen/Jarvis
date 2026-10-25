@@ -12,6 +12,7 @@ from pathlib import Path
 
 from codex_bridge import BridgeError, CodexBridge, VERIFIED_MODELS
 import usage_policy
+import adaptive_routing as routing
 from ultra_monitor import Monitor, terminal
 
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("ultra.json")
@@ -45,7 +46,8 @@ EXTRA_WORKER_PROFILE = ("gpt-6-luna", "high")
 EXPLICIT_WORKERS = re.compile(r"\b(?:use|run|spawn|assign)\b[^.!?]{0,60}\b(?:workers|agents)\b", re.I)
 NO_WORKERS = re.compile(r"\b(?:do not|don't|never|without|no)\s+(?:(?:use|run|spawn|assign)\s+)?(?:parallel\s+)?(?:workers|agents)\b", re.I)
 OBJECTIVE_FAILURES = frozenset({"invalid_output", "missing_sources", "math_check"})
-NO_RETRY = frozenset({"blocked_action", "model_mismatch", "model_unavailable", "effort_unavailable", "image_unavailable"}) | usage_policy.ERROR_MESSAGES.keys()
+NO_RETRY = frozenset({"blocked_action", "model_mismatch", "model_unavailable", "effort_unavailable", "image_unavailable",
+    "model_budget_exhausted", "context_budget_exhausted", "invalid_routing_profile"}) | usage_policy.ERROR_MESSAGES.keys()
 SAFE_ERROR = "Ultra could not verify this answer. Please retry, or turn Ultra off to use your previous brain."
 STAGE_ONE_BOUNDARY = (
     " Stage 1 is read-only: no tools, file changes, sends, screen actions or test execution are available. "
@@ -85,6 +87,9 @@ DISPATCH_SCHEMA = {"type": "object", "properties": {
 @dataclass(frozen=True)
 class Settings:
     enabled: bool = False
+    adaptive_routing_enabled: bool = False
+    model_call_limit: int = routing.DEFAULT_MODEL_CALLS
+    observed_token_limit: int = routing.DEFAULT_TOKEN_BUDGET
     routing_enabled: bool = True
     parallel_workers_enabled: bool = True
     live_monitor_enabled: bool = True
@@ -130,6 +135,7 @@ class Settings:
                     raise ValueError
             for key, limit in (("max_workers", MAX_WORKERS), ("worker_retries", MAX_RETRIES),
                                ("max_escalations", MAX_ESCALATIONS), ("worker_timeout_s", MAX_WORKER_TIMEOUT_S),
+                               ("model_call_limit", routing.MAX_MODEL_CALLS), ("observed_token_limit", routing.MAX_TOKEN_BUDGET),
                                ("request_timeout_s", MAX_REQUEST_TIMEOUT_S)):
                 value = getattr(result, key)
                 if not (0 if key in ("worker_retries", "max_escalations") else 1) <= value <= limit:
@@ -139,6 +145,8 @@ class Settings:
                     "gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra"):
                 raise ValueError
             if result.effort != "high":
+                raise ValueError
+            if result.adaptive_routing_enabled and result.max_workers > routing.MAX_TEAM_WORKERS:
                 raise ValueError
             return result, None
         except FileNotFoundError:
@@ -297,6 +305,8 @@ class UltraJarvis:
         self.tool_layer = None
         self._tool_session = None
         self._source_lock = threading.RLock()
+        self._model_budget = None
+        self._route = None
 
     def _event(self, kind, slot=None):
         if hasattr(self.monitor, "event"):
@@ -336,21 +346,27 @@ class UltraJarvis:
         state = self.monitor.snapshot() if visible else {"request_id": None, "active": False,
             "elapsed_s": 0, "escalations": 0, "agents": []}
         return dict(state, enabled=visible, routing_enabled=settings.enabled and settings.routing_enabled,
+            adaptive_routing_enabled=settings.enabled and settings.adaptive_routing_enabled,
+            routing=self._route, model_usage=self._model_budget.snapshot() if self._model_budget else None,
             crew_enabled=crew_enabled, crew=self.crew_roster(settings) if crew_enabled else [],
             evaluation=self._evaluation if visible and settings.evaluation_enabled else None,
             notice=notice, limits={"max_workers": settings.max_workers, "worker_retries": settings.worker_retries,
+            "model_call_limit": settings.model_call_limit, "observed_token_limit": settings.observed_token_limit,
                 "worker_timeout_s": settings.worker_timeout_s, "max_escalations": settings.max_escalations,
                 "request_timeout_s": settings.request_timeout_s})
 
     @staticmethod
     def worker_profile(settings, index, kind="general"):
+        if settings.adaptive_routing_enabled:
+            return settings.quick_model, routing.QUICK_EFFORT
         if settings.crew_profiles_enabled:
             return CREW_PROFILES[index] if index < len(CREW_PROFILES) else EXTRA_WORKER_PROFILE
         return (settings.quick_model if kind == "general" else settings.brain_model, settings.effort)
 
     @classmethod
     def crew_roster(cls, settings):
-        boss_effort = BOSS_EFFORT if settings.crew_profiles_enabled else settings.effort
+        boss_effort = (routing.STRONG_EFFORT if settings.adaptive_routing_enabled else
+                       BOSS_EFFORT if settings.crew_profiles_enabled else settings.effort)
         roster = [{"id": "boss", "role": "boss", "label": "Boss", "model": settings.brain_model,
             "effort": boss_effort}]
         if settings.parallel_workers_enabled:
@@ -380,6 +396,11 @@ class UltraJarvis:
                     return
                 job.usage_seen = True
                 latest.update(values)
+                if self._model_budget is not None:
+                    try:
+                        self._model_budget.observe(reservation, values)
+                    except routing.RoutingBudgetError as error:
+                        raise BridgeError(error.code) from None
                 self.monitor.update(key, input_tokens=job.totals["inputTokens"] + latest.get("inputTokens", 0),
                     output_tokens=job.totals["outputTokens"] + latest.get("outputTokens", 0),
                     total_tokens=job.totals["totalTokens"] + latest.get("totalTokens", 0))
@@ -387,12 +408,22 @@ class UltraJarvis:
                 if time.monotonic() >= deadline:
                     raise BridgeError("timeout")
                 options = {}
+                if self._model_budget is not None:
+                    try:
+                        attempt_payload = routing.compact_payload(attempt_payload)
+                        reservation = self._model_budget.reserve(job.model, job.effort, role)
+                    except routing.RoutingBudgetError as error:
+                        raise BridgeError(error.code) from None
+                    options["cancel_event"] = self._model_budget.cancel
+                    self._save()
                 if self._tool_session and tools_allowed and image is None and role != "brain":
                     def handle_tool(name, arguments, tool_deadline, session=self._tool_session,
                                     request_id=self.monitor.snapshot()["request_id"]):
                         def tool_status(tool):
                             if self.monitor.snapshot()["request_id"] == request_id:
                                 self.monitor.update(key, current_tool=tool)
+                        if self._model_budget is not None and self._model_budget.cancel.is_set():
+                            raise BridgeError("model_budget_exhausted")
                         result = session.call(name, arguments, tool_deadline, tool_status)
                         if time.monotonic() >= tool_deadline or self.monitor.snapshot()["request_id"] != request_id:
                             return result
@@ -417,9 +448,9 @@ class UltraJarvis:
                                     self._tool_notes[note["id"]] = dict(prior or note)
                         self._save()
                         return result
-                    options = {"tools": self.tool_layer.dynamic_specs(), "tool_handler": handle_tool}
+                    options.update(tools=self.tool_layer.dynamic_specs(), tool_handler=handle_tool)
                 raw = self.bridge.complete(model=job.model, effort=job.effort,
-                    system=system + (TOOLS_BOUNDARY if options else STAGE_ONE_BOUNDARY),
+                    system=system + (TOOLS_BOUNDARY if options.get("tools") else STAGE_ONE_BOUNDARY),
                     payload=attempt_payload, schema=schema, deadline=deadline, observer=usage, image=image, **options)
                 self.monitor.update(key, phase="checking")
                 value = validate(decode(raw))
@@ -431,6 +462,9 @@ class UltraJarvis:
                 return value
             except (BridgeError, CheckFailure) as error:
                 failure = error.code
+                if self._model_budget is not None and self._model_budget.cancel.is_set():
+                    failure = "model_budget_exhausted"
+                    error = BridgeError(failure)
                 if self._run is not None:
                     with self._checkpoint_lock:
                         self._run["checks"].append({"status": "failed", "code": failure})
@@ -439,10 +473,12 @@ class UltraJarvis:
                 # Model confidence, prose such as 'unsure', and transport errors never promote.
                 if failure in NO_RETRY or job.retries >= settings.worker_retries or time.monotonic() >= deadline:
                     self.monitor.update(key, status="failed", phase="done")
-                    raise
+                    raise error
                 if failure in OBJECTIVE_FAILURES and job.model == settings.quick_model and not job.escalated and budget.take():
                     job.model = settings.brain_model
-                    if role == "worker" and settings.crew_profiles_enabled:
+                    if settings.adaptive_routing_enabled:
+                        job.effort = routing.STRONG_EFFORT
+                    elif role == "worker" and settings.crew_profiles_enabled:
                         job.effort = CREW_PROFILES[0][1]
                     job.escalated = True
                     self.monitor.escalate()
@@ -476,6 +512,8 @@ class UltraJarvis:
                 "retries": job.retries, "escalated": job.escalated,
                 "tokens": dict(job.totals), "usage_seen": job.usage_seen} for job in self._jobs]
             self._run["saved_agents"] = self.monitor.snapshot()["agents"]
+            if self._model_budget is not None:
+                self._run["routing_budget"] = self._model_budget.snapshot()["calls"]
             if self._tool_session:
                 self._run["tool_session"] = self._tool_session.identifier
                 self._run["tool_notes"] = list(self._tool_notes.values())
@@ -492,6 +530,8 @@ class UltraJarvis:
             self.monitor.begin()
             self._evaluation, self._run, self._run_id = None, None, None
             self._settings, self._jobs = settings, []
+            self._model_budget = routing.ModelBudget(settings.model_call_limit, settings.observed_token_limit) if settings.adaptive_routing_enabled else None
+            self._route = None
             self._cached_run = False
             self._sources, self._tool_notes = [dict(note) for note in notes], {}
             self._tool_session = None
@@ -527,6 +567,9 @@ class UltraJarvis:
                                 self._sources.append(saved)
                                 self._tool_notes[saved["id"]] = saved
                         self._run, self._run_id = state, resume_run
+                        if self._model_budget is not None:
+                            self._model_budget = routing.ModelBudget(settings.model_call_limit, settings.observed_token_limit,
+                                state.get("routing_budget", []))
                         for row in state.get("saved_agents", []):
                             if row["role"] != "worker" or state.get("final") is not None:
                                 self.monitor.restore(row)
@@ -553,7 +596,8 @@ class UltraJarvis:
                         from ultra_tools import ToolSession
                         self._tool_session = ToolSession(self.tool_layer,
                             self._run.get("tool_session") if self._run else None)
-                    boss_effort = BOSS_EFFORT if settings.crew_profiles_enabled else settings.effort
+                    boss_effort = (routing.STRONG_EFFORT if settings.adaptive_routing_enabled else
+                                   BOSS_EFFORT if settings.crew_profiles_enabled else settings.effort)
                     payload = {"question": question, "notes": notes, "history": history}
                     if settings.memory_enabled and settings.preferences_enabled and preferences:
                         payload["preferences"] = preferences
@@ -589,23 +633,47 @@ class UltraJarvis:
                     def dispatch(value):
                         if set(value) != {"route", "job", "response"} or value["route"] not in ("direct", "brain") or value["job"] not in JOB_KINDS:
                             raise CheckFailure("invalid_output")
-                        if value["route"] == "direct" and value["job"] == "general":
+                        if value["route"] == "direct" and (value["job"] == "general" or settings.adaptive_routing_enabled):
                             value["response"] = validator(value["response"])
                         return value
                     parallel_allowed = settings.parallel_workers_enabled and not NO_WORKERS.search(question)
+                    adaptive_route = routing.decide(question, workflow=workflow, parallel=parallel_allowed,
+                        max_workers=settings.max_workers) if settings.adaptive_routing_enabled else None
+                    if adaptive_route is not None:
+                        self._route = adaptive_route.public()
+                        boss_effort = adaptive_route.effort if adaptive_route.mode != "quick" else routing.STRONG_EFFORT
+                        if not self._run and workflow is None:
+                            local = routing.local_answer(question, notes, calculate)
+                            if local is not None:
+                                self._route = dict(self._route, mode="local", reason="exact_local_command", workers=0)
+                                return self._result(local)
+                        if not self._run and adaptive_route.mode == "strong":
+                            return self._result(self._job(settings, budget, request_deadline, "answer", settings.brain_model,
+                                system, payload, CHECKED_SCHEMA, validator, effort=boss_effort, slot="boss"))
                     if self._run:
                         decision = self._run["decision"]
+                    elif adaptive_route is not None and adaptive_route.mode == "team":
+                        decision = {"route": "brain", "job": adaptive_route.job}
                     elif workflow is not None or EXPLICIT_WORKERS.search(question) and not NO_WORKERS.search(question):
                         decision = {"route": "brain", "job": workflow if workflow in JOB_KINDS else "general"}
                     else:
                         decision = self._job(settings, budget, request_deadline, "dispatch", settings.quick_model,
-                            system + " Classify the request. For quick chat, retrieval, summaries and simple questions, route direct "
+                            system + (" Classify and answer in one call. Focused code extraction or explanation can route direct too. "
+                            "Use brain only when this request needs complex reasoning; worker allocation is controlled locally. "
+                            if settings.adaptive_routing_enabled else "") + " Classify the request. For quick chat, retrieval, summaries and simple questions, route direct "
                             "and answer now in response. Code/debug/test work, computer actions, dense documents, hard reasoning "
-                            "or multiple independent deliverables route to brain with the appropriate job kind. "
+                            + ("or multiple independent deliverables can need brain with the appropriate job kind. "
+                               if settings.adaptive_routing_enabled else
+                               "or multiple independent deliverables route to brain with the appropriate job kind. ") +
                             "For brain routes response may contain an empty answer and empty arrays. Do not include a rationale.",
                             payload, DISPATCH_SCHEMA, dispatch)
-                    if decision["route"] == "direct" and decision["job"] == "general":
+                    if decision["route"] == "direct" and (decision["job"] == "general" or adaptive_route is not None):
                         return self._result(decision["response"])
+                    if adaptive_route is not None and adaptive_route.mode != "team" and not self._run:
+                        self._route = dict(self._route, mode="strong", effort=routing.STRONG_EFFORT,
+                            reason="luna_requested_reasoning")
+                        return self._result(self._job(settings, budget, request_deadline, "answer", settings.brain_model,
+                            system, payload, CHECKED_SCHEMA, validator, effort=routing.STRONG_EFFORT, slot="boss"))
                     if not parallel_allowed:
                         return self._result(self._job(settings, budget, request_deadline, "answer", settings.brain_model,
                             system, payload, CHECKED_SCHEMA, validator, effort=boss_effort, slot="boss"))
@@ -695,13 +763,13 @@ class UltraJarvis:
                                 system + " Answer only your assignment. Return verified findings, exact evidence, computed values "
                                 "and unresolved_issues when requested. Do not describe internal reasoning.",
                                 dict(payload, assignment=item["task"]), report_schema, report_validator,
-                                job=job, phase="drafting", finish=not settings.collaboration_enabled)
+                            job=job, phase="drafting", finish=not settings.collaboration_enabled or settings.adaptive_routing_enabled)
                             reports[index] = dict(result, status="complete")
                         except (BridgeError, CheckFailure) as error:
                             reports[index] = {"status": "failed", "failure": error.code}
                         self._save("drafting")
                         return reports[index]
-                    peer_review = settings.collaboration_enabled and len(tasks) > 1
+                    peer_review = settings.collaboration_enabled and len(tasks) > 1 and not settings.adaptive_routing_enabled
                     sharing = threading.Condition()
                     announced_review = [False]
                     announced_drafts = [False]
@@ -776,6 +844,8 @@ class UltraJarvis:
                     # Include sources discovered through tools; the boss should review the
                     # completed work rather than rediscover the same notes or repeat writes.
                     final_payload = dict(payload, notes=list(self._sources), worker_results=results)
+                    if adaptive_route is not None and any(item.get("unresolved_issues") for item in results):
+                        boss_effort = routing.DEEP_EFFORT
 
                     def final_validate(raw):
                         value = checked(raw, self._sources)
@@ -814,6 +884,8 @@ class UltraJarvis:
                     messages = {"checkpoint_mismatch": "That saved run no longer matches this question, notes or settings. Start a fresh workflow.",
                         "checkpoint_unavailable": "Saved-run recovery is disabled.", "workflow_unavailable": "That workflow is unavailable or disabled.",
                         "budget_exhausted": "The saved run has exhausted its original time budget. Start a fresh request."}
+                    messages.update(model_budget_exhausted="This request reached its model-work budget. Completed operations were not repeated. Try a narrower request.",
+                        context_budget_exhausted="This request exceeds the context budget. Choose fewer sources or split the question.")
                     messages.update(usage_policy.ERROR_MESSAGES)
                     return self._result({"answer": messages.get(code, SAFE_ERROR), "about_notes": False, "nodes": [], "error": True})
                 finally:
@@ -832,6 +904,7 @@ class UltraJarvis:
                 self._run["metrics"] = self._evaluation
             self._save()
         return dict(value, ultra={"request_id": snapshot["request_id"], "escalations": snapshot["escalations"],
+            "routing": self._route, "model_usage": self._model_budget.snapshot() if self._model_budget else None,
             "workers": len(self._run["plan"]) if self._cached_run else sum(row["role"] == "worker" for row in snapshot["agents"]),
             "run_id": self._run_id, "workflow": self._run["workflow"] if self._run else None,
             "resumable": bool(self._run_id and self._run and self._run.get("final") is None and time.monotonic() < self._deadline),

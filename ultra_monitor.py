@@ -25,7 +25,9 @@ EVENTS = frozenset({"planned", "drafts_ready", "peer_review_started", "peer_revi
     "reported", "resumed", "checkpoint_saved"})
 FAILURES = frozenset({"invalid_output", "missing_sources", "math_check", "timeout", "unavailable",
     "protocol_failure", "model_unavailable", "effort_unavailable", "image_unavailable", "inference_failed",
-    "blocked_action", "model_mismatch", "disconnected", "request_timeout", "budget_exhausted"})
+    "blocked_action", "model_mismatch", "disconnected", "request_timeout", "budget_exhausted",
+    "model_budget_exhausted", "context_budget_exhausted", "invalid_routing_profile",
+    "subscription_required", "quota_exhausted", "usage_unavailable"})
 
 
 class Monitor:

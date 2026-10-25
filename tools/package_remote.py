@@ -10,13 +10,13 @@ import subprocess
 ROOT=Path(__file__).resolve().parents[1]
 ALLOW_ROOT={'server.py','build.py','focus.py','focus_reader.py','watch.py','voice_bridge.py','note_store.py',
  'ultra.py','ultra_tools.py','ultra_memory.py','ultra_documents.py','ultra_monitor.py','ultra_workflows.py',
- 'codex_bridge.py','usage_policy.py','workflow_graph.py','workflow_runtime.py','execution_control.py','execution_gateway.py',
+ 'codex_bridge.py','usage_policy.py','adaptive_routing.py','workflow_graph.py','workflow_runtime.py','execution_control.py','execution_gateway.py',
  'execution_scheduler.py','execution_adapters.py','helper_protocol.py','remote_workspaces.py','worker_transport.py',
  'learning_gate.py','outcome_collection.py','execution_evaluation.py','native_tool_routes.py','requirements-ultra.txt','THIRD_PARTY.md'}
 ALLOW_TREES={'viewer','optional','dependencies','deploy'}
 ALLOW_TOOLS={'run_remote_controller.py','run_remote_worker.py','setup_execution.py','backup_execution.py'}
 ALLOW_DOCS={'usage-policy.md','upgrade-results.md','upgrade-evidence.md','upgrade-checklist.md',
-            'upgrade-contracts.md','upgrade-evaluation.md'}
+            'upgrade-contracts.md','upgrade-evaluation.md','routing-checklist.md','routing-policy.md','routing-results.md'}
 EXCLUDED={'graph-data.js','config.json','.env','.DS_Store','__pycache__'}
 MAX_PACKAGE_BYTES=100*1024*1024
 

@@ -1,5 +1,8 @@
 {
   "enabled": false,
+  "adaptive_routing_enabled": false,
+  "model_call_limit": 8,
+  "observed_token_limit": 120000,
   "routing_enabled": true,
   "parallel_workers_enabled": true,
   "live_monitor_enabled": true,

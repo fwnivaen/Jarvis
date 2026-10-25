@@ -96,3 +96,28 @@ The installed protocol exposes no atomic included-only spending reservation or r
 - Archive of that implementation revision: **108 files**, **15,383,632 bytes**, SHA-256 `1fc1ce734cd3c198e97bb72eb0f90f6faaa847a5e44a9498b28a22fe432fcf90`. Includes usage module and six policy/upgrade guides. All embedded file hashes match, zero forbidden/private/symlink entries, no upload. Private artifact `.local/jarvis-remote-source-included-usage.tar.gz`; audit `included-usage-package-audit.json`. This archive predates only this documentation record.
 - Repository check: **243 files, 175 local links, 0 failures**; indexed whitespace check passed; no configuration, auth cache, API key, notes, private state or screenshot staged.
 - Agent-owned test server on 4703 stopped. The primary server on loopback 4700 remains running with the tested code and original private settings; local PID/log stay ignored. Browser returned to Galaxy, temporary viewport override reset, microphone/camera/screen controls remained off. No cloud resources or billing settings changed.
+
+## Adaptive-routing continuation — 2026-10-25
+
+Base revision `62593f5cf9ec1a546d6adc4dc505708de1c3e018`. [Detailed results](routing-results.md), [policy and research](routing-policy.md), [persistent activation/checklist](routing-checklist.md). Earlier visual/preflight failures above are historical and remain recorded.
+
+| Gate | Procedure / actual result | Evidence / limits |
+| --- | --- | --- |
+| Baseline | Existing tests/preflight before edits; **14 pass, 0 fail, 2 warn** | `routing-baseline-{tests,preflight}.txt` |
+| Final deterministic checks | **299 Python tests, zero skips; all 14 browser suites pass** | `routing-final-regressions.txt`; 30 new routing/budget/context/failure tests; actual optional graph/embedding environments |
+| Local model comparison | Six exposed synthetic case pairs passed across two development trials; 16 reserved/admitted attempts including one quota refusal, 15 completed turns with reported usage | `routing-live.json`, `routing-live-complex.json`; candidate hashes included. Original refused attempt retained. Not a frozen statistical quality/cost benchmark |
+| Quota behavior/recovery | Initial `quota_exhausted` was terminal; no retry/fallback. Later exact Codex connection returned fresh explicit ordinary usage permission and valid quota windows; only then unfinished trials resumed | `routing-cli-usage.json`; identity, credentials and credit balances excluded. Shared usage can change between reads |
+| Live Work/tool integration | Real LangGraph/Codex Luna High, synthetic source, registered `note_read`, correct fact/source, one model call, cleanup complete; 5.649 s, 12,796 tokens | `routing-live-work.json`; one sample beyond paired pilot, not remote or statistical evidence |
+| Full preflight | Candidate attempt **13 pass, 1 fail, 2 warn** (transient foreground reader); unchanged-source recheck **14 pass, 0 fail, 2 warn**; final activated service **14 pass, 0 fail, 2 warn** | `routing-final-preflight{,-recheck}.txt`, `routing-active-preflight.txt`. Two API checks skipped for Codex route. Full real swap/chat/recall/image/capture/cleanup/privacy checks |
+| Required visible probe | **16 pass, 0 fail at 1440×900**; full per-case title read and selected visible native Chrome screenshot inspected | Actual probe tab selected; host 127.0.0.1:4700; page zoom reset 90% → 100%; temporary viewport reset. Native browser-window count remains unavailable from enabled inventory; it is not inferred from tab count |
+| Local activation / UI | Running server confirms adaptive enabled, one admitted run/three workers, eight model-attempt/120,000 observed-token guards; included-only usage; four Work types. Viewer shows `ULTRA · LUNA / SOL`, idle Scout/Weave/Prism, working Work controls and restored 30-note/95-link galaxy | `routing-active-http.json`; private launcher flags only. Existing UI assets unchanged; old saved Work reports retain original profiles. No cloud or learning activation |
+| Independent gates | Oracle account still unverified; raw-model Deep Agents compatibility, remote ownership/egress/input/viewing and live learning acceptance remain unfinished | Master checklist retains precise blockers. No remote deployment identifier, Mac-off independence, learned gain or general savings claim |
+
+Latest required summaries:
+
+```text
+14 pass, 0 fail, 2 warn
+FOCUS PROBE: 16 pass, 0 fail | 1440x900 | PASS viewport | PASS visible | PASS reload-read-only | PASS focused | PASS deferred | PASS unavailable | PASS paused | PASS drift | PASS excused | PASS home | PASS intent-window | PASS commands | PASS pixel-identical | PASS pixel-change | PASS disconnect | PASS visible-at-finish
+```
+
+The running diagnostic was read, six session-ledger records and the legacy aggregate were inspected without recording identities, and the assistant tab host was verified. No Focus implementation was patched to obtain the pass. Explicit teams remain available, but implicit automatic team creation was removed after the live team used four calls/36.090 s/27,024 tokens versus one Astra call/10.490 s/6,406 tokens. These observations motivate a conservative policy; included allowance savings remain unknown.
